@@ -153,7 +153,34 @@
 
 ---
 
-## 8. 에셋 (이미지/로고)
+## 8. 환경변수
+
+> ⚠️ API 키는 절대 GitHub에 올리지 말 것 — `.env` 파일로만 관리
+
+**.env 파일 위치**
+```
+/Users/mailplug/revision/yukjindae-map/.env
+```
+
+**.env 파일 내용**
+```
+NAVER_MAP_CLIENT_ID=여기에_네이버_Maps_Client_ID_입력
+NOTION_API_KEY=여기에_Notion_Integration_키_입력
+```
+
+**.gitignore에 반드시 추가**
+```
+.env
+```
+
+| 변수명 | 설명 | 발급 경로 |
+|--------|------|---------|
+| NAVER_MAP_CLIENT_ID | 네이버 Maps Client ID | console.ncloud.com → Maps → Application → 인증 정보 |
+| NOTION_API_KEY | Notion Integration 키 | notion.so/my-integrations |
+
+---
+
+## 9. 에셋 (이미지/로고)
 
 | 파일명 | 경로 | 용도 |
 |--------|------|------|
@@ -167,7 +194,7 @@
 
 ---
 
-## 9. 참고 자료
+## 10. 참고 자료
 
 - 강원도 best9.pdf
 - 경기북부·인천 TOP9.pdf

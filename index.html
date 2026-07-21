@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>육진대 맵 | 아빠와 아이가 갈만한 곳</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo/character-logo.svg" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <img class="header__logo" src="assets/logo/character-logo.svg" alt="육진대" />
+    <span class="header__title">육진대 맵</span>
+  </header>
+
+  <section class="hero">
+    <img class="hero__logo" src="assets/logo/main-logo.svg" alt="육진대 - 육아에 진심인 대디" />
+    <p class="hero__tagline">아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳</p>
+    <p class="hero__stats">300+ 아빠 크리에이터가 함께 만드는 지도</p>
+  </section>
+
+  <div class="search">
+    <input class="search__input" type="search" placeholder="지역, 장소를 검색해보세요" />
+  </div>
+
+  <section class="section">
+    <h2 class="section__title">지역별로 찾아보기</h2>
+    <div class="region-grid" id="region-grid">
+      <!-- 서울/경기북부/인천/강원도/충청도/전라도/경상도/제주 -->
+    </div>
+  </section>
+
+  <div class="tag-filter" id="tag-filter">
+    <!-- 자연/공원, 실내놀이, 맛집, 카페, 체험/문화, 스포츠, 무료 -->
+  </div>
+
+  <section class="section">
+    <h2 class="section__title">추천 장소</h2>
+    <div class="place-list" id="place-list">
+      <!-- Notion DB 연동 후 카드 렌더링 -->
+    </div>
+  </section>
+
+  <nav class="tabbar">
+    <div class="tabbar__item is-active">홈</div>
+    <div class="tabbar__item">지도</div>
+    <div class="tabbar__item">찜</div>
+    <div class="tabbar__item">내정보</div>
+  </nav>
+
+</div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

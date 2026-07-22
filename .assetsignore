@@ -1,0 +1,15 @@
+src/
+functions/
+node_modules/
+.git/
+.wrangler/
+.env
+.dev.vars
+.gitignore
+.assetsignore
+wrangler.jsonc
+package.json
+package-lock.json
+README.md
+YUKJINDAE_MAP.md
+*.pdf

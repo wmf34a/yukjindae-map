@@ -50,9 +50,7 @@ function toPlace(page) {
   };
 }
 
-export async function onRequestGet(context) {
-  const { env } = context;
-
+async function handlePlaces(env) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
     return new Response(JSON.stringify({ error: "Notion 환경변수가 설정되지 않았습니다." }), {
       status: 500,
@@ -111,3 +109,31 @@ export async function onRequestGet(context) {
     });
   }
 }
+
+function handleNaverConfig(env) {
+  const body = `window.__ENV__ = ${JSON.stringify({
+    NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
+  })};`;
+  return new Response(body, {
+    status: 200,
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "public, max-age=3600",
+    },
+  });
+}
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/api/places") {
+      return handlePlaces(env);
+    }
+    if (url.pathname === "/naver-config") {
+      return handleNaverConfig(env);
+    }
+
+    return env.ASSETS.fetch(request);
+  },
+};

@@ -19,7 +19,7 @@ const state = {
   region: null,
   category: null,
   query: "",
-  expanded: false,
+  visibleCount: PLACE_PAGE_SIZE,
 };
 
 function renderRegions() {
@@ -38,7 +38,7 @@ function renderRegions() {
     btn.addEventListener("click", () => {
       const region = btn.dataset.region;
       state.region = state.region === region ? null : region;
-      state.expanded = false;
+      state.visibleCount = PLACE_PAGE_SIZE;
       renderRegions();
       renderPlaces();
     });
@@ -56,7 +56,7 @@ function renderCategoryFilter() {
     btn.addEventListener("click", () => {
       const category = btn.dataset.category;
       state.category = state.category === category ? null : category;
-      state.expanded = false;
+      state.visibleCount = PLACE_PAGE_SIZE;
       renderCategoryFilter();
       renderPlaces();
     });
@@ -91,23 +91,36 @@ function placeCard(place) {
 
 function renderPlaces() {
   const list = document.getElementById("place-list");
-  const moreBtn = document.getElementById("place-more");
   const filtered = state.places.filter(matchesFilters);
 
   if (!state.places.length) {
     list.innerHTML = `<p class="place-list__loading">불러오는 중...</p>`;
-    moreBtn.hidden = true;
     return;
   }
   if (!filtered.length) {
     list.innerHTML = `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
-    moreBtn.hidden = true;
     return;
   }
 
-  const visible = state.expanded ? filtered : filtered.slice(0, PLACE_PAGE_SIZE);
+  const visible = filtered.slice(0, state.visibleCount);
   list.innerHTML = visible.map(placeCard).join("");
-  moreBtn.hidden = state.expanded || filtered.length <= PLACE_PAGE_SIZE;
+}
+
+function initInfiniteScroll() {
+  const sentinel = document.getElementById("place-sentinel");
+  if (!sentinel) return;
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (!entries[0].isIntersecting) return;
+      const filtered = state.places.filter(matchesFilters);
+      if (state.visibleCount >= filtered.length) return;
+      state.visibleCount += PLACE_PAGE_SIZE;
+      renderPlaces();
+    },
+    { rootMargin: "200px" }
+  );
+  observer.observe(sentinel);
 }
 
 function initHeroSlider() {
@@ -153,15 +166,11 @@ document.addEventListener("DOMContentLoaded", () => {
   renderRegions();
   renderCategoryFilter();
   initHeroSlider();
+  initInfiniteScroll();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
-    state.expanded = false;
-    renderPlaces();
-  });
-
-  document.getElementById("place-more").addEventListener("click", () => {
-    state.expanded = true;
+    state.visibleCount = PLACE_PAGE_SIZE;
     renderPlaces();
   });
 

@@ -74,7 +74,7 @@
 
 ## 4. 데이터 구조 (Notion DB)
 
-> 실제 DB: https://app.notion.com/p/3a5a0ea3c62a81b9b3eee42e2fcae412 (yukjindae-map 워크스페이스)
+> 실제 DB: https://app.notion.com/p/3a5a4eba1ccb81148f3cf90a0b73bcc3 (육진대 공용 노션 워크스페이스, "일삼파파")
 
 ### 장소 DB 컬럼
 

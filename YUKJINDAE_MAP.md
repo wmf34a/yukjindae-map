@@ -371,6 +371,13 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 3. **로컬 검증의 한계**: `wrangler dev`(localhost:8787)에서는 네이버 지도 SDK가 "Open API 인증 실패" 배너를 띄움 — 네이버 맵 클라이언트 ID가 운영 도메인 기준으로 도메인 화이트리스트가 걸려 있어 localhost에서는 지도 자체가 로드되지 않음(코드 문제 아님, 환경 제약). 대신 깃발 아이콘 마크업만 별도 정적 HTML로 렌더링해서 모양(로고 포함) 확인 후 배포
 4. **배포**: 원격에 동시 세션의 새 커밋(`ee6b85c` 헤더 로고 클릭 시 홈 이동)이 먼저 푸시돼 있어 `git rebase origin/main`으로 정리 후 푸시, CI 통과·배포 확인
 
+### 2026-07-22 — 헤더 로고 클릭 시 홈 이동, 설치 버튼 숨김 CSS 버그 수정
+
+1. **헤더 브랜드 클릭 → 홈 이동**: `index.html`/`map.html` 헤더의 아이콘+"육진대 맵" 텍스트를 `<a class="header__brand" href="index.html">`로 감쌈. `place.html`은 뒤로가기 화살표+"장소 상세" 헤더라 브랜드 로고가 없어서 대상에서 제외. `.header__brand { display:flex; gap:8px; text-decoration:none }` CSS 추가, 기존 `.header__install`의 `margin-left:auto`는 그대로라 레이아웃 안 깨짐 (커밋 `ee6b85c`)
+2. **설치 버튼이 standalone에서도 계속 보이던 버그 발견·수정**: 앱을 홈 화면 아이콘으로 설치해 standalone 모드로 열어도 헤더 "설치" 버튼이 안 사라진다는 제보 → 원인은 `js/pwa.js`의 `initHeaderInstallButtons()`가 `isStandalone()`일 때 버튼에 `hidden` 속성을 그대로 두는 로직 자체는 맞았는데, `css/style.css`의 `.header__install { display:flex; ... }`가 author 규칙이라 브라우저 기본 `[hidden] { display:none }` UA 스타일을 이겨버려서 `hidden`이 붙어도 시각적으로는 계속 보였던 것. `.header__install[hidden] { display:none; }`을 추가해서 해결 (커밋 `1f32d62`)
+3. **검증 중 삽질**: 로컬 `wrangler dev`에서 수정 전/후를 확인하는데 서비스워커가 예전 `style.css`를 `stale-while-revalidate` 캐시로 계속 서빙해서 처음엔 수정이 반영 안 된 것처럼 보임 → devtools에서 서비스워커 `unregister()` + `caches.delete()`로 캐시 비우고 나서야 정상 확인됨 (버그 아니라 로컬 테스트 환경의 캐시 문제)
+4. **배포 확인**: PR merge 후 GitHub Actions CI(test→deploy) 성공 확인, 프로덕션 `yukjindae-map.wmf34a.workers.dev/css/style.css`에서 `.header__install[hidden]` 규칙과 새 `etag` 응답까지 `curl`로 직접 확인 — 첫 요청은 Cloudflare 엣지 캐시(`cf-cache-status: HIT`)로 배포 직전 버전이 잠깐 잡혔다가 곧바로 새 버전으로 갱신됨
+
 ---
 
 ## 13. 참고 자료

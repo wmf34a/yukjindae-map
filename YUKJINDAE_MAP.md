@@ -207,6 +207,7 @@
 | main-logo-fallback.png | `public/assets/logo/main-logo-fallback.png` (원본: 육진대 로고 배경제거.png) | SVG 미지원 환경 폴백용 PNG, PWA 아이콘 원본 소스 |
 | main-logo-bg.jpg | `public/assets/logo/main-logo-bg.jpg` (원본: 육진대첫번째로고01-1 (1).jpg) | 배경 있는 영역 폴백용 JPG |
 | icon-192.png / icon-512.png / apple-touch-icon.png / favicon-32.png | `public/assets/icons/` | PWA 매니페스트 아이콘 (main-logo-fallback.png를 `sips`로 리사이즈해서 생성) |
+| maskable-icon-192.png / maskable-icon-512.png | `public/assets/icons/` | maskable 아이콘 (`purpose: "maskable"`). 로고를 62% 축소 후 `#1A2F6B` 배경으로 패딩 — 원형/사각형 마스킹 시 잘림 방지용 |
 
 > ✅ SVG 우선 사용 — 어떤 크기에도 깨지지 않음  
 > ✅ PNG/JPG는 SVG 미지원 환경 대비 폴백으로 보관
@@ -289,6 +290,15 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 - 카테고리 태그 데이터 보강 (현재 "무료"만 채워짐, 나머지 6개 태그는 DB에 수동/자동 입력 필요)
 - 디자인 다듬기 (현재는 로고 색감만 반영한 기본 스타일, 캔바 자료 기준 비주얼 정리는 미착수)
 - 이미지 핫링크 구조를 자체 호스팅(Cloudflare 등)으로 바꿀지 검토 (10장 참고 — 언제든 다시 깨질 수 있는 구조)
+
+### 2026-07-22 — PWA 개선 (maskable 아이콘, 오프라인 폴백, 설치 배너)
+
+기본 PWA(manifest+sw.js+아이콘)는 이미 완료된 상태였고, 이번엔 그 위에 세 가지를 추가:
+
+1. **maskable 아이콘**: `main-logo-fallback.png`(1024x1024, 배경 제거본)를 `sips`로 62% 축소 후 `#1A2F6B` 배경색으로 512/192 캔버스에 패딩해서 `maskable-icon-512.png`/`maskable-icon-192.png` 생성. Android 등에서 아이콘이 원형/사각형으로 마스킹될 때 로고가 잘리지 않도록 안전 영역 확보. `manifest.json`에 `purpose: "maskable"` 항목으로 추가 등록 (기존 `purpose: "any"` 아이콘은 유지)
+2. **오프라인 폴백 페이지**: `public/offline.html` 신규 추가 (사이트 톤에 맞춘 네이비 톤 안내 화면 + 다시 시도 버튼). `sw.js`를 v2→v3로 캐시 버전 올리고 프리캐시 목록에 추가, `navigate` 모드 fetch 실패 시 `캐시 매치 → 없으면 offline.html` 순으로 폴백하도록 수정
+3. **설치 유도 배너**: `js/pwa.js`에 `beforeinstallprompt` 이벤트를 받아 하단 탭바 위에 뜨는 배너 UI 추가 (설치/닫기 버튼, 닫으면 `localStorage`에 기억해서 재노출 안 함). 스타일은 `css/style.css`에 `.install-banner*` 클래스로 추가, index/map/place 세 페이지 모두 `js/pwa.js`를 공유하므로 어디서든 동일하게 동작
+4. **로컬 검증**: `wrangler dev`로 서비스워커 activate, `caches.match('/offline.html')` 프리캐시 확인, `showInstallBanner()` 강제 호출로 배너 렌더링, `/offline.html` 직접 접속 렌더링까지 브라우저로 확인. `npm run lint`/`npm run test` 통과
 
 ---
 

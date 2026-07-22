@@ -1,9 +1,10 @@
-const CACHE_NAME = "yukjindae-map-v2";
+const CACHE_NAME = "yukjindae-map-v3";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
   "/map.html",
   "/place.html",
+  "/offline.html",
   "/css/style.css",
   "/css/map.css",
   "/css/place.css",
@@ -47,7 +48,10 @@ self.addEventListener("fetch", (event) => {
   // 페이지를 띄우는 문제가 있었음. 오프라인 대비는 설치 시 채워둔 precache로 충분.
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request).catch(
+        () =>
+          caches.match(event.request).then((cached) => cached || caches.match("/offline.html"))
+      )
     );
     return;
   }

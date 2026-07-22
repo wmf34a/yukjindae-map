@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>오프라인 | 육진대 맵</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo/character-logo.svg" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#1A2F6B" />
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="css/style.css" />
+<style>
+.offline {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px;
+  gap: 16px;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.offline__logo { width: 96px; height: 96px; }
+.offline__title { font-size: 1.25rem; font-weight: 700; }
+.offline__desc { font-size: 0.95rem; opacity: 0.8; }
+.offline__retry {
+  margin-top: 8px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: var(--color-white);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<div class="offline">
+  <img class="offline__logo" src="assets/logo/character-logo.svg" alt="육진대" />
+  <p class="offline__title">인터넷 연결이 끊겼어요</p>
+  <p class="offline__desc">네트워크 연결을 확인한 뒤 다시 시도해주세요.<br />이전에 방문한 페이지는 오프라인에서도 볼 수 있어요.</p>
+  <button class="offline__retry" onclick="location.reload()">다시 시도</button>
+</div>
+</body>
+</html>

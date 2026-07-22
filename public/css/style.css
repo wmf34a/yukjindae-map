@@ -265,3 +265,67 @@ body {
   color: var(--color-secondary);
   font-weight: 700;
 }
+
+.install-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar-height) + 12px);
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: calc(var(--max-width) - 32px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 12px;
+  background: var(--color-white);
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(13, 27, 62, 0.18);
+  z-index: 1000;
+}
+
+.install-banner__logo {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+
+.install-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.install-banner__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.install-banner__desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #6B7593;
+}
+
+.install-banner__install {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: var(--color-secondary);
+  color: var(--color-white);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.install-banner__close {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #9AA5C3;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}

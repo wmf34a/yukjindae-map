@@ -100,6 +100,12 @@ body {
   color: var(--color-primary);
 }
 
+.header__subtitle {
+  font-size: 12px;
+  font-weight: 500;
+  color: #5A6789;
+}
+
 .header__actions {
   margin-left: auto;
   display: flex;

@@ -53,6 +53,27 @@ body {
   color: var(--color-primary);
 }
 
+.header__install {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--color-white);
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.header__install svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Hero */
 .hero {
   background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-secondary) 100%);

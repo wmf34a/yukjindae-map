@@ -18,6 +18,7 @@ window.addEventListener("beforeinstallprompt", (event) => {
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
   document.querySelector(".install-popup-overlay")?.remove();
+  document.querySelectorAll(".header__install").forEach((btn) => { btn.hidden = true; });
 });
 
 function isStandalone() {
@@ -123,6 +124,25 @@ function showInstallPopup() {
     closePopup();
   });
 }
+
+function initHeaderInstallButtons() {
+  if (isStandalone()) return;
+
+  document.querySelectorAll(".header__install").forEach((btn) => {
+    btn.hidden = false;
+    btn.addEventListener("click", async () => {
+      if (!isIOS() && deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        return;
+      }
+      showInstallPopup();
+    });
+  });
+}
+
+initHeaderInstallButtons();
 
 window.addEventListener("load", () => {
   if (isStandalone()) return;

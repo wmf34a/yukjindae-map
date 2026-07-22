@@ -8,11 +8,12 @@
 <link rel="manifest" href="/manifest.json" />
 <meta name="theme-color" content="#1A2F6B" />
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
 <div class="splash" id="splash">
-  <img class="splash__logo" src="assets/logo/main-logo-blue.svg" alt="육진대" />
+  <img class="splash__logo" src="assets/logo/main-logo-fallback.png" alt="육진대" />
 </div>
 <script>
   (function () {
@@ -33,34 +34,18 @@
 
 <div class="app">
 
-  <header class="header">
+  <header class="header header--home">
     <a class="header__brand" href="index.html">
       <img class="header__logo" src="assets/logo/character-logo.svg" alt="육진대" />
-      <span class="header__title">육진대 맵</span>
     </a>
-    <button class="header__install" type="button" hidden>
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M5 19h14" /></svg>
-      설치
-    </button>
-  </header>
-
-  <section class="hero">
-    <div class="hero__track" id="hero-track">
-      <div class="hero__slide">
-        <img class="hero__logo" src="assets/logo/main-logo.svg" alt="육진대 - 육아에 진심인 대디" />
-        <p class="hero__tagline">아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳</p>
-      </div>
-      <div class="hero__slide">
-        <p class="hero__big">300+</p>
-        <p class="hero__tagline">아빠 크리에이터가 함께 만드는 지도</p>
-      </div>
-      <div class="hero__slide">
-        <p class="hero__big">99곳</p>
-        <p class="hero__tagline">전국 방방곡곡, 직접 다녀온 곳만 소개해요</p>
-      </div>
+    <div class="header__actions">
+      <button class="header__bell" type="button" aria-label="알림">🔔</button>
+      <button class="header__install" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M5 19h14" /></svg>
+        설치
+      </button>
     </div>
-    <div class="hero__dots" id="hero-dots"></div>
-  </section>
+  </header>
 
   <div class="search">
     <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
@@ -69,8 +54,26 @@
   <section class="section">
     <h2 class="section__title">지역별로 찾아보기</h2>
     <div class="region-grid" id="region-grid">
-      <!-- 서울/경기북부/인천/강원도/충청도/전라도/경상도/제주 -->
+      <!-- 서울/경기북부/경기남부/강원도/충청도/전라도/인천/제주 -->
     </div>
+  </section>
+
+  <section class="banner">
+    <div class="banner__track" id="hero-track">
+      <div class="banner__slide">
+        <img class="banner__logo" src="assets/logo/main-logo.svg" alt="육진대 - 육아에 진심인 대디" />
+        <p class="banner__tagline">아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳</p>
+      </div>
+      <div class="banner__slide banner__slide--stat">
+        <p class="banner__big">300+</p>
+        <p class="banner__tagline">아빠 크리에이터가 함께 만드는 지도</p>
+      </div>
+      <div class="banner__slide banner__slide--stat">
+        <p class="banner__big">99곳</p>
+        <p class="banner__tagline">전국 방방곡곡, 직접 다녀온 곳만 소개해요</p>
+      </div>
+    </div>
+    <div class="banner__dots" id="hero-dots"></div>
   </section>
 
   <div class="tag-filter" id="tag-filter">
@@ -78,8 +81,11 @@
   </div>
 
   <section class="section">
-    <h2 class="section__title">추천 장소 <span id="place-count" class="section__count"></span></h2>
-    <div class="place-list" id="place-list">
+    <div class="section__head">
+      <h2 class="section__title">이번 주 추천 장소</h2>
+      <button class="section__more" id="place-more" type="button" hidden>더보기 ›</button>
+    </div>
+    <div class="place-grid" id="place-list">
       <p class="place-list__loading" id="place-loading">불러오는 중...</p>
     </div>
   </section>

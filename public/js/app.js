@@ -19,7 +19,10 @@ const state = {
   region: null,
   category: null,
   query: "",
-  visibleCount: PLACE_PAGE_SIZE,
+  gridOffset: 0,
+  gridHasMore: true,
+  gridLoading: false,
+  gridRequestId: 0,
 };
 
 function renderRegions() {
@@ -38,9 +41,8 @@ function renderRegions() {
     btn.addEventListener("click", () => {
       const region = btn.dataset.region;
       state.region = state.region === region ? null : region;
-      state.visibleCount = PLACE_PAGE_SIZE;
       renderRegions();
-      renderPlaces();
+      loadPlaceGrid(true);
     });
   });
 }
@@ -56,22 +58,10 @@ function renderCategoryFilter() {
     btn.addEventListener("click", () => {
       const category = btn.dataset.category;
       state.category = state.category === category ? null : category;
-      state.visibleCount = PLACE_PAGE_SIZE;
       renderCategoryFilter();
-      renderPlaces();
+      loadPlaceGrid(true);
     });
   });
-}
-
-function matchesFilters(place) {
-  if (state.region && place.region !== state.region) return false;
-  if (state.category && !place.categories.includes(state.category)) return false;
-  if (state.query) {
-    const q = state.query.toLowerCase();
-    const haystack = `${place.name} ${place.address} ${place.region}`.toLowerCase();
-    if (!haystack.includes(q)) return false;
-  }
-  return true;
 }
 
 function placeCard(place) {
@@ -89,21 +79,54 @@ function placeCard(place) {
   `;
 }
 
-function renderPlaces() {
+function buildGridUrl(offset) {
+  const params = new URLSearchParams({ limit: String(PLACE_PAGE_SIZE), offset: String(offset) });
+  if (state.region) params.set("region", state.region);
+  if (state.category) params.set("category", state.category);
+  if (state.query) params.set("q", state.query);
+  return `/api/places?${params.toString()}`;
+}
+
+async function loadPlaceGrid(reset) {
   const list = document.getElementById("place-list");
-  const filtered = state.places.filter(matchesFilters);
 
-  if (!state.places.length) {
+  if (reset) {
+    state.gridOffset = 0;
+    state.gridHasMore = true;
     list.innerHTML = `<p class="place-list__loading">불러오는 중...</p>`;
-    return;
-  }
-  if (!filtered.length) {
-    list.innerHTML = `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+  } else if (state.gridLoading || !state.gridHasMore) {
     return;
   }
 
-  const visible = filtered.slice(0, state.visibleCount);
-  list.innerHTML = visible.map(placeCard).join("");
+  const requestId = ++state.gridRequestId;
+  state.gridLoading = true;
+
+  try {
+    const res = await fetch(buildGridUrl(state.gridOffset));
+    const data = await res.json();
+    if (requestId !== state.gridRequestId) return;
+    if (!res.ok) throw new Error(data.error || "places fetch failed");
+
+    const items = data.places || [];
+    if (reset) {
+      list.innerHTML = items.length
+        ? items.map(placeCard).join("")
+        : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+    } else if (items.length) {
+      list.insertAdjacentHTML("beforeend", items.map(placeCard).join(""));
+    }
+
+    state.gridOffset += items.length;
+    state.gridHasMore = Boolean(data.hasMore);
+  } catch (err) {
+    if (requestId !== state.gridRequestId) return;
+    console.error(err);
+    if (reset) {
+      list.innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
+    }
+  } finally {
+    if (requestId === state.gridRequestId) state.gridLoading = false;
+  }
 }
 
 function initInfiniteScroll() {
@@ -112,11 +135,7 @@ function initInfiniteScroll() {
 
   const observer = new IntersectionObserver(
     (entries) => {
-      if (!entries[0].isIntersecting) return;
-      const filtered = state.places.filter(matchesFilters);
-      if (state.visibleCount >= filtered.length) return;
-      state.visibleCount += PLACE_PAGE_SIZE;
-      renderPlaces();
+      if (entries[0].isIntersecting) loadPlaceGrid(false);
     },
     { rootMargin: "200px" }
   );
@@ -154,12 +173,9 @@ async function loadPlaces() {
     state.places = data.places || [];
   } catch (err) {
     console.error(err);
-    const list = document.getElementById("place-list");
-    list.innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
     return;
   }
   renderRegions();
-  renderPlaces();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -170,9 +186,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
-    state.visibleCount = PLACE_PAGE_SIZE;
-    renderPlaces();
+    loadPlaceGrid(true);
   });
 
   loadPlaces();
+  loadPlaceGrid(true);
 });

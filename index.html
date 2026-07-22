@@ -22,7 +22,7 @@
   </section>
 
   <div class="search">
-    <input class="search__input" type="search" placeholder="지역, 장소를 검색해보세요" />
+    <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
   </div>
 
   <section class="section">
@@ -37,17 +37,17 @@
   </div>
 
   <section class="section">
-    <h2 class="section__title">추천 장소</h2>
+    <h2 class="section__title">추천 장소 <span id="place-count" class="section__count"></span></h2>
     <div class="place-list" id="place-list">
-      <!-- Notion DB 연동 후 카드 렌더링 -->
+      <p class="place-list__loading" id="place-loading">불러오는 중...</p>
     </div>
   </section>
 
   <nav class="tabbar">
-    <div class="tabbar__item is-active">홈</div>
-    <div class="tabbar__item">지도</div>
-    <div class="tabbar__item">찜</div>
-    <div class="tabbar__item">내정보</div>
+    <a class="tabbar__item is-active" href="index.html">홈</a>
+    <a class="tabbar__item" href="map.html">지도</a>
+    <a class="tabbar__item" href="#">찜</a>
+    <a class="tabbar__item" href="#">내정보</a>
   </nav>
 
 </div>

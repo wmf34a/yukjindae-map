@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>지도 | 육진대 맵</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo/character-logo.svg" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/map.css" />
+</head>
+<body>
+<div class="app app--map">
+
+  <header class="header">
+    <img class="header__logo" src="assets/logo/character-logo.svg" alt="육진대" />
+    <span class="header__title">육진대 맵</span>
+  </header>
+
+  <div class="map-toolbar">
+    <div class="map-toolbar__regions" id="map-region-chips"></div>
+  </div>
+
+  <div id="map" class="map-canvas"></div>
+  <button id="locate-btn" class="map-locate-btn" title="현재 위치">📍</button>
+
+  <div class="map-sheet" id="map-sheet">
+    <div class="map-sheet__handle"></div>
+    <div id="map-sheet-content"></div>
+  </div>
+
+  <nav class="tabbar">
+    <a class="tabbar__item" href="index.html">홈</a>
+    <a class="tabbar__item is-active" href="map.html">지도</a>
+    <a class="tabbar__item" href="#">찜</a>
+    <a class="tabbar__item" href="#">내정보</a>
+  </nav>
+
+</div>
+
+<script src="/naver-config"></script>
+<script>
+  document.write('<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=' + window.__ENV__.NAVER_MAP_CLIENT_ID + '"><\/script>');
+</script>
+<script src="js/map.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+  "name": "yukjindae-map",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "wrangler pages dev . --port 8788"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}

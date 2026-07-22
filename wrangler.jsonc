@@ -10,7 +10,7 @@
     // 다중 페이지 정적 사이트(index/map/place.html)라서 pokemon 프로젝트와 달리
     // "single-page-application" 폴백은 쓰지 않음 — 켜면 없는 경로가 항상 index.html로
     // 대체되어 존재하지 않는 페이지도 200으로 응답하게 됨
-    "directory": "./",
+    "directory": "./public",
     "binding": "ASSETS"
   }
 }

@@ -35,8 +35,8 @@ body {
 }
 
 .splash__logo {
-  width: 55%;
-  max-width: 240px;
+  width: 70%;
+  max-width: 320px;
   height: auto;
   animation: splash-pop 0.6s ease;
 }

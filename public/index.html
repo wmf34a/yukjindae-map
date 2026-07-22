@@ -20,12 +20,14 @@
     var splash = document.getElementById("splash");
     if (sessionStorage.getItem("splashShown")) {
       splash.style.display = "none";
+      window.dispatchEvent(new Event("splashHidden"));
     } else {
       sessionStorage.setItem("splashShown", "1");
       setTimeout(function () {
         splash.classList.add("splash--hide");
         setTimeout(function () {
           splash.style.display = "none";
+          window.dispatchEvent(new Event("splashHidden"));
         }, 400);
       }, 2000);
     }

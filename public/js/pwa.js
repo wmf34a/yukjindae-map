@@ -180,5 +180,13 @@ initHeaderInstallButtons();
 window.addEventListener("load", () => {
   if (isStandalone()) return;
   if (localStorage.getItem(DISMISS_KEY) === todayString()) return;
-  setTimeout(showInstallPopup, 800);
+
+  const splash = document.getElementById("splash");
+  const scheduleShow = () => setTimeout(showInstallPopup, 800);
+
+  if (splash && splash.style.display !== "none") {
+    window.addEventListener("splashHidden", scheduleShow, { once: true });
+  } else {
+    scheduleShow();
+  }
 });

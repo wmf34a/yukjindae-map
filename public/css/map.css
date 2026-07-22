@@ -37,7 +37,8 @@
 }
 
 .map-canvas {
-  flex: 1;
+  flex: none;
+  height: 50vh;
   width: 100%;
   min-height: 0;
 }

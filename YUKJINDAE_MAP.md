@@ -165,6 +165,16 @@
 - 하단 탭바 네비게이션
 - 따뜻하되 강인한 느낌 (육진대 = 육아에 진심인 대디)
 
+### 홈 화면 리디자인 — "여기어때" 스타일 (2026-07-22)
+
+기본 스타일 위에 앱처럼 보이도록 홈 화면을 다듬음 (12장 로그 참고):
+- **스플래시**: 첫 접속 시 네이비(`#1A2F6B`) 풀스크린 + 로고, 2초 후 페이드아웃 (세션당 1회, `sessionStorage`)
+- **카테고리 그리드**: 지역명을 3D 느낌 이모지 타일로 (그라데이션 배경 + 그림자 + `drop-shadow`), 선택 시 블루 그라데이션으로 강조
+- **히어로 배너**: 로고/통계 슬라이드 3장이 3초마다 자동 전환, 하단 점 인디케이터
+- **장소 카드**: 썸네일 확대(88→108px), 라운드 20px, 그림자, 탭 시 눌리는 인터랙션
+- **하단 탭바**: 이모지 아이콘(🏠🗺️❤️👤) + 텍스트, 3개 페이지 전부 통일
+- **타이포/여백**: 본문 폰트 굵기 500 기본, 제목·카드명 800으로 강조, section/카드 패딩 전반 확대
+
 ---
 
 ## 8. 환경변수
@@ -340,6 +350,19 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 3. **maskable 아이콘 배경 수정**: 처음 만들 때 배경을 `#1A2F6B`(네이비)로 패딩했는데, 로고 자체도 네이비 톤이라 대비가 안 나와서 안 보이는 문제 발견 → 배경을 흰색(`#FFFFFF`)으로 재생성 (`maskable-icon-192.png`/`-512.png`, 생성 스크립트는 동일하고 `--padColor`만 교체)
 4. **검증**: `wrangler dev`로 팝업 Android/iOS(UA 오버라이드) 분기, "오늘 하루 보지 않기" 저장·재방문 억제, 헤더 버튼 클릭 시 실제 크로미움 네이티브 설치 프롬프트 호출까지 브라우저로 확인. lint/test 통과 후 3개 커밋으로 나눠 푸시, CI 배포 성공 확인
 5. **참고**: 테스트 중 `wrangler dev`가 "이 세션이 AI 에이전트에서 실행 중"임을 감지하고 `/cdn-cgi/explorer/api`(로컬 D1/R2/KV 등 조회용 API)를 자동 노출한다는 걸 발견. 이 API 자체가 파일을 수정하진 않지만, 방문했을 때 R2 관련 바인딩이 `wrangler.jsonc`에 잠깐 나타난 적이 있어(작업 중이던 다른 세션의 R2 커밋과 타이밍이 겹쳐서 혼동했었음) — 실제로는 무관한 두 가지였음. 다음 세션도 비슷한 걸 보면 `git status`/`git log`로 실제 커밋 여부부터 확인할 것
+
+### 2026-07-22 — 홈 화면 "여기어때" 스타일 리디자인
+
+사용자 요청 7가지를 그대로 구현 (7장 "홈 화면 리디자인" 요약과 동일 내용, 여기는 구현 세부):
+
+1. **스플래시 화면**: `index.html` body 최상단에 `#splash` 오버레이 추가, `main-logo.svg` + `#1A2F6B` 배경. 인라인 `<script>`가 `sessionStorage.splashShown` 체크 → 없으면 2초 후 `splash--hide` 클래스(opacity 전환) 추가하고 400ms 뒤 `display:none`, 있으면 즉시 숨김 (탭 이동 시 반복 노출 방지)
+2. **카테고리 3D 이모지 그리드**: `js/app.js`에 `REGION_EMOJI` 매핑(서울🗼/서울근교🌳/경기북부🏙️/경기남부🌆/인천✈️/강원도🏔️/충청도🌾/전라도🌊/경상도🏯/제주🌴 — 사용자가 8개만 지정해서 서울근교·경상도는 임의 보완) 추가, `region-grid__item` 마크업에 `region-grid__icon`/`region-grid__label` 분리. CSS는 그라데이션 배경 + `box-shadow`(외부 그림자 + inset 하이라이트) + 이모지 `drop-shadow`로 입체감
+3. **히어로 슬라이더**: `.hero__track`(flex) 안에 슬라이드 3장(로고+태그라인 / "300+" / "99곳"), `js/app.js`의 `initHeroSlider()`가 3초 간격 `setInterval`로 `translateX` 이동 + 점 인디케이터(`.hero__dot.is-active`) 갱신. 외부 라이브러리 없이 순수 CSS transform
+4. **장소 카드**: `.place-card__thumb` 88px→108px, `.place-card` `border-radius` 14→20px, `border` 제거하고 `box-shadow`로 대체, `:active`에 `scale(0.98)` 인터랙션 추가
+5. **하단 탭바**: `index.html`/`map.html`/`place.html` 3곳 전부 `tabbar__item`에 `<span class="tabbar__icon">` 추가(🏠🗺️❤️👤), 기존 `flex-direction:column` 레이아웃이라 아이콘이 텍스트 위에 자동으로 배치됨
+6. **폰트/여백**: `body` 기본 `font-weight:500`, 제목류(`header__title`, `section__title`, `place-card__name`) `700→800`, `section`/`.place-list`/`.tag-filter`/`.search` 패딩 확대(16px 기준→18~20px)
+7. **검증 중 발견한 것**: 로컬 `wrangler dev`가 이전 턴 사이에 알 수 없는 이유로 죽어있어서(다른 프로세스 정리 중 같이 종료된 듯) 잠깐 프로덕션 URL로 착각하게 만드는 상황 발생 — `ps aux | grep wrangler`로 프로세스 확인 후 재시작해서 해결. 배포 직후 첫 로드는 서비스워커의 stale-while-revalidate 때문에 구버전 CSS가 잠깐 보였다가 새로고침 한 번으로 정상화됨 (예상된 동작, 버그 아님)
+8. 사용자 요청대로 `git add . && git commit -m "홈화면 여기어때 스타일 리디자인" && git push` 그대로 실행, CI/CD 성공 확인
 
 ---
 

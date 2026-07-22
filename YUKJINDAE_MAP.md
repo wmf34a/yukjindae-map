@@ -112,7 +112,7 @@
 | 백엔드 | Cloudflare Workers (`src/worker.js`) — Notion 프록시(`/api/places`), 네이버 키 전달(`/naver-config`) |
 | 지도 | 네이버 Maps API (Dynamic Map, 클라이언트 사이드 JS SDK) |
 | 데이터 | Notion API (서버에서만 호출, 브라우저에 키 노출 없음) |
-| 이미지 | 네이버 이미지검색 API로 찾은 외부 URL을 그대로 핫링크 (Notion에 파일 업로드 아님 — 자세한 내용은 11장) |
+| 이미지 | Cloudflare R2(`yukjindae-map-images` 버킷)에 자체 호스팅. `src/worker.js`의 `/images/:key` 라우트가 R2에서 직접 서빙 (1년 캐시). 원래는 네이버 이미지검색 API로 찾은 외부 URL을 핫링크했으나 하루에 두 번 깨져서 R2로 이전함 — 자세한 내용은 10·11장 |
 | PWA | `public/manifest.json` + `public/sw.js` (stale-while-revalidate, API 응답은 캐시 제외) |
 | 배포 | Cloudflare Workers (Static Assets), `wrangler.jsonc` |
 | CI/CD | GitHub Actions (`.github/workflows/ci.yml`) — push마다 lint→test→(main이면)deploy 자동 실행 |
@@ -212,6 +212,8 @@
 > ✅ SVG 우선 사용 — 어떤 크기에도 깨지지 않음  
 > ✅ PNG/JPG는 SVG 미지원 환경 대비 폴백으로 보관
 
+> 💡 여기 나온 로고/아이콘은 `public/assets/`에 있는 **브랜드 에셋**이고, 99곳 **장소 사진**은 별개로 Cloudflare R2(`yukjindae-map-images` 버킷)에 있다 — 10장 참고.
+
 ---
 
 ## 10. API 사용 현황
@@ -237,14 +239,27 @@
 
 > 💡 이 지역검색/이미지검색 로직은 향후 "3-6. 후기 제보" 기능(멤버가 새 장소 등록 시 주소·좌표·사진 자동 채움) 만들 때 그대로 재사용할 수 있다.
 
-### 이미지가 안 나올 때 (핫링크 이슈)
+### 이미지는 이제 핫링크가 아니라 R2 자체 호스팅 (2026-07-22 이전)
 
-이미지검색으로 찾은 URL은 원본 사이트(블로그/뉴스/카페)에 그대로 링크만 걸어둔 것이라, 원본 사이트가 **리퍼러(Referer) 체크로 외부 핫링크를 차단**하거나 이미지를 지우면 깨진다 (다음 카페 CDN `t1.daumcdn.net`이 대표적 — 2026-07-22에 서울식물원/퍼스트가든 2곳이 이 문제로 걸렸다가 재검색 후 수정함). 점검 스크립트:
+처음엔 이미지검색으로 찾은 URL을 원본 사이트(블로그/뉴스/카페)에 그대로 핫링크했는데, 하루 만에 두 번 깨졌다:
+1. 다음 카페 CDN(`t1.daumcdn.net`)이 **리퍼러(Referer) 체크로 외부 핫링크 차단** → 서울식물원/퍼스트가든 403
+2. 오래된 네이버 쇼핑 CDN(`shop1.phinf.naver.net`)이 **SSL 인증서 호스트명 불일치**(Akamai 인증서를 씀) → 크롬이 `http://` 이미지를 `https://`로 자동 승격하다가 실패 → 용인 공룡월드/원주 소금산 그랜드밸리 로드 실패
+
+둘 다 근본 원인은 같음(제3자 호스팅에 의존), 그래서 **99곳 이미지를 전부 다운로드해서 Cloudflare R2(`yukjindae-map-images` 버킷)에 재업로드**하고 Notion `사진` 필드를 `https://yukjindae-map.wmf34a.workers.dev/images/<노션페이지ID>.<확장자>`로 교체했다. 이제 원본 사이트가 뭘 하든 우리 이미지는 안 깨진다.
+
+**서빙 구조**: `wrangler.jsonc`의 `r2_buckets` 바인딩(`IMAGES`) → `src/worker.js`의 `/images/:key` 라우트가 `env.IMAGES.get(key)`로 객체를 읽어 1년 캐시(`cache-control: public, max-age=31536000, immutable`)로 응답.
+
+> 💡 향후 "3-6. 후기 제보"로 멤버가 새 사진을 올리면, 그 사진도 같은 방식으로 R2에 저장하도록 확장하면 된다 (지금은 마이그레이션 스크립트로 1회성 처리했을 뿐, 업로드 API 자체는 아직 없음).
+
+<details>
+<summary>참고: 핫링크 시절 점검용으로 썼던 스크립트 (지금은 불필요)</summary>
 
 ```bash
 # 우리 사이트를 Referer로 넣어서 요청 → 403/에러면 핫링크 차단된 것
 curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 ```
+
+</details>
 
 ---
 
@@ -257,6 +272,7 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 - **`assets.not_found_handling`은 절대 `single-page-application`으로 켜지 않는다.** 이 사이트는 index/map/place.html이 각각 실제 라우트인 다중 페이지 사이트라, SPA 폴백을 켜면 존재하지 않는 경로도 전부 index.html로 응답해버림.
 - **자동배포는 Cloudflare 대시보드의 "Connect to Git"이 아니라 GitHub Actions가 담당.** Cloudflare의 Git 연동 화면만 보고 자동배포된다고 착각하기 쉬운데(실제로 이 프로젝트도, 같은 계정의 pokemon/hangul-nori도 전부 아니었음), 진짜 배포 트리거는 `.github/workflows/ci.yml`의 `deploy` 잡(`cloudflare/wrangler-action`)이다: `main` push → lint+test 통과 → `wrangler deploy`.
 - **로컬 개발**: `make dev`(`wrangler dev`), `make lint`, `make test`, `make ci`(lint+test), `make deploy`(수동/즉시 배포용, 평소엔 안 씀).
+- **R2 바인딩**: `wrangler.jsonc`의 `r2_buckets`에 `{ "binding": "IMAGES", "bucket_name": "yukjindae-map-images" }`가 있어야 장소 이미지 서빙(`/images/:key`)이 동작함. 버킷 자체는 `wrangler r2 bucket create`로 미리 만들어둔 것이라 배포 시 자동 생성되지 않음 — 계정을 새로 옮기거나 버킷을 지웠다면 다시 만들어야 함. R2는 Cloudflare 대시보드에서 계정별로 한 번 활성화(Enable R2)해야 쓸 수 있음 (결제 수단 등록 필요하지만 이 프로젝트 규모론 사실상 무료).
 
 ---
 
@@ -288,8 +304,8 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 - 핀 클러스터링, 현재 위치 기반 거리 표시, 평점/리뷰 수, 좋아요 버튼, 이미지 갤러리, 지도 미니맵 임베드, 공유 버튼 (3장 체크리스트)
 - 찜 목록, 장소 제보 폼 (3-5, 3-6)
 - 카테고리 태그 데이터 보강 (현재 "무료"만 채워짐, 나머지 6개 태그는 DB에 수동/자동 입력 필요)
+- 기저귀교환대/수유실/유모차동선 데이터 보강 (컬럼은 있으나 99곳 전부 비어있음 — PDF 원본에 없던 정보라 멤버 제보로 채워야 함)
 - 디자인 다듬기 (현재는 로고 색감만 반영한 기본 스타일, 캔바 자료 기준 비주얼 정리는 미착수)
-- 이미지 핫링크 구조를 자체 호스팅(Cloudflare 등)으로 바꿀지 검토 (10장 참고 — 언제든 다시 깨질 수 있는 구조)
 
 ### 2026-07-22 — PWA 개선 (maskable 아이콘, 오프라인 폴백, 설치 배너)
 
@@ -299,6 +315,17 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 2. **오프라인 폴백 페이지**: `public/offline.html` 신규 추가 (사이트 톤에 맞춘 네이비 톤 안내 화면 + 다시 시도 버튼). `sw.js`를 v2→v3로 캐시 버전 올리고 프리캐시 목록에 추가, `navigate` 모드 fetch 실패 시 `캐시 매치 → 없으면 offline.html` 순으로 폴백하도록 수정
 3. **설치 유도 배너**: `js/pwa.js`에 `beforeinstallprompt` 이벤트를 받아 하단 탭바 위에 뜨는 배너 UI 추가 (설치/닫기 버튼, 닫으면 `localStorage`에 기억해서 재노출 안 함). 스타일은 `css/style.css`에 `.install-banner*` 클래스로 추가, index/map/place 세 페이지 모두 `js/pwa.js`를 공유하므로 어디서든 동일하게 동작
 4. **로컬 검증**: `wrangler dev`로 서비스워커 activate, `caches.match('/offline.html')` 프리캐시 확인, `showInstallBanner()` 강제 호출로 배너 렌더링, `/offline.html` 직접 접속 렌더링까지 브라우저로 확인. `npm run lint`/`npm run test` 통과
+
+### 2026-07-22 — 이미지 자체 호스팅으로 전환 (Cloudflare R2)
+
+핫링크 이미지가 하루에 두 번 깨진 뒤(9번 항목의 리퍼러 차단, 그리고 뒤이어 발견된 `shop1.phinf.naver.net`의 SSL 인증서 호스트명 불일치로 인한 mixed-content 실패), 근본적으로 R2 자체 호스팅으로 이전:
+
+1. R2는 계정에서 처음엔 비활성 상태라 사용자가 직접 대시보드에서 Enable R2 (계정 설정이라 대신 할 수 없는 부분)
+2. `wrangler r2 bucket create yukjindae-map-images`로 버킷 생성, `wrangler.jsonc`에 `r2_buckets` 바인딩(`IMAGES`) 추가
+3. `src/worker.js`에 `/images/:key` 라우트 추가 — `env.IMAGES.get(key)`로 R2 객체를 읽어 1년 immutable 캐시로 서빙
+4. 1회성 마이그레이션 스크립트(스크래치 전용, 저장소엔 미포함)로 99곳 전부: 기존 이미지 URL 다운로드(https 강제 + Referer/User-Agent 지정) → `wrangler r2 object put`으로 R2 업로드 → Notion `사진` 필드를 `/images/<페이지ID>.<확장자>`로 교체. 99곳 전부 성공
+5. 배포 후 GitHub Actions의 `CLOUDFLARE_API_TOKEN`이 R2 쓰기 권한까지 커버하는지는 이미 검증됨(로컬에서 같은 토큰으로 버킷 생성·업로드 성공) — 별도 시크릿 추가 없이 기존 2개(`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`)로 충분
+6. 실제 브라우저로 이미지 로드 확인, `curl`로 `cache-control: public, max-age=31536000, immutable` 헤더 확인
 
 ---
 

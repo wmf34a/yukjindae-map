@@ -11,6 +11,26 @@
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+<div class="splash" id="splash">
+  <img class="splash__logo" src="assets/logo/main-logo.svg" alt="육진대" />
+</div>
+<script>
+  (function () {
+    var splash = document.getElementById("splash");
+    if (sessionStorage.getItem("splashShown")) {
+      splash.style.display = "none";
+    } else {
+      sessionStorage.setItem("splashShown", "1");
+      setTimeout(function () {
+        splash.classList.add("splash--hide");
+        setTimeout(function () {
+          splash.style.display = "none";
+        }, 400);
+      }, 2000);
+    }
+  })();
+</script>
+
 <div class="app">
 
   <header class="header">
@@ -23,9 +43,21 @@
   </header>
 
   <section class="hero">
-    <img class="hero__logo" src="assets/logo/main-logo.svg" alt="육진대 - 육아에 진심인 대디" />
-    <p class="hero__tagline">아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳</p>
-    <p class="hero__stats">300+ 아빠 크리에이터가 함께 만드는 지도</p>
+    <div class="hero__track" id="hero-track">
+      <div class="hero__slide">
+        <img class="hero__logo" src="assets/logo/main-logo.svg" alt="육진대 - 육아에 진심인 대디" />
+        <p class="hero__tagline">아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳</p>
+      </div>
+      <div class="hero__slide">
+        <p class="hero__big">300+</p>
+        <p class="hero__tagline">아빠 크리에이터가 함께 만드는 지도</p>
+      </div>
+      <div class="hero__slide">
+        <p class="hero__big">99곳</p>
+        <p class="hero__tagline">전국 방방곡곡, 직접 다녀온 곳만 소개해요</p>
+      </div>
+    </div>
+    <div class="hero__dots" id="hero-dots"></div>
   </section>
 
   <div class="search">
@@ -51,10 +83,10 @@
   </section>
 
   <nav class="tabbar">
-    <a class="tabbar__item is-active" href="index.html">홈</a>
-    <a class="tabbar__item" href="map.html">지도</a>
-    <a class="tabbar__item" href="#">찜</a>
-    <a class="tabbar__item" href="#">내정보</a>
+    <a class="tabbar__item is-active" href="index.html"><span class="tabbar__icon">🏠</span>홈</a>
+    <a class="tabbar__item" href="map.html"><span class="tabbar__icon">🗺️</span>지도</a>
+    <a class="tabbar__item" href="#"><span class="tabbar__icon">❤️</span>찜</a>
+    <a class="tabbar__item" href="#"><span class="tabbar__icon">👤</span>내정보</a>
   </nav>
 
 </div>

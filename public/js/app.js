@@ -1,5 +1,17 @@
 const REGIONS = ["서울", "서울근교", "경기북부", "경기남부", "인천", "강원도", "충청도", "전라도", "경상도", "제주"];
 const CATEGORIES = ["자연·공원", "실내놀이", "맛집", "카페", "체험·문화", "스포츠", "무료"];
+const REGION_EMOJI = {
+  "서울": "🗼",
+  "서울근교": "🌳",
+  "경기북부": "🏙️",
+  "경기남부": "🌆",
+  "인천": "✈️",
+  "강원도": "🏔️",
+  "충청도": "🌾",
+  "전라도": "🌊",
+  "경상도": "🏯",
+  "제주": "🌴",
+};
 
 const state = {
   places: [],
@@ -13,7 +25,11 @@ function renderRegions() {
   grid.innerHTML = REGIONS.map((region) => {
     const count = state.places.filter((p) => p.region === region).length;
     const active = state.region === region ? " is-active" : "";
-    return `<button class="region-grid__item${active}" data-region="${region}">${region}${count ? `<small>${count}</small>` : ""}</button>`;
+    return `<button class="region-grid__item${active}" data-region="${region}">
+      <span class="region-grid__icon">${REGION_EMOJI[region] || "📍"}</span>
+      <span class="region-grid__label">${region}</span>
+      ${count ? `<small>${count}</small>` : ""}
+    </button>`;
   }).join("");
 
   grid.querySelectorAll("[data-region]").forEach((btn) => {
@@ -89,6 +105,29 @@ function renderPlaces() {
   list.innerHTML = filtered.map(placeCard).join("");
 }
 
+function initHeroSlider() {
+  const track = document.getElementById("hero-track");
+  const dotsWrap = document.getElementById("hero-dots");
+  if (!track || !dotsWrap) return;
+
+  const count = track.children.length;
+  let index = 0;
+
+  dotsWrap.innerHTML = Array.from(
+    { length: count },
+    (_, i) => `<span class="hero__dot${i === 0 ? " is-active" : ""}"></span>`
+  ).join("");
+  const dots = dotsWrap.children;
+
+  function go(next) {
+    index = next;
+    track.style.transform = `translateX(-${index * 100}%)`;
+    Array.from(dots).forEach((dot, i) => dot.classList.toggle("is-active", i === index));
+  }
+
+  setInterval(() => go((index + 1) % count), 3000);
+}
+
 async function loadPlaces() {
   try {
     const res = await fetch("/api/places");
@@ -108,6 +147,7 @@ async function loadPlaces() {
 document.addEventListener("DOMContentLoaded", () => {
   renderRegions();
   renderCategoryFilter();
+  initHeroSlider();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();

@@ -106,7 +106,7 @@ function initLocateButton() {
       const { latitude, longitude } = pos.coords;
       map.setCenter(new naver.maps.LatLng(latitude, longitude));
       map.setZoom(13);
-      new naver.maps.Marker({
+      const myMarker = new naver.maps.Marker({
         position: new naver.maps.LatLng(latitude, longitude),
         map,
         icon: {
@@ -114,6 +114,7 @@ function initLocateButton() {
           anchor: new naver.maps.Point(7, 7),
         },
       });
+      void myMarker;
     });
   });
 }

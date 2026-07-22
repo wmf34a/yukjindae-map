@@ -1,54 +1,4 @@
-function text(prop) {
-  if (!prop || !prop.rich_text || prop.rich_text.length === 0) return "";
-  return prop.rich_text.map((t) => t.plain_text).join("");
-}
-
-function title(prop) {
-  if (!prop || !prop.title || prop.title.length === 0) return "";
-  return prop.title.map((t) => t.plain_text).join("");
-}
-
-function selectName(prop) {
-  return prop && prop.select ? prop.select.name : "";
-}
-
-function multiSelectNames(prop) {
-  if (!prop || !prop.multi_select) return [];
-  return prop.multi_select.map((o) => o.name);
-}
-
-function firstFileUrl(prop) {
-  if (!prop || !prop.files || prop.files.length === 0) return "";
-  const f = prop.files[0];
-  if (f.type === "external") return f.external.url;
-  if (f.type === "file") return f.file.url;
-  return "";
-}
-
-function toPlace(page) {
-  const p = page.properties;
-  return {
-    id: page.id,
-    name: title(p["장소명"]),
-    region: selectName(p["지역"]),
-    categories: multiSelectNames(p["카테고리"]),
-    address: text(p["주소"]),
-    lat: p["위도"] && p["위도"].number,
-    lng: p["경도"] && p["경도"].number,
-    image: firstFileUrl(p["사진"]),
-    hours: text(p["운영시간"]),
-    fee: text(p["입장료"]),
-    reason: text(p["추천이유"]),
-    parkingAvailable: selectName(p["주차가능여부"]),
-    parkingDetail: text(p["주차상세"]),
-    strollerAccess: selectName(p["유모차동선"]),
-    diaperChange: p["기저귀교환대"] && p["기저귀교환대"].checkbox,
-    nursingRoom: p["수유실"] && p["수유실"].checkbox,
-    nearbyRestaurant: text(p["근처맛집"]),
-    nearbyCafe: text(p["근처카페"]),
-    registeredBy: text(p["등록자"]),
-  };
-}
+import { toPlace } from "./notion.js";
 
 async function handlePlaces(env) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
@@ -68,6 +18,8 @@ async function handlePlaces(env) {
   let cursor = undefined;
 
   try {
+    // 다음 페이지 커서가 이전 응답에서만 나오므로 순차 호출이 필수라 병렬화 불가
+    /* oxlint-disable no-await-in-loop */
     do {
       const body = {
         page_size: 100,
@@ -92,6 +44,7 @@ async function handlePlaces(env) {
       results = results.concat(data.results);
       cursor = data.has_more ? data.next_cursor : undefined;
     } while (cursor);
+    /* oxlint-enable no-await-in-loop */
 
     const places = results.map(toPlace).filter((p) => p.name);
 

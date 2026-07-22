@@ -2,10 +2,24 @@
   "name": "yukjindae-map",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8788"
+    "dev": "wrangler dev --port 8788",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.1.0",
+    "oxlint": "^1.71.0",
+    "vitest": "^4.1.10",
     "wrangler": "^3.90.0"
+  },
+  "lint-staged": {
+    "*.js": "oxlint --fix"
   }
 }

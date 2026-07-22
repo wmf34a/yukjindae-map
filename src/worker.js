@@ -63,6 +63,21 @@ async function handlePlaces(env) {
   }
 }
 
+async function handleImage(env, key) {
+  if (!env.IMAGES) {
+    return new Response("이미지 저장소가 설정되지 않았습니다.", { status: 500 });
+  }
+  const object = await env.IMAGES.get(key);
+  if (!object) {
+    return new Response("이미지를 찾을 수 없습니다.", { status: 404 });
+  }
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=31536000, immutable");
+  return new Response(object.body, { headers });
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
@@ -85,6 +100,9 @@ export default {
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);
+    }
+    if (url.pathname.startsWith("/images/")) {
+      return handleImage(env, url.pathname.slice("/images/".length));
     }
 
     return env.ASSETS.fetch(request);

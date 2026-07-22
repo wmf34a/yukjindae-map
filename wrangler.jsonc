@@ -12,5 +12,11 @@
     // 대체되어 존재하지 않는 페이지도 200으로 응답하게 됨
     "directory": "./public",
     "binding": "ASSETS"
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "IMAGES",
+      "bucket_name": "yukjindae-map-images"
+    }
+  ]
 }

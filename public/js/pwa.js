@@ -36,16 +36,11 @@ function todayString() {
 function buildAndroidContent() {
   const wrap = document.createElement("div");
   wrap.className = "install-popup__body";
-  wrap.innerHTML = `
-    <button class="install-popup__install" type="button">홈 화면에 설치하기</button>
-    <p class="install-popup__note install-popup__note--hidden">
-      이 브라우저에서는 자동 설치를 지원하지 않아요. 메뉴에서 '홈 화면에 추가'를 선택해주세요.
-    </p>
-  `;
+  wrap.innerHTML = `<button class="install-popup__install" type="button">홈 화면에 설치하기</button>`;
 
   wrap.querySelector(".install-popup__install").addEventListener("click", async () => {
     if (!deferredInstallPrompt) {
-      wrap.querySelector(".install-popup__note").classList.remove("install-popup__note--hidden");
+      wrap.replaceWith(buildManualGuideContent());
       return;
     }
     deferredInstallPrompt.prompt();
@@ -54,6 +49,36 @@ function buildAndroidContent() {
     closePopup();
   });
 
+  return wrap;
+}
+
+function buildManualGuideContent() {
+  const wrap = document.createElement("div");
+  wrap.className = "install-popup__body";
+  wrap.innerHTML = `
+    <ol class="install-popup__steps">
+      <li class="install-popup__step">
+        <span class="install-popup__step-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6h16" />
+            <path d="M4 12h16" />
+            <path d="M4 18h16" />
+          </svg>
+        </span>
+        <span class="install-popup__step-text">브라우저 <b>메뉴 버튼</b>을 눌러주세요</span>
+      </li>
+      <li class="install-popup__step">
+        <span class="install-popup__step-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M12 8v8" />
+            <path d="M8 12h8" />
+          </svg>
+        </span>
+        <span class="install-popup__step-text"><b>홈 화면에 추가</b>(또는 앱 설치)를 선택해주세요</span>
+      </li>
+    </ol>
+  `;
   return wrap;
 }
 
@@ -106,7 +131,15 @@ function showInstallPopup() {
   `;
 
   const card = overlay.querySelector(".install-popup");
-  card.appendChild(isIOS() ? buildIOSContent() : buildAndroidContent());
+  let content;
+  if (isIOS()) {
+    content = buildIOSContent();
+  } else if (deferredInstallPrompt) {
+    content = buildAndroidContent();
+  } else {
+    content = buildManualGuideContent();
+  }
+  card.appendChild(content);
 
   const footer = document.createElement("div");
   footer.className = "install-popup__footer";

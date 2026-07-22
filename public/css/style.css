@@ -111,6 +111,10 @@ body {
   cursor: pointer;
 }
 
+.header__install[hidden] {
+  display: none;
+}
+
 .header__install svg {
   width: 14px;
   height: 14px;

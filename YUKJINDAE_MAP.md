@@ -207,7 +207,7 @@
 | main-logo-fallback.png | `public/assets/logo/main-logo-fallback.png` (원본: 육진대 로고 배경제거.png) | SVG 미지원 환경 폴백용 PNG, PWA 아이콘 원본 소스 |
 | main-logo-bg.jpg | `public/assets/logo/main-logo-bg.jpg` (원본: 육진대첫번째로고01-1 (1).jpg) | 배경 있는 영역 폴백용 JPG |
 | icon-192.png / icon-512.png / apple-touch-icon.png / favicon-32.png | `public/assets/icons/` | PWA 매니페스트 아이콘 (main-logo-fallback.png를 `sips`로 리사이즈해서 생성) |
-| maskable-icon-192.png / maskable-icon-512.png | `public/assets/icons/` | maskable 아이콘 (`purpose: "maskable"`). 로고를 62% 축소 후 `#1A2F6B` 배경으로 패딩 — 원형/사각형 마스킹 시 잘림 방지용 |
+| maskable-icon-192.png / maskable-icon-512.png | `public/assets/icons/` | maskable 아이콘 (`purpose: "maskable"`). 로고를 62% 축소 후 흰색(`#FFFFFF`) 배경으로 패딩 — 원형/사각형 마스킹 시 잘림 방지용 (처음엔 네이비 배경이었으나 로고와 대비가 안 나와서 흰색으로 교체) |
 
 > ✅ SVG 우선 사용 — 어떤 크기에도 깨지지 않음  
 > ✅ PNG/JPG는 SVG 미지원 환경 대비 폴백으로 보관
@@ -313,7 +313,7 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 
 1. **maskable 아이콘**: `main-logo-fallback.png`(1024x1024, 배경 제거본)를 `sips`로 62% 축소 후 `#1A2F6B` 배경색으로 512/192 캔버스에 패딩해서 `maskable-icon-512.png`/`maskable-icon-192.png` 생성. Android 등에서 아이콘이 원형/사각형으로 마스킹될 때 로고가 잘리지 않도록 안전 영역 확보. `manifest.json`에 `purpose: "maskable"` 항목으로 추가 등록 (기존 `purpose: "any"` 아이콘은 유지)
 2. **오프라인 폴백 페이지**: `public/offline.html` 신규 추가 (사이트 톤에 맞춘 네이비 톤 안내 화면 + 다시 시도 버튼). `sw.js`를 v2→v3로 캐시 버전 올리고 프리캐시 목록에 추가, `navigate` 모드 fetch 실패 시 `캐시 매치 → 없으면 offline.html` 순으로 폴백하도록 수정
-3. **설치 유도 배너**: `js/pwa.js`에 `beforeinstallprompt` 이벤트를 받아 하단 탭바 위에 뜨는 배너 UI 추가 (설치/닫기 버튼, 닫으면 `localStorage`에 기억해서 재노출 안 함). 스타일은 `css/style.css`에 `.install-banner*` 클래스로 추가, index/map/place 세 페이지 모두 `js/pwa.js`를 공유하므로 어디서든 동일하게 동작
+3. **설치 유도 배너**: `js/pwa.js`에 `beforeinstallprompt` 이벤트를 받아 하단 탭바 위에 뜨는 배너 UI 추가 (설치/닫기 버튼, 닫으면 `localStorage`에 기억해서 재노출 안 함). 스타일은 `css/style.css`에 `.install-banner*` 클래스로 추가, index/map/place 세 페이지 모두 `js/pwa.js`를 공유하므로 어디서든 동일하게 동작 — ⚠️ 이 배너는 바로 다음 항목에서 모달 팝업으로 교체됨 (`.install-banner*` 클래스는 더 이상 안 씀)
 4. **로컬 검증**: `wrangler dev`로 서비스워커 activate, `caches.match('/offline.html')` 프리캐시 확인, `showInstallBanner()` 강제 호출로 배너 렌더링, `/offline.html` 직접 접속 렌더링까지 브라우저로 확인. `npm run lint`/`npm run test` 통과
 
 ### 2026-07-22 — 이미지 자체 호스팅으로 전환 (Cloudflare R2)
@@ -326,6 +326,20 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 4. 1회성 마이그레이션 스크립트(스크래치 전용, 저장소엔 미포함)로 99곳 전부: 기존 이미지 URL 다운로드(https 강제 + Referer/User-Agent 지정) → `wrangler r2 object put`으로 R2 업로드 → Notion `사진` 필드를 `/images/<페이지ID>.<확장자>`로 교체. 99곳 전부 성공
 5. 배포 후 GitHub Actions의 `CLOUDFLARE_API_TOKEN`이 R2 쓰기 권한까지 커버하는지는 이미 검증됨(로컬에서 같은 토큰으로 버킷 생성·업로드 성공) — 별도 시크릿 추가 없이 기존 2개(`CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`)로 충분
 6. 실제 브라우저로 이미지 로드 확인, `curl`로 `cache-control: public, max-age=31536000, immutable` 헤더 확인
+
+### 2026-07-22 — 설치 유도 팝업 + 헤더 설치 버튼, maskable 아이콘 배경 수정
+
+위 "PWA 개선" 항목의 하단 배너를 첫 접속 시 자동으로 뜨는 모달 팝업으로 교체하고, 상시 노출되는 헤더 버튼을 추가:
+
+1. **설치 팝업으로 교체**: `js/pwa.js`의 `showInstallBanner()`를 제거하고 `showInstallPopup()`으로 전면 교체. `window`의 `load` 이벤트 0.8초 후 자동 표시(이미 standalone이면 스킵, `localStorage`의 `installPopupDismissedDate`가 오늘 날짜면 스킵). User-Agent로 `isIOS()` 판별해서 분기:
+   - Android/기타: "홈 화면에 설치하기" 버튼 → `deferredInstallPrompt.prompt()` 직접 호출. 캡처된 이벤트가 없으면 안내 문구로 폴백
+   - iOS: Safari 공유 버튼 → 홈 화면에 추가 2단계를 아이콘(SVG 직접 그림, Apple 실제 UI 캡처 아님)으로 안내
+   - 공통: "오늘 하루 보지 않기" 버튼(오늘 날짜를 `localStorage`에 저장) / X 닫기(오늘 다시 뜸) 구분
+   - CSS는 `.install-popup*` 클래스로 `css/style.css`에 흰 배경 카드 + 네이비 텍스트/버튼 스타일 추가
+2. **헤더 설치 버튼**: index/map/place 세 페이지 헤더 우측에 `.header__install` 버튼 상시 노출(이미 설치됐으면 `hidden`). 클릭 시 Android는 캡처된 프롬프트로 바로 설치(원터치), iOS는 위 팝업을 띔
+3. **maskable 아이콘 배경 수정**: 처음 만들 때 배경을 `#1A2F6B`(네이비)로 패딩했는데, 로고 자체도 네이비 톤이라 대비가 안 나와서 안 보이는 문제 발견 → 배경을 흰색(`#FFFFFF`)으로 재생성 (`maskable-icon-192.png`/`-512.png`, 생성 스크립트는 동일하고 `--padColor`만 교체)
+4. **검증**: `wrangler dev`로 팝업 Android/iOS(UA 오버라이드) 분기, "오늘 하루 보지 않기" 저장·재방문 억제, 헤더 버튼 클릭 시 실제 크로미움 네이티브 설치 프롬프트 호출까지 브라우저로 확인. lint/test 통과 후 3개 커밋으로 나눠 푸시, CI 배포 성공 확인
+5. **참고**: 테스트 중 `wrangler dev`가 "이 세션이 AI 에이전트에서 실행 중"임을 감지하고 `/cdn-cgi/explorer/api`(로컬 D1/R2/KV 등 조회용 API)를 자동 노출한다는 걸 발견. 이 API 자체가 파일을 수정하진 않지만, 방문했을 때 R2 관련 바인딩이 `wrangler.jsonc`에 잠깐 나타난 적이 있어(작업 중이던 다른 세션의 R2 커밋과 타이밍이 겹쳐서 혼동했었음) — 실제로는 무관한 두 가지였음. 다음 세션도 비슷한 걸 보면 `git status`/`git log`로 실제 커밋 여부부터 확인할 것
 
 ---
 

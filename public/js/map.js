@@ -50,6 +50,18 @@ function clearMarkers() {
   markers = [];
 }
 
+const FLAG_ICON = {
+  content: `
+    <div style="position:relative;width:34px;height:44px;">
+      <div style="position:absolute;left:2px;top:8px;width:2px;height:36px;background:#1A2F6B;border-radius:1px;"></div>
+      <div style="position:absolute;left:3px;top:0;width:28px;height:22px;background:#fff;border:2px solid #1A2F6B;border-radius:2px 9px 9px 2px;box-shadow:0 2px 5px rgba(13,27,62,0.35);display:flex;align-items:center;justify-content:center;overflow:hidden;">
+        <img src="/assets/logo/character-logo.svg" style="width:18px;height:18px;object-fit:contain;" alt="" />
+      </div>
+    </div>
+  `,
+  anchor: new naver.maps.Point(3, 44),
+};
+
 function renderMarkers(list) {
   clearMarkers();
   list.forEach((place) => {
@@ -58,6 +70,7 @@ function renderMarkers(list) {
       position: new naver.maps.LatLng(place.lat, place.lng),
       map,
       title: place.name,
+      icon: FLAG_ICON,
     });
     naver.maps.Event.addListener(marker, "click", () => openSheet(place));
     markers.push(marker);

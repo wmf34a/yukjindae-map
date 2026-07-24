@@ -13,48 +13,24 @@
 </head>
 <body>
 <div class="splash" id="splash">
-  <video
-    class="splash__bg"
-    id="splash-video"
-    src="assets/video/yuk.mp4"
-    autoplay
-    muted
-    playsinline
-    preload="auto"
-  ></video>
+  <img class="splash__bg" src="assets/splash/splash-bg.jpg" alt="육진대" />
 </div>
 <script>
   (function () {
     var splash = document.getElementById("splash");
-    var video = document.getElementById("splash-video");
-
     if (sessionStorage.getItem("splashShown")) {
       splash.style.display = "none";
       window.dispatchEvent(new Event("splashHidden"));
-      return;
-    }
-    sessionStorage.setItem("splashShown", "1");
-
-    var hidden = false;
-    function hideSplash() {
-      if (hidden) return;
-      hidden = true;
-      splash.classList.add("splash--hide");
+    } else {
+      sessionStorage.setItem("splashShown", "1");
       setTimeout(function () {
-        splash.style.display = "none";
-        window.dispatchEvent(new Event("splashHidden"));
-      }, 400);
+        splash.classList.add("splash--hide");
+        setTimeout(function () {
+          splash.style.display = "none";
+          window.dispatchEvent(new Event("splashHidden"));
+        }, 400);
+      }, 1200);
     }
-
-    var fallback = setTimeout(hideSplash, 2500);
-    video.addEventListener("playing", function () {
-      clearTimeout(fallback);
-    });
-    video.addEventListener("ended", hideSplash);
-    video.addEventListener("error", hideSplash);
-    video.play().catch(function () {
-      // 자동재생 제한 등으로 재생이 막히면 fallback 타이머가 처리
-    });
   })();
 </script>
 

@@ -31,6 +31,27 @@ body {
   position: relative;
 }
 
+/* Splash screen */
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  width: 100%;
+  height: 100dvh;
+  transition: opacity 0.4s ease;
+}
+
+.splash__bg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.splash--hide {
+  opacity: 0;
+}
+
 /* Header */
 .header {
   display: flex;

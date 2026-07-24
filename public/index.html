@@ -13,24 +13,38 @@
 </head>
 <body>
 <div class="splash" id="splash">
-  <img class="splash__bg" src="assets/splash/splash-bg.jpg" alt="육진대" />
+  <div class="splash__stage is-active" id="splash-stage1">
+    <img class="splash__logo" src="assets/logo/main-logo-fallback.png" alt="육진대" />
+  </div>
+  <div class="splash__stage" id="splash-stage2">
+    <img class="splash__bg" src="assets/splash/splash-bg.jpg" alt="육진대" />
+  </div>
 </div>
 <script>
   (function () {
     var splash = document.getElementById("splash");
+    var stage1 = document.getElementById("splash-stage1");
+    var stage2 = document.getElementById("splash-stage2");
+
     if (sessionStorage.getItem("splashShown")) {
       splash.style.display = "none";
       window.dispatchEvent(new Event("splashHidden"));
-    } else {
-      sessionStorage.setItem("splashShown", "1");
+      return;
+    }
+    sessionStorage.setItem("splashShown", "1");
+
+    setTimeout(function () {
+      stage1.classList.remove("is-active");
+      stage2.classList.add("is-active");
+
       setTimeout(function () {
         splash.classList.add("splash--hide");
         setTimeout(function () {
           splash.style.display = "none";
           window.dispatchEvent(new Event("splashHidden"));
         }, 400);
-      }, 1200);
-    }
+      }, 1500);
+    }, 1500);
   })();
 </script>
 

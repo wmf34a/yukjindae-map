@@ -72,6 +72,12 @@
 - [ ] Notion DB 자동 저장
 - [ ] 관리자 승인 후 지도 표시
 
+### 3-7. 육진대 탭 (소개 + SNS) — 2026-07-25 추가
+- [x] 하단탭 4번째 항목을 "내정보"(빈 링크)에서 "육진대"로 교체, `public/about.html` 신설
+- [x] 곰 캐릭터 로고 + 소개문구
+- [x] SNS 링크 카드 리스트: 인스타그램 / 유튜브 / 틱톡 / 네이버 클립 / 네이버 카페 / 카카오톡 공지방 / 카카오톡 수다방
+- [ ] "찜" 탭은 여전히 빈 링크(`#`) — 3-5와 별개로 미구현 상태
+
 ---
 
 ## 4. 데이터 구조 (Notion DB)
@@ -218,6 +224,8 @@
 | main-logo-bg.jpg | `public/assets/logo/main-logo-bg.jpg` (원본: 육진대첫번째로고01-1 (1).jpg) | 배경 있는 영역 폴백용 JPG |
 | icon-192.png / icon-512.png / apple-touch-icon.png / favicon-32.png | `public/assets/icons/` | PWA 매니페스트 아이콘 (main-logo-fallback.png를 `sips`로 리사이즈해서 생성) |
 | maskable-icon-192.png / maskable-icon-512.png | `public/assets/icons/` | maskable 아이콘 (`purpose: "maskable"`). 로고를 62% 축소 후 흰색(`#FFFFFF`) 배경으로 패딩 — 원형/사각형 마스킹 시 잘림 방지용 (처음엔 네이비 배경이었으나 로고와 대비가 안 나와서 흰색으로 교체) |
+| splash-bg.jpg | `public/assets/splash/splash-bg.jpg` | 인앱 스플래시 배경 이미지 (파란 하늘+구름+"육진대 Korean Papa" 로고). `index.html`의 `#splash`에서 사용 중 |
+| yuk.mp4 | `public/assets/video/yuk.mp4` | 육진대 소개 영상(5초, ~4.9MB). 한때 스플래시 인트로로 썼다가(자동재생 제한/로딩 이슈로) 정적 이미지로 되돌아감 — 저장소엔 남아있지만 현재 코드에서 참조 안 함, sw.js 프리캐시 목록에도 미포함(용량 때문) |
 
 > ✅ SVG 우선 사용 — 어떤 크기에도 깨지지 않음  
 > ✅ PNG/JPG는 SVG 미지원 환경 대비 폴백으로 보관
@@ -377,6 +385,45 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 2. **설치 버튼이 standalone에서도 계속 보이던 버그 발견·수정**: 앱을 홈 화면 아이콘으로 설치해 standalone 모드로 열어도 헤더 "설치" 버튼이 안 사라진다는 제보 → 원인은 `js/pwa.js`의 `initHeaderInstallButtons()`가 `isStandalone()`일 때 버튼에 `hidden` 속성을 그대로 두는 로직 자체는 맞았는데, `css/style.css`의 `.header__install { display:flex; ... }`가 author 규칙이라 브라우저 기본 `[hidden] { display:none }` UA 스타일을 이겨버려서 `hidden`이 붙어도 시각적으로는 계속 보였던 것. `.header__install[hidden] { display:none; }`을 추가해서 해결 (커밋 `1f32d62`)
 3. **검증 중 삽질**: 로컬 `wrangler dev`에서 수정 전/후를 확인하는데 서비스워커가 예전 `style.css`를 `stale-while-revalidate` 캐시로 계속 서빙해서 처음엔 수정이 반영 안 된 것처럼 보임 → devtools에서 서비스워커 `unregister()` + `caches.delete()`로 캐시 비우고 나서야 정상 확인됨 (버그 아니라 로컬 테스트 환경의 캐시 문제)
 4. **배포 확인**: PR merge 후 GitHub Actions CI(test→deploy) 성공 확인, 프로덕션 `yukjindae-map.wmf34a.workers.dev/css/style.css`에서 `.header__install[hidden]` 규칙과 새 `etag` 응답까지 `curl`로 직접 확인 — 첫 요청은 Cloudflare 엣지 캐시(`cf-cache-status: HIT`)로 배포 직전 버전이 잠깐 잡혔다가 곧바로 새 버전으로 갱신됨
+
+### 2026-07-23 — 스플래시 색상/로고 삽질, 홈 화면 2차 리디자인
+
+1. **스플래시 배경/로고 색 변경**: 기존 네이비 배경+검정 로고 → 흰 배경+파란(`#2563EB`) 로고로 요청받아 진행. 원본 `main-logo.svg`(fill `#0d0909`)를 복제해 fill만 블루로 바꾼 `main-logo-blue.svg`를 만들었는데, Windows PowerShell `Set-Content -Encoding UTF8`이 **UTF-8 BOM을 파일 앞에 붙여버려서** 브라우저가 SVG 파싱에 실패 → 스플래시에 깨진 이미지(작은 네모) 아이콘만 표시되는 버그 발생. 원인 파악 후 BOM 없이 `Write` 도구로 재생성해서 해결했으나, 이후 사용자 요청으로 결국 `main-logo-fallback.png`(PNG, 배경 투명)로 최종 교체됨 — svg 시도는 폐기
+2. **PNG 미리보기 함정**: `main-logo-fallback.png`를 Read 도구로 미리 볼 때 어두운 방사형 배경이 있는 것처럼 보였는데, 이건 **이미지 뷰어가 투명 영역을 검게 렌더링**해서 그런 것일 뿐 실제 브라우저(흰 배경 위)에서는 투명하게 잘 보임 — 파일 자체엔 문제 없었음
+3. **홈 화면 2차 리디자인** (동시에 진행되던 다른 세션 작업 포함): 히어로 배너를 `.hero`에서 상단 카드형 `.banner`로 분리해 지역 그리드 아래로 재배치, 추천 장소를 리스트(`.place-card`)에서 2열 카드 그리드(`.place-grid`)로 변경 + 페이지네이션(이후 무한스크롤로 재교체), 헤더에서 텍스트 로고 제거하고 알림 벨 추가, Pretendard 웹폰트 CDN 링크 추가
+4. **헤더 문구 변경**: "육진대 맵" → "육진대 - 아빠어디가" → 최종 **"아빠, 어디가? by 육진대"**로 확정 (형태는 굵은 메인 텍스트+작은 보조 텍스트 유지, 문구만 교체)
+
+### 2026-07-23 — 커스텀 스플래시 제거 시도 → 겹침 버그 발견/수정
+
+1. **커스텀 스플래시 전면 제거**: "OS가 자동으로 만드는 PWA 스플래시(manifest.json 기반)와 커스텀 HTML 스플래시가 중복 노출된다"는 요청으로, `index.html`의 `#splash` 오버레이·타이머 스크립트·`style.css`의 `.splash*` 규칙을 전부 삭제해서 앱 진입 즉시 콘텐츠가 보이도록 변경 (커밋 `8a9d222`)
+2. **설치 팝업 겹침 버그 발견**: 이후 "스플래시 이미지가 2개 나온다"는 제보 → 원인은 스플래시가 사라지는 0.4초 페이드아웃 구간에서, `load` 이벤트 0.8초 후 독립적으로 뜨는 설치 유도 팝업(`install-popup-overlay`, z-index 1000)이 반투명해진 스플래시(z-index 2000) 뒤로 비쳐 보이는 것이었음. `index.html`에서 스플래시가 완전히 사라질 때 `window.dispatchEvent(new Event("splashHidden"))`를 쏘고, `js/pwa.js`는 스플래시가 있으면 그 이벤트를 기다렸다가 설치 팝업 타이머를 시작하도록 수정 — 이 `splashHidden` 연동 로직은 이후 스플래시 구조가 여러 번 바뀌는 동안에도 계속 유지됨
+
+### 2026-07-24 ~ 07-26 — Android 네이티브 스플래시 API 관련 반복 질의응답 (결론: PWA로는 불가능)
+
+세션 전반에 걸쳐 "OS가 앱 실행 시 강제로 보여주는 아이콘+앱 이름 화면(Android 12+ SplashScreen API 스타일)을 커스터마이징/제거해달라"는 요청이 여러 형태로 반복됨. 매번 같은 결론:
+
+- 이 저장소는 **네이티브 안드로이드 프로젝트가 아닌 순수 PWA**라 `windowSplashScreenAnimatedIcon` 같은 `styles.xml` 설정 자체가 존재하지 않음
+- 설치된 PWA를 Android/Chrome이 실행할 때 자동으로 그려주는 화면은 `manifest.json`의 `name`(또는 `short_name`)과 `icons`, `background_color`만 반영 가능 — **레이아웃(아이콘 크기, 텍스트 노출 여부)은 전혀 커스터마이징 불가**한 브라우저/OS 강제 동작
+- `short_name`은 홈 화면 아이콘 라벨용이지 스플래시 텍스트(= `name` 필드)와 무관 → `short_name: ""`으로 바꿔도 스플래시 텍스트는 그대로일 가능성이 높음 (안전하게 테스트만 진행, 커밋 `1f0e3ad`)
+- 우리가 실제로 손댈 수 있는 건 `background_color`/`theme_color`(현재 `#FFFFFF`)와 `icons`(이미 로고 디자인 반영됨) 뿐. 텍스트까지 완전히 없애려면 Capacitor/TWA로 진짜 네이티브 앱을 새로 만들어야 함(별도 프로젝트, 미착수)
+
+### 2026-07-24 ~ 07-25 — 스플래시 구조를 여러 차례 실험 후 최종 확정
+
+"OS 스플래시 → 인앱 스플래시 → 메인" 흐름을 두고 다음 순서로 시행착오:
+
+1. **`yuk.mp4` 비디오 스플래시 시도**: 프로젝트 루트에 있던 `yuk.mp4`(5초, ~4.9MB)를 `public/assets/video/`로 옮기고 `<video autoplay muted playsinline>`로 전체화면 재생, `ended`/`error` 이벤트 + 2.5초 fallback 타임아웃으로 구현 (커밋 `3b04e55`). 구현 도중 **동시에 다른 세션이 같은 `index.html`/`sw.js`를 이미지 스플래시(`splash-bg.jpg`) 방향으로 계속 덮어쓰는 충돌**이 발생해서, 사용자가 다른 세션을 멈춘 뒤에야 안정적으로 커밋 가능했음
+2. **비디오 → 정적 이미지로 회귀**: "영상 로딩/자동재생 이슈 없이 심플하게" 요청으로 `splash-bg.jpg`(파란 하늘+구름+로고) 단일 이미지로 교체, 1.2~1.5초 노출 후 페이드아웃 (커밋 `270c8e8`)
+3. **"흰 배경+로고" 단계를 넣었다 뺐다 반복**: OS 스플래시(흰 배경+아이콘)와 시각적으로 자연스럽게 이어지도록 "1단계: 흰 배경+`main-logo-fallback.png`(1.5초) → 2단계: `splash-bg.jpg`(1.5초)" 2단계 크로스페이드를 추가(`f5ce435`) → manifest.json 아이콘이 이미 흰 배경+로고라 **중복이라는 피드백**으로 1단계 제거(`6987b1f` 계열) → 사용자가 다시 2단계 구조를 명확히 요청해 복원 → 최종적으로 **"OS 스플래시가 이미 흰 배경+로고를 보여주니 인앱에서는 파란 하늘 화면 하나만"**으로 확정, 1단계(로고) 오버레이와 관련 CSS(`.splash__stage`, `.splash__logo`) 완전 삭제 (커밋 `5e0e0d4`)
+4. **최종 구조**: OS 네이티브 스플래시(흰 배경+아이콘, `manifest.json` 제어, 제어 불가) → `splash-bg.jpg` 1.5초 노출 → 0.4초 페이드아웃 → 메인 화면. `sw.js` 캐시는 이 과정에서 v14→v18까지 여러 차례 갱신(프리캐시 목록 변경 때마다 버전업 필요)
+
+### 2026-07-25 — 하단탭 "내정보" → "육진대"로 교체, 소개+SNS 링크 페이지 신설
+
+1. 기존 4번째 탭("내정보", `href="#"`로 빈 링크)을 "육진대"로 교체하고 `public/about.html` 신규 작성 — 곰 캐릭터 로고(`character-logo.svg`) + 소개 문구 + SNS 카드 리스트
+2. **SNS 링크 7개**: 인스타그램, 유튜브, 틱톡, 네이버 클립, 네이버 카페, 카카오톡 공지방, 카카오톡 수다방 — 전부 사용자에게 실제 URL을 받아서 반영 (URL을 임의로 만들지 않음). 각 항목은 브랜드 컬러 원형 배지 + 인라인 SVG 아이콘(직접 제작, 실제 로고 자산 아님) + 화살표로 "여기어때" 스타일 카드 리스트 구성
+3. 탭 아이콘을 이모지(👤)에서 `character-logo.svg`(곰 캐릭터, `.tabbar__icon--img`)로 교체, index/map/place/about 4개 페이지 탭바 전부 동일하게 반영
+4. `sw.js` 프리캐시에 `about.html` 추가, 캐시 v18 (커밋 `c860da7`)
+
+**남은 것**: "찜" 탭은 여전히 미구현(`href="#"`), 카카오톡 링크 실효성(초대 링크 만료 여부)은 별도 확인 필요
 
 ---
 

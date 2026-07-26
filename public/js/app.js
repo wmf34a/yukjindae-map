@@ -12,17 +12,12 @@ const REGION_EMOJI = {
   "경상도": "🏯",
   "제주": "🌴",
 };
-const PLACE_PAGE_SIZE = 6;
 
 const state = {
   places: [],
   region: null,
   category: null,
   query: "",
-  gridOffset: 0,
-  gridHasMore: true,
-  gridLoading: false,
-  gridRequestId: 0,
 };
 
 function renderRegions() {
@@ -42,7 +37,7 @@ function renderRegions() {
       const region = btn.dataset.region;
       state.region = state.region === region ? null : region;
       renderRegions();
-      loadPlaceGrid(true);
+      renderPlaces();
     });
   });
 }
@@ -59,9 +54,20 @@ function renderCategoryFilter() {
       const category = btn.dataset.category;
       state.category = state.category === category ? null : category;
       renderCategoryFilter();
-      loadPlaceGrid(true);
+      renderPlaces();
     });
   });
+}
+
+function matchesFilters(place) {
+  if (state.region && place.region !== state.region) return false;
+  if (state.category && !place.categories.includes(state.category)) return false;
+  if (state.query) {
+    const needle = state.query.toLowerCase();
+    const haystack = `${place.name} ${place.address} ${place.region}`.toLowerCase();
+    if (!haystack.includes(needle)) return false;
+  }
+  return true;
 }
 
 function placeCard(place) {
@@ -79,67 +85,18 @@ function placeCard(place) {
   `;
 }
 
-function buildGridUrl(offset) {
-  const params = new URLSearchParams({ limit: String(PLACE_PAGE_SIZE), offset: String(offset) });
-  if (state.region) params.set("region", state.region);
-  if (state.category) params.set("category", state.category);
-  if (state.query) params.set("q", state.query);
-  return `/api/places?${params.toString()}`;
-}
-
-async function loadPlaceGrid(reset) {
+function renderPlaces() {
   const list = document.getElementById("place-list");
 
-  if (reset) {
-    state.gridOffset = 0;
-    state.gridHasMore = true;
+  if (!state.places.length) {
     list.innerHTML = `<p class="place-list__loading">불러오는 중...</p>`;
-  } else if (state.gridLoading || !state.gridHasMore) {
     return;
   }
 
-  const requestId = ++state.gridRequestId;
-  state.gridLoading = true;
-
-  try {
-    const res = await fetch(buildGridUrl(state.gridOffset));
-    const data = await res.json();
-    if (requestId !== state.gridRequestId) return;
-    if (!res.ok) throw new Error(data.error || "places fetch failed");
-
-    const items = data.places || [];
-    if (reset) {
-      list.innerHTML = items.length
-        ? items.map(placeCard).join("")
-        : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
-    } else if (items.length) {
-      list.insertAdjacentHTML("beforeend", items.map(placeCard).join(""));
-    }
-
-    state.gridOffset += items.length;
-    state.gridHasMore = Boolean(data.hasMore);
-  } catch (err) {
-    if (requestId !== state.gridRequestId) return;
-    console.error(err);
-    if (reset) {
-      list.innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
-    }
-  } finally {
-    if (requestId === state.gridRequestId) state.gridLoading = false;
-  }
-}
-
-function initInfiniteScroll() {
-  const sentinel = document.getElementById("place-sentinel");
-  if (!sentinel) return;
-
-  const observer = new IntersectionObserver(
-    (entries) => {
-      if (entries[0].isIntersecting) loadPlaceGrid(false);
-    },
-    { rootMargin: "200px" }
-  );
-  observer.observe(sentinel);
+  const filtered = state.places.filter(matchesFilters);
+  list.innerHTML = filtered.length
+    ? filtered.map(placeCard).join("")
+    : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
 }
 
 function initHeroSlider() {
@@ -173,22 +130,22 @@ async function loadPlaces() {
     state.places = data.places || [];
   } catch (err) {
     console.error(err);
+    document.getElementById("place-list").innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
     return;
   }
   renderRegions();
+  renderPlaces();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   renderRegions();
   renderCategoryFilter();
   initHeroSlider();
-  initInfiniteScroll();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
-    loadPlaceGrid(true);
+    renderPlaces();
   });
 
   loadPlaces();
-  loadPlaceGrid(true);
 });

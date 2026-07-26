@@ -463,10 +463,6 @@ body {
   padding: 32px 0;
 }
 
-#place-sentinel {
-  height: 1px;
-}
-
 /* Bottom tab bar */
 .tabbar {
   position: fixed;

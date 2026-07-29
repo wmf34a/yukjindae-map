@@ -65,7 +65,7 @@ async function handlePlaces(env, url) {
         status: 200,
         headers: {
           "content-type": "application/json; charset=utf-8",
-          "cache-control": "public, max-age=300",
+          "cache-control": "no-store",
         },
       });
     }
@@ -86,7 +86,7 @@ async function handlePlaces(env, url) {
         status: 200,
         headers: {
           "content-type": "application/json; charset=utf-8",
-          "cache-control": "public, max-age=300",
+          "cache-control": "no-store",
         },
       }
     );

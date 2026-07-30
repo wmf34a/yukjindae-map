@@ -107,27 +107,32 @@ function guessImageExt(fingerprint) {
 // 요청 시점에 R2로 미러링해서 안정적인 URL로 서빙한다. 소스가 바뀌지 않았으면
 // 재다운로드하지 않도록 R2 커스텀 메타데이터에 소스 지문을 저장해 비교한다.
 async function ensureBannerImage(env, pageId, source) {
-  if (!source || !env.IMAGES) return "";
+  if (!source) return { image: "", debug: "no source" };
+  if (!env.IMAGES) return { image: "", debug: "no IMAGES binding" };
 
   const fingerprint = source.stable ? source.url : source.url.split("?")[0];
   const key = `banners/${pageId}.${guessImageExt(fingerprint)}`;
 
   const existing = await env.IMAGES.head(key);
   if (existing && existing.customMetadata && existing.customMetadata.sourceFingerprint === fingerprint) {
-    return `/images/${key}`;
+    return { image: `/images/${key}`, debug: "cached" };
   }
 
-  const res = await fetch(source.url);
-  if (!res.ok) {
-    return existing ? `/images/${key}` : "";
-  }
+  try {
+    const res = await fetch(source.url);
+    if (!res.ok) {
+      return { image: existing ? `/images/${key}` : "", debug: `fetch not ok: ${res.status}` };
+    }
 
-  const contentType = res.headers.get("content-type") || "image/jpeg";
-  await env.IMAGES.put(key, res.body, {
-    httpMetadata: { contentType },
-    customMetadata: { sourceFingerprint: fingerprint },
-  });
-  return `/images/${key}`;
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    await env.IMAGES.put(key, res.body, {
+      httpMetadata: { contentType },
+      customMetadata: { sourceFingerprint: fingerprint },
+    });
+    return { image: `/images/${key}`, debug: "fetched+stored" };
+  } catch (err) {
+    return { image: existing ? `/images/${key}` : "", debug: `error: ${String(err)}` };
+  }
 }
 
 async function handleBanners(env) {
@@ -162,13 +167,13 @@ async function handleBanners(env) {
     const banners = await Promise.all(
       data.results.map(async (page) => {
         const banner = toBanner(page);
-        const image = await ensureBannerImage(env, banner.id, banner.imageSource);
-        return { id: banner.id, title: banner.title, tagline: banner.tagline, link: banner.link, image };
+        const { image, debug } = await ensureBannerImage(env, banner.id, banner.imageSource);
+        return { id: banner.id, title: banner.title, tagline: banner.tagline, link: banner.link, image, debug };
       })
     );
 
     return new Response(
-      JSON.stringify({ banners: banners.filter((b) => b.image), configured: true, rawCount: data.results.length }),
+      JSON.stringify({ banners, configured: true, rawCount: data.results.length }),
       { status: 200, headers }
     );
   } catch (err) {

@@ -8,20 +8,23 @@ function row(label, value) {
   `;
 }
 
-// 1차 파일럿: 근처맛집/근처카페에 콤마 없이 업체명 하나만 명확히 적힌 경우
-// 네이버 지역검색 API로 주소를 끌어와 작은 "길찾기" 버튼을 붙인다.
-// 검증 후 대상을 넓힐 예정이라 지금은 특정 장소에만 켜둔다.
-const NEARBY_NAV_PILOT_PLACES = new Set(["현대 모터스튜디오 고양"]);
-
+// 근처맛집/근처카페에 콤마 없이 업체명 하나만 명확히 적힌 경우, 네이버 지역검색
+// API로 주소를 끌어와 작은 "길찾기" 버튼을 붙인다. 괄호 부가설명(예: "(대형키즈룸완비)")은
+// 검색어에서는 제거한다 — 검색 매칭을 방해해서 정상 업체도 못 찾는 경우가 있었다.
 function isSingleBusinessName(value) {
   return Boolean(value) && !value.includes(",") && !value.includes("·");
 }
 
-function nearbyRow(label, value, place) {
+function stripParenthetical(value) {
+  return value.replace(/[(（][^)）]*[)）]/g, "").trim();
+}
+
+function nearbyRow(label, value) {
   if (!value) return "";
-  const eligible = NEARBY_NAV_PILOT_PLACES.has(place.name) && isSingleBusinessName(value);
+  const eligible = isSingleBusinessName(value);
+  const query = stripParenthetical(value) || value;
   const navSlot = eligible
-    ? `<span class="place-detail__nav-btn" data-biz-query="${encodeURIComponent(value.trim())}"></span>`
+    ? `<span class="place-detail__nav-btn" data-biz-query="${encodeURIComponent(query)}"></span>`
     : "";
   return `
     <div class="place-detail__section">
@@ -89,8 +92,8 @@ function render(place) {
       ${row("✏️ 추천 이유", place.reason)}
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
-      ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
-      ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
+      ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant)}
+      ${nearbyRow("☕ 근처 카페", place.nearbyCafe)}
       ${row("등록자", place.registeredBy)}
 
       <div class="place-detail__actions">

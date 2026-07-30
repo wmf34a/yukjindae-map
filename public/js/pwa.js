@@ -58,6 +58,7 @@ function buildManualGuideContent() {
   wrap.innerHTML = `
     <ol class="install-popup__steps">
       <li class="install-popup__step">
+        <span class="install-popup__step-num" aria-hidden="true">1</span>
         <span class="install-popup__step-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 6h16" />
@@ -68,6 +69,7 @@ function buildManualGuideContent() {
         <span class="install-popup__step-text">브라우저 <b>메뉴 버튼</b>을 눌러주세요</span>
       </li>
       <li class="install-popup__step">
+        <span class="install-popup__step-num" aria-hidden="true">2</span>
         <span class="install-popup__step-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="4" />
@@ -88,6 +90,7 @@ function buildIOSContent() {
   wrap.innerHTML = `
     <ol class="install-popup__steps">
       <li class="install-popup__step">
+        <span class="install-popup__step-num" aria-hidden="true">1</span>
         <span class="install-popup__step-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 16V4" />
@@ -98,6 +101,7 @@ function buildIOSContent() {
         <span class="install-popup__step-text">Safari 하단의 <b>공유 버튼</b>을 눌러주세요</span>
       </li>
       <li class="install-popup__step">
+        <span class="install-popup__step-num" aria-hidden="true">2</span>
         <span class="install-popup__step-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="4" />

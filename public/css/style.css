@@ -602,6 +602,12 @@ body {
   line-height: 1;
 }
 
+.tabbar__icon svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+}
+
 .tabbar__icon--img {
   width: 19px;
   height: 19px;

@@ -134,7 +134,7 @@ async function handleBanners(env) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
   if (!env.NOTION_API_KEY || !env.NOTION_BANNER_DATABASE_ID) {
-    return new Response(JSON.stringify({ banners: [] }), { status: 200, headers });
+    return new Response(JSON.stringify({ banners: [], configured: false }), { status: 200, headers });
   }
 
   const notionHeaders = {
@@ -167,7 +167,10 @@ async function handleBanners(env) {
       })
     );
 
-    return new Response(JSON.stringify({ banners: banners.filter((b) => b.image) }), { status: 200, headers });
+    return new Response(
+      JSON.stringify({ banners: banners.filter((b) => b.image), configured: true, rawCount: data.results.length }),
+      { status: 200, headers }
+    );
   } catch (err) {
     return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
   }

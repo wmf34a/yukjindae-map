@@ -103,34 +103,38 @@ function guessImageExt(fingerprint) {
   return match ? match[1].toLowerCase() : "jpg";
 }
 
+async function shortHash(text) {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 10);
+}
+
 // Notion 자체 호스팅 이미지(type: "file")는 서명 URL이라 몇 시간 뒤 만료되므로,
-// 요청 시점에 R2로 미러링해서 안정적인 URL로 서빙한다. 소스가 바뀌지 않았으면
-// 재다운로드하지 않도록 R2 커스텀 메타데이터에 소스 지문을 저장해 비교한다.
+// 요청 시점에 R2로 미러링해서 안정적인 URL로 서빙한다. R2 키 자체에 소스 지문의
+// 해시를 박아 넣어서(content-addressed), 배너 이미지를 바꾸면 자동으로 새 키/새
+// URL이 되도록 한다 — 이렇게 안 하면 이미지가 바뀌어도 기존 R2 객체(및 브라우저의
+// immutable 캐시)가 그대로 남아있어서 반영이 안 되는 문제가 있었다.
 async function ensureBannerImage(env, pageId, source) {
   if (!source || !env.IMAGES) return "";
 
   const fingerprint = source.stable ? source.url : source.url.split("?")[0];
-  const key = `banners/${pageId}.${guessImageExt(fingerprint)}`;
+  const key = `banners/${pageId}-${await shortHash(fingerprint)}.${guessImageExt(fingerprint)}`;
 
   const existing = await env.IMAGES.head(key);
-  if (existing && existing.customMetadata && existing.customMetadata.sourceFingerprint === fingerprint) {
-    return `/images/${key}`;
-  }
+  if (existing) return `/images/${key}`;
 
   try {
     const res = await fetch(source.url, {
       headers: { "User-Agent": "yukjindae-map-bot/1.0 (+https://yukjindae-map.wmf34a.workers.dev)" },
     });
-    if (!res.ok) return existing ? `/images/${key}` : "";
+    if (!res.ok) return "";
 
     const contentType = res.headers.get("content-type") || "image/jpeg";
-    await env.IMAGES.put(key, res.body, {
-      httpMetadata: { contentType },
-      customMetadata: { sourceFingerprint: fingerprint },
-    });
+    await env.IMAGES.put(key, res.body, { httpMetadata: { contentType } });
     return `/images/${key}`;
   } catch {
-    return existing ? `/images/${key}` : "";
+    return "";
   }
 }
 

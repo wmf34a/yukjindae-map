@@ -1,4 +1,4 @@
-const CACHE_NAME = "yukjindae-map-v26";
+const CACHE_NAME = "yukjindae-map-v27";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -42,7 +42,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // 항상 최신이어야 하는 API/설정 응답은 캐시하지 않고 네트워크로 그대로 흘려보냄
-  if (url.pathname === "/api/places" || url.pathname === "/naver-config") {
+  if (url.pathname === "/api/places" || url.pathname === "/api/banners" || url.pathname === "/naver-config") {
     return;
   }
   if (event.request.method !== "GET") return;

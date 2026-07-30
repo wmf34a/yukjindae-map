@@ -237,7 +237,7 @@ async function loadBanners() {
 function buildNotices() {
   const eventNotices = state.banners.map((banner) => ({
     type: "event",
-    title: banner.title,
+    title: banner.title || "새 소식이 있어요",
     subtitle: banner.tagline,
     link: banner.link,
     createdAt: banner.createdAt,

@@ -164,8 +164,9 @@ function showMyLocation(latitude, longitude, { recenter = true, zoom = 13 } = {}
     position: new naver.maps.LatLng(latitude, longitude),
     map,
     icon: {
-      content: '<div style="width:14px;height:14px;border-radius:50%;background:#2563EB;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
-      anchor: new naver.maps.Point(7, 7),
+      content:
+        '<div class="map-my-location"><div class="map-my-location__halo"></div><div class="map-my-location__dot"></div></div>',
+      anchor: new naver.maps.Point(20, 20),
     },
   });
 }

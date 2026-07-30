@@ -195,3 +195,51 @@
   background: var(--color-bg);
   color: var(--color-secondary);
 }
+
+/* 내 위치 마커: 파란 점 + 은은하게 퍼지는 원 */
+.map-my-location {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-my-location__halo {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.18);
+  animation: map-my-location-pulse 2.2s ease-out infinite;
+}
+
+.map-my-location__dot {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-secondary);
+  border: 3px solid #fff;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes map-my-location-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.9;
+  }
+  70%,
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-my-location__halo {
+    animation: none;
+    opacity: 0.5;
+  }
+}

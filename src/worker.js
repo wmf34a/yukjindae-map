@@ -1,4 +1,4 @@
-import { toPlace } from "./notion.js";
+import { toPlace, toBanner } from "./notion.js";
 
 export function matchesQuery(place, { region, category, q }) {
   if (region && place.region !== region) return false;
@@ -98,6 +98,81 @@ async function handlePlaces(env, url) {
   }
 }
 
+function guessImageExt(fingerprint) {
+  const match = fingerprint.match(/\.(jpg|jpeg|png|webp|gif)(?:$|[?#])/i);
+  return match ? match[1].toLowerCase() : "jpg";
+}
+
+// Notion 자체 호스팅 이미지(type: "file")는 서명 URL이라 몇 시간 뒤 만료되므로,
+// 요청 시점에 R2로 미러링해서 안정적인 URL로 서빙한다. 소스가 바뀌지 않았으면
+// 재다운로드하지 않도록 R2 커스텀 메타데이터에 소스 지문을 저장해 비교한다.
+async function ensureBannerImage(env, pageId, source) {
+  if (!source || !env.IMAGES) return "";
+
+  const fingerprint = source.stable ? source.url : source.url.split("?")[0];
+  const key = `banners/${pageId}.${guessImageExt(fingerprint)}`;
+
+  const existing = await env.IMAGES.head(key);
+  if (existing && existing.customMetadata && existing.customMetadata.sourceFingerprint === fingerprint) {
+    return `/images/${key}`;
+  }
+
+  const res = await fetch(source.url);
+  if (!res.ok) {
+    return existing ? `/images/${key}` : "";
+  }
+
+  const contentType = res.headers.get("content-type") || "image/jpeg";
+  await env.IMAGES.put(key, res.body, {
+    httpMetadata: { contentType },
+    customMetadata: { sourceFingerprint: fingerprint },
+  });
+  return `/images/${key}`;
+}
+
+async function handleBanners(env) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_BANNER_DATABASE_ID) {
+    return new Response(JSON.stringify({ banners: [] }), { status: 200, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_BANNER_DATABASE_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        filter: { property: "노출여부", checkbox: { equals: true } },
+        sorts: [{ property: "순서", direction: "ascending" }],
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+    }
+
+    const data = await res.json();
+    const banners = await Promise.all(
+      data.results.map(async (page) => {
+        const banner = toBanner(page);
+        const image = await ensureBannerImage(env, banner.id, banner.imageSource);
+        return { id: banner.id, title: banner.title, tagline: banner.tagline, link: banner.link, image };
+      })
+    );
+
+    return new Response(JSON.stringify({ banners: banners.filter((b) => b.image) }), { status: 200, headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+  }
+}
+
 async function handleImage(env, key) {
   if (!env.IMAGES) {
     return new Response("이미지 저장소가 설정되지 않았습니다.", { status: 500 });
@@ -186,6 +261,9 @@ export default {
 
     if (url.pathname === "/api/places") {
       return handlePlaces(env, url);
+    }
+    if (url.pathname === "/api/banners") {
+      return handleBanners(env);
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);

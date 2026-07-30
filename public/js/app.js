@@ -122,6 +122,36 @@ function initHeroSlider() {
   setInterval(() => go((index + 1) % count), 3000);
 }
 
+function bannerSlide(banner) {
+  const caption =
+    banner.title || banner.tagline
+      ? `<div class="banner__caption">
+          ${banner.title ? `<p class="banner__caption-title">${banner.title}</p>` : ""}
+          ${banner.tagline ? `<p class="banner__caption-tagline">${banner.tagline}</p>` : ""}
+        </div>`
+      : "";
+  const img = `<img class="banner__photo" src="${banner.image}" alt="${banner.title || "배너"}" />`;
+  const inner = `${img}${caption}`;
+
+  return banner.link
+    ? `<a class="banner__slide banner__slide--photo" href="${banner.link}" target="_blank" rel="noopener">${inner}</a>`
+    : `<div class="banner__slide banner__slide--photo">${inner}</div>`;
+}
+
+async function loadBanners() {
+  try {
+    const res = await fetch("/api/banners");
+    const data = await res.json();
+    const banners = data.banners || [];
+    if (banners.length) {
+      document.getElementById("hero-track").innerHTML = banners.map(bannerSlide).join("");
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  initHeroSlider();
+}
+
 async function loadPlaces() {
   try {
     const res = await fetch("/api/places");
@@ -140,7 +170,7 @@ async function loadPlaces() {
 document.addEventListener("DOMContentLoaded", () => {
   renderRegions();
   renderCategoryFilter();
-  initHeroSlider();
+  loadBanners();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();

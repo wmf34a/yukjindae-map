@@ -25,6 +25,16 @@ export function firstFileUrl(prop) {
   return "";
 }
 
+// firstFileUrl과 달리 Notion 자체 호스팅 파일(type: "file")의 URL은 시간이 지나면
+// 만료되는 서명 URL이라, R2 미러링 시 안정적인 소스 식별자(쿼리스트링 제외)가 따로 필요하다.
+export function firstFileSource(prop) {
+  if (!prop || !prop.files || prop.files.length === 0) return null;
+  const f = prop.files[0];
+  if (f.type === "external") return { url: f.external.url, stable: true };
+  if (f.type === "file") return { url: f.file.url, stable: false };
+  return null;
+}
+
 export function toPlace(page) {
   const p = page.properties;
   return {
@@ -47,5 +57,17 @@ export function toPlace(page) {
     nearbyRestaurant: text(p["근처맛집"]),
     nearbyCafe: text(p["근처카페"]),
     registeredBy: text(p["등록자"]),
+  };
+}
+
+export function toBanner(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    title: title(p["제목"]),
+    tagline: text(p["문구"]),
+    link: (p["링크"] && p["링크"].url) || "",
+    order: (p["순서"] && p["순서"].number) ?? 0,
+    imageSource: firstFileSource(p["이미지"]),
   };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { text, title, selectName, multiSelectNames, firstFileUrl, toPlace } from "./notion.js";
+import { text, title, selectName, multiSelectNames, firstFileUrl, firstFileSource, toPlace, toBanner } from "./notion.js";
 
 describe("text", () => {
   it("rich_text 배열을 하나의 문자열로 합친다", () => {
@@ -60,6 +60,22 @@ describe("firstFileUrl", () => {
   });
 });
 
+describe("firstFileSource", () => {
+  it("external 타입은 stable: true로 반환한다", () => {
+    const prop = { files: [{ type: "external", external: { url: "https://example.com/a.jpg" } }] };
+    expect(firstFileSource(prop)).toEqual({ url: "https://example.com/a.jpg", stable: true });
+  });
+
+  it("file 타입(노션 호스팅, 서명 URL)은 stable: false로 반환한다", () => {
+    const prop = { files: [{ type: "file", file: { url: "https://notion.so/a.jpg?sig=1" } }] };
+    expect(firstFileSource(prop)).toEqual({ url: "https://notion.so/a.jpg?sig=1", stable: false });
+  });
+
+  it("파일이 없으면 null을 반환한다", () => {
+    expect(firstFileSource({ files: [] })).toBeNull();
+  });
+});
+
 describe("toPlace", () => {
   it("Notion 페이지 객체를 장소 객체로 변환한다", () => {
     const page = {
@@ -99,6 +115,52 @@ describe("toPlace", () => {
       image: "https://x.com/a.jpg",
       diaperChange: true,
       nursingRoom: false,
+    });
+  });
+});
+
+describe("toBanner", () => {
+  it("Notion 페이지 객체를 배너 객체로 변환한다", () => {
+    const page = {
+      id: "banner-1",
+      properties: {
+        "제목": { title: [{ plain_text: "여름 특집" }] },
+        "문구": { rich_text: [{ plain_text: "아이와 함께 떠나는 여름 나들이" }] },
+        "링크": { url: "https://example.com/summer" },
+        "순서": { number: 1 },
+        "이미지": { files: [{ type: "external", external: { url: "https://x.com/banner.jpg" } }] },
+      },
+    };
+
+    expect(toBanner(page)).toEqual({
+      id: "banner-1",
+      title: "여름 특집",
+      tagline: "아이와 함께 떠나는 여름 나들이",
+      link: "https://example.com/summer",
+      order: 1,
+      imageSource: { url: "https://x.com/banner.jpg", stable: true },
+    });
+  });
+
+  it("링크/순서가 없으면 기본값을 사용한다", () => {
+    const page = {
+      id: "banner-2",
+      properties: {
+        "제목": { title: [{ plain_text: "제목만" }] },
+        "문구": { rich_text: [] },
+        "링크": { url: null },
+        "순서": { number: null },
+        "이미지": { files: [] },
+      },
+    };
+
+    expect(toBanner(page)).toEqual({
+      id: "banner-2",
+      title: "제목만",
+      tagline: "",
+      link: "",
+      order: 0,
+      imageSource: null,
     });
   });
 });

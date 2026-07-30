@@ -456,7 +456,7 @@ curl -sI -H "Referer: https://yukjindae-map.wmf34a.workers.dev/" "이미지URL"
 ## 13. 참고 자료
 
 - 강원도 best9.pdf
-- 경기북부·인천 TOP9.pdf
+- 경기북부·인천 TOP9.docx (2026-07-30, 기존 pdf 대체)
 - 서울·서울근교 BEST.pdf
 - 네이버 Maps API 문서: https://api.ncloud-docs.com/docs/application-maps-overview
 - Notion API 문서: https://developers.notion.com

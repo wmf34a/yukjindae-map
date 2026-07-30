@@ -14,6 +14,7 @@ const DEFAULT_VIEW = { lat: 36.4, lng: 127.9, zoom: 7 };
 let map;
 let markers = [];
 let places = [];
+let sheetHistoryPushed = false;
 
 function openSheet(place) {
   const sheet = document.getElementById("map-sheet");
@@ -45,11 +46,28 @@ function openSheet(place) {
   `;
   bindFavoriteButtons(content);
   sheet.classList.add("is-open");
+
+  // 시트를 히스토리에 한 단계로 쌓아둬서, 뒤로가기를 눌렀을 때 지도 페이지를
+  // 벗어나 홈으로 가버리지 않고 시트만 닫히도록 한다.
+  if (!sheetHistoryPushed) {
+    history.pushState({ mapSheet: true }, "");
+    sheetHistoryPushed = true;
+  }
 }
 
 function closeSheet() {
   document.getElementById("map-sheet").classList.remove("is-open");
+  if (sheetHistoryPushed) {
+    sheetHistoryPushed = false;
+    history.back();
+  }
 }
+
+window.addEventListener("popstate", () => {
+  if (!sheetHistoryPushed) return;
+  sheetHistoryPushed = false;
+  document.getElementById("map-sheet").classList.remove("is-open");
+});
 
 // 시트가 맨 위까지 스크롤된 상태에서 아래로 60px 이상 드래그하면 닫는다.
 // passive:true라 기존 세로 스크롤(overflow-y:auto)과는 충돌하지 않는다.

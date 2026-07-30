@@ -119,7 +119,9 @@ async function ensureBannerImage(env, pageId, source) {
   }
 
   try {
-    const res = await fetch(source.url);
+    const res = await fetch(source.url, {
+      headers: { "User-Agent": "yukjindae-map-bot/1.0 (+https://yukjindae-map.wmf34a.workers.dev)" },
+    });
     if (!res.ok) {
       return { image: existing ? `/images/${key}` : "", debug: `fetch not ok: ${res.status}` };
     }

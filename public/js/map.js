@@ -146,6 +146,7 @@ function init() {
   map = new naver.maps.Map("map", {
     center: new naver.maps.LatLng(DEFAULT_VIEW.lat, DEFAULT_VIEW.lng),
     zoom: DEFAULT_VIEW.zoom,
+    logoControlOptions: { position: naver.maps.Position.TOP_LEFT },
   });
   naver.maps.Event.addListener(map, "click", closeSheet);
 

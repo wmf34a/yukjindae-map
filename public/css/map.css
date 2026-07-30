@@ -72,6 +72,9 @@
   z-index: 6;
   max-height: 60vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
 }
 
 .map-sheet.is-open {

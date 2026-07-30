@@ -117,12 +117,42 @@ function initHeroSlider() {
   const dots = dotsWrap.children;
 
   function go(next) {
-    index = next;
+    index = (next + count) % count;
     track.style.transform = `translateX(-${index * 100}%)`;
     Array.from(dots).forEach((dot, i) => dot.classList.toggle("is-active", i === index));
   }
 
-  setInterval(() => go((index + 1) % count), 3000);
+  let timer;
+  function startAutoplay() {
+    clearInterval(timer);
+    timer = setInterval(() => go(index + 1), 3000);
+  }
+  startAutoplay();
+
+  let startX = 0;
+  let dragging = false;
+
+  track.addEventListener(
+    "touchstart",
+    (e) => {
+      startX = e.touches[0].clientX;
+      dragging = true;
+    },
+    { passive: true }
+  );
+
+  track.addEventListener(
+    "touchend",
+    (e) => {
+      if (!dragging) return;
+      dragging = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) < 40) return;
+      go(dx < 0 ? index + 1 : index - 1);
+      startAutoplay();
+    },
+    { passive: true }
+  );
 }
 
 function bannerSlide(banner) {

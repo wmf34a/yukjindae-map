@@ -1,8 +1,15 @@
 .header__back {
-  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--color-primary);
   text-decoration: none;
   padding: 4px 8px 4px 0;
+}
+
+.header__back svg {
+  width: 22px;
+  height: 22px;
 }
 
 .place-detail__hero {

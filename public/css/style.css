@@ -86,6 +86,8 @@ body {
   font-size: 18px;
   font-weight: 700;
   color: var(--color-primary);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .header__subtitle {

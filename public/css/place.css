@@ -69,6 +69,10 @@
   white-space: normal;
 }
 
+.place-detail__nav-slot:empty {
+  display: none;
+}
+
 .place-detail__nav-btn {
   flex-shrink: 0;
   font-size: 11px;

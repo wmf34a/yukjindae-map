@@ -172,10 +172,14 @@ document.addEventListener("DOMContentLoaded", () => {
   renderCategoryFilter();
   loadBanners();
 
-  document.getElementById("search-input").addEventListener("input", (e) => {
+  const searchInput = document.getElementById("search-input");
+  searchInput.addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     renderPlaces();
   });
+  if (window.location.hash === "#search-input") {
+    searchInput.focus();
+  }
 
   loadPlaces();
 });

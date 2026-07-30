@@ -80,6 +80,7 @@ describe("toPlace", () => {
   it("Notion 페이지 객체를 장소 객체로 변환한다", () => {
     const page = {
       id: "page-1",
+      created_time: "2026-07-20T03:00:00.000Z",
       properties: {
         "장소명": { title: [{ plain_text: "전쟁기념관" }] },
         "지역": { select: { name: "서울" } },
@@ -106,6 +107,7 @@ describe("toPlace", () => {
 
     expect(place).toMatchObject({
       id: "page-1",
+      createdAt: "2026-07-20T03:00:00.000Z",
       name: "전쟁기념관",
       region: "서울",
       categories: ["무료"],
@@ -123,6 +125,7 @@ describe("toBanner", () => {
   it("Notion 페이지 객체를 배너 객체로 변환한다", () => {
     const page = {
       id: "banner-1",
+      created_time: "2026-07-25T01:00:00.000Z",
       properties: {
         "제목": { title: [{ plain_text: "여름 특집" }] },
         "문구": { rich_text: [{ plain_text: "아이와 함께 떠나는 여름 나들이" }] },
@@ -134,6 +137,7 @@ describe("toBanner", () => {
 
     expect(toBanner(page)).toEqual({
       id: "banner-1",
+      createdAt: "2026-07-25T01:00:00.000Z",
       title: "여름 특집",
       tagline: "아이와 함께 떠나는 여름 나들이",
       link: "https://example.com/summer",
@@ -145,6 +149,7 @@ describe("toBanner", () => {
   it("링크/순서가 없으면 기본값을 사용한다", () => {
     const page = {
       id: "banner-2",
+      created_time: "2026-07-26T01:00:00.000Z",
       properties: {
         "제목": { title: [{ plain_text: "제목만" }] },
         "문구": { rich_text: [] },
@@ -156,6 +161,7 @@ describe("toBanner", () => {
 
     expect(toBanner(page)).toEqual({
       id: "banner-2",
+      createdAt: "2026-07-26T01:00:00.000Z",
       title: "제목만",
       tagline: "",
       link: "",

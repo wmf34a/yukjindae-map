@@ -57,10 +57,13 @@ const REGION_ICONS = {
 
 const state = {
   places: [],
+  banners: [],
   region: null,
   category: null,
   query: "",
 };
+
+const NOTICES_SEEN_KEY = "yukjindae_notices_seen_at";
 
 function renderRegions() {
   const grid = document.getElementById("region-grid");
@@ -219,6 +222,7 @@ async function loadBanners() {
     const res = await fetch("/api/banners");
     const data = await res.json();
     const banners = data.banners || [];
+    state.banners = banners;
     if (banners.length) {
       document.getElementById("hero-track").innerHTML = banners.map(bannerSlide).join("");
     }
@@ -226,6 +230,95 @@ async function loadBanners() {
     console.error(err);
   }
   initHeroSlider();
+}
+
+// 배너(이벤트 소식)와 최근 등록된 장소(신규 장소 소식)를 합쳐서 최신순으로 정리.
+// 로그인/푸시 인프라 없이 Notion의 생성일(createdAt)만으로 가볍게 구현.
+function buildNotices() {
+  const eventNotices = state.banners.map((banner) => ({
+    type: "event",
+    title: banner.title,
+    subtitle: banner.tagline,
+    link: banner.link,
+    createdAt: banner.createdAt,
+  }));
+
+  const newPlaceNotices = state.places
+    .toSorted((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 3)
+    .map((place) => ({
+      type: "new-place",
+      title: `새 장소 추가: ${place.name}`,
+      subtitle: place.region,
+      link: `place.html?id=${encodeURIComponent(place.id)}`,
+      createdAt: place.createdAt,
+    }));
+
+  return [...eventNotices, ...newPlaceNotices]
+    .toSorted((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 5);
+}
+
+function hasUnreadNotices() {
+  const notices = buildNotices();
+  if (!notices.length) return false;
+  const seenAt = localStorage.getItem(NOTICES_SEEN_KEY);
+  if (!seenAt) return true;
+  return new Date(notices[0].createdAt) > new Date(seenAt);
+}
+
+function renderBellBadge() {
+  const bell = document.querySelector(".header__bell");
+  if (!bell) return;
+  bell.classList.toggle("has-unread", hasUnreadNotices());
+}
+
+function noticeItemHtml(notice) {
+  const inner = `
+    <p class="notices-panel__item-title">${notice.title}</p>
+    ${notice.subtitle ? `<p class="notices-panel__item-sub">${notice.subtitle}</p>` : ""}
+  `;
+  if (!notice.link) return `<div class="notices-panel__item">${inner}</div>`;
+  const externalAttrs = notice.type === "event" ? ` target="_blank" rel="noopener"` : "";
+  return `<a class="notices-panel__item" href="${notice.link}"${externalAttrs}>${inner}</a>`;
+}
+
+function renderNoticesPanel() {
+  const panel = document.getElementById("notices-panel");
+  if (!panel) return;
+  const notices = buildNotices();
+  const itemsHtml = notices.length
+    ? notices.map(noticeItemHtml).join("")
+    : `<p class="notices-panel__empty">아직 새 소식이 없어요</p>`;
+
+  panel.innerHTML = `
+    <p class="notices-panel__header">새 소식</p>
+    ${itemsHtml}
+    <a class="notices-panel__footer" href="about.html">육진대 채널 더보기 →</a>
+  `;
+}
+
+function initNoticesBell() {
+  const bell = document.querySelector(".header__bell");
+  const panel = document.getElementById("notices-panel");
+  if (!bell || !panel) return;
+
+  bell.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const opening = !panel.classList.contains("is-open");
+    panel.classList.toggle("is-open", opening);
+    if (opening) {
+      renderNoticesPanel();
+      localStorage.setItem(NOTICES_SEEN_KEY, new Date().toISOString());
+      renderBellBadge();
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!panel.classList.contains("is-open")) return;
+    if (panel.contains(e.target) || bell.contains(e.target)) return;
+    panel.classList.remove("is-open");
+  });
 }
 
 async function loadPlaces() {
@@ -246,12 +339,12 @@ async function loadPlaces() {
 document.addEventListener("DOMContentLoaded", () => {
   renderRegions();
   renderCategoryFilter();
-  loadBanners();
+  initNoticesBell();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     renderPlaces();
   });
 
-  loadPlaces();
+  Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
 });

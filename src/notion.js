@@ -39,6 +39,7 @@ export function toPlace(page) {
   const p = page.properties;
   return {
     id: page.id,
+    createdAt: page.created_time,
     name: title(p["장소명"]),
     region: selectName(p["지역"]),
     categories: multiSelectNames(p["카테고리"]),
@@ -64,6 +65,7 @@ export function toBanner(page) {
   const p = page.properties;
   return {
     id: page.id,
+    createdAt: page.created_time,
     title: title(p["제목"]),
     tagline: text(p["문구"]),
     link: (p["링크"] && p["링크"].url) || "",

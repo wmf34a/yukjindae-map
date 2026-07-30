@@ -167,7 +167,14 @@ async function handleBanners(env) {
       data.results.map(async (page) => {
         const banner = toBanner(page);
         const image = await ensureBannerImage(env, banner.id, banner.imageSource);
-        return { id: banner.id, title: banner.title, tagline: banner.tagline, link: banner.link, image };
+        return {
+          id: banner.id,
+          createdAt: banner.createdAt,
+          title: banner.title,
+          tagline: banner.tagline,
+          link: banner.link,
+          image,
+        };
       })
     );
 

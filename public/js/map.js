@@ -52,6 +52,40 @@ function closeSheet() {
   document.getElementById("map-sheet").classList.remove("is-open");
 }
 
+// 시트가 맨 위까지 스크롤된 상태에서 아래로 60px 이상 드래그하면 닫는다.
+// passive:true라 기존 세로 스크롤(overflow-y:auto)과는 충돌하지 않는다.
+function initSheetDrag() {
+  const sheet = document.getElementById("map-sheet");
+  let startY = 0;
+  let dragging = false;
+
+  sheet.addEventListener(
+    "touchstart",
+    (e) => {
+      startY = e.touches[0].clientY;
+      dragging = true;
+    },
+    { passive: true },
+  );
+
+  sheet.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!dragging) return;
+      const dy = e.touches[0].clientY - startY;
+      if (sheet.scrollTop <= 0 && dy > 60) {
+        dragging = false;
+        closeSheet();
+      }
+    },
+    { passive: true },
+  );
+
+  sheet.addEventListener("touchend", () => {
+    dragging = false;
+  }, { passive: true });
+}
+
 function clearMarkers() {
   markers.forEach((m) => m.setMap(null));
   markers = [];
@@ -159,6 +193,7 @@ function init() {
 
   renderRegionChips();
   initLocateButton();
+  initSheetDrag();
   loadPlaces();
   locateMe();
 }

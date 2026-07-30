@@ -112,24 +112,34 @@ async function loadPlaces() {
   renderMarkers(places);
 }
 
-function initLocateButton() {
-  document.getElementById("locate-btn").addEventListener("click", () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      map.setCenter(new naver.maps.LatLng(latitude, longitude));
-      map.setZoom(13);
-      const myMarker = new naver.maps.Marker({
-        position: new naver.maps.LatLng(latitude, longitude),
-        map,
-        icon: {
-          content: '<div style="width:14px;height:14px;border-radius:50%;background:#2563EB;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
-          anchor: new naver.maps.Point(7, 7),
-        },
-      });
-      void myMarker;
-    });
+let myLocationMarker = null;
+
+function showMyLocation(latitude, longitude, { recenter = true, zoom = 13 } = {}) {
+  if (recenter) {
+    map.setCenter(new naver.maps.LatLng(latitude, longitude));
+    map.setZoom(zoom);
+  }
+  if (myLocationMarker) myLocationMarker.setMap(null);
+  myLocationMarker = new naver.maps.Marker({
+    position: new naver.maps.LatLng(latitude, longitude),
+    map,
+    icon: {
+      content: '<div style="width:14px;height:14px;border-radius:50%;background:#2563EB;border:3px solid white;box-shadow:0 0 4px rgba(0,0,0,0.3);"></div>',
+      anchor: new naver.maps.Point(7, 7),
+    },
   });
+}
+
+function locateMe(options) {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(
+    (pos) => showMyLocation(pos.coords.latitude, pos.coords.longitude, options),
+    () => {},
+  );
+}
+
+function initLocateButton() {
+  document.getElementById("locate-btn").addEventListener("click", () => locateMe());
 }
 
 function init() {
@@ -142,6 +152,7 @@ function init() {
   renderRegionChips();
   initLocateButton();
   loadPlaces();
+  locateMe();
 }
 
 if (window.naver && window.naver.maps) {

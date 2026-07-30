@@ -87,7 +87,10 @@ function render(place) {
   el.innerHTML = `
     ${hero}
     <div class="place-detail__body">
-      <h1 class="place-detail__name">${place.name}</h1>
+      <div class="place-detail__name-row">
+        <h1 class="place-detail__name">${place.name}</h1>
+        ${favoriteButtonHtml(place.id, "place-detail__favorite-btn")}
+      </div>
       <div class="place-detail__tags">${tags}</div>
 
       ${row("📍 주소", place.address)}
@@ -108,6 +111,7 @@ function render(place) {
   `;
 
   el.querySelectorAll(".place-detail__nav-slot[data-biz-query]").forEach(loadNearbyNav);
+  bindFavoriteButtons(el);
 }
 
 async function init() {

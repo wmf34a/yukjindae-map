@@ -463,12 +463,39 @@ body {
   box-shadow: 0 2px 8px rgba(13, 27, 62, 0.08);
 }
 
+.place-grid__thumb-wrap {
+  position: relative;
+}
+
 .place-grid__thumb {
   width: 100%;
   aspect-ratio: 4 / 3;
   border-radius: 12px 12px 0 0;
   background: var(--color-surface);
   object-fit: cover;
+  display: block;
+}
+
+.place-grid__favorite-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 6px rgba(13, 27, 62, 0.18);
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.place-grid__favorite-btn.is-active {
+  background: var(--color-white);
 }
 
 .place-grid__body {
@@ -499,6 +526,38 @@ body {
   color: #8b96b8;
   font-size: 13px;
   padding: 32px 0;
+}
+
+/* 찜한 장소 */
+.favorite-count {
+  margin: 4px 18px 0;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5A6789;
+}
+
+.favorite-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.favorite-empty__text {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #8b96b8;
+}
+
+.favorite-empty__btn {
+  display: inline-block;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--color-secondary);
+  color: var(--color-white);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 /* Bottom tab bar */

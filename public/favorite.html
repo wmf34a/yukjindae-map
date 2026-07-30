@@ -3,41 +3,45 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-<title>장소 상세 | 육진대 맵</title>
+<title>찜한 장소 | 육진대 맵</title>
 <link rel="icon" type="image/svg+xml" href="assets/logo/character-logo.svg" />
 <link rel="manifest" href="/manifest.json" />
 <meta name="theme-color" content="#1A2F6B" />
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
 <link rel="stylesheet" href="css/style.css" />
-<link rel="stylesheet" href="css/place.css" />
 </head>
 <body>
 <div class="app">
 
   <header class="header">
-    <a href="javascript:history.back()" class="header__back" aria-label="뒤로가기">←</a>
-    <span class="header__title">장소 상세</span>
+    <span class="header__title">찜한 장소</span>
     <button class="header__install" type="button" hidden>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /><path d="M7 10l5 5 5-5" /><path d="M5 19h14" /></svg>
       설치
     </button>
   </header>
 
-  <div id="place-detail">
-    <p class="place-list__loading">불러오는 중...</p>
-  </div>
+  <p class="favorite-count" id="favorite-count">찜한 장소 0곳</p>
+
+  <div class="tag-filter" id="favorite-region-filter"></div>
+
+  <section class="section">
+    <div class="place-grid" id="favorite-list">
+      <p class="place-list__loading">불러오는 중...</p>
+    </div>
+  </section>
 
   <nav class="tabbar">
     <a class="tabbar__item" href="index.html"><span class="tabbar__icon">🏠</span>홈</a>
     <a class="tabbar__item" href="map.html"><span class="tabbar__icon">📍</span>주변</a>
-    <a class="tabbar__item" href="favorite.html"><span class="tabbar__icon">❤️</span>찜</a>
+    <a class="tabbar__item is-active" href="favorite.html"><span class="tabbar__icon">❤️</span>찜</a>
     <a class="tabbar__item" href="about.html"><img class="tabbar__icon tabbar__icon--img" src="assets/logo/character-logo.svg" alt="" />육진대</a>
   </nav>
 
 </div>
 
 <script src="js/favorites.js"></script>
-<script src="js/place.js"></script>
+<script src="js/favorite-page.js"></script>
 <script src="js/pwa.js"></script>
 </body>
 </html>

@@ -76,7 +76,10 @@ function placeCard(place) {
     : `<div class="place-grid__thumb"></div>`;
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
-      ${thumb}
+      <div class="place-grid__thumb-wrap">
+        ${thumb}
+        ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
+      </div>
       <div class="place-grid__body">
         <div class="place-grid__name">${place.name}</div>
         <div class="place-grid__region">${place.region}</div>
@@ -97,6 +100,7 @@ function renderPlaces() {
   list.innerHTML = filtered.length
     ? filtered.map(placeCard).join("")
     : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+  bindFavoriteButtons(list);
 }
 
 function initHeroSlider() {
@@ -172,14 +176,10 @@ document.addEventListener("DOMContentLoaded", () => {
   renderCategoryFilter();
   loadBanners();
 
-  const searchInput = document.getElementById("search-input");
-  searchInput.addEventListener("input", (e) => {
+  document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     renderPlaces();
   });
-  if (window.location.hash === "#search-input") {
-    searchInput.focus();
-  }
 
   loadPlaces();
 });

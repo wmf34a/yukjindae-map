@@ -19,14 +19,20 @@ let places = [];
 function openSheet(place) {
   const sheet = document.getElementById("map-sheet");
   const content = document.getElementById("map-sheet-content");
-  const img = place.image
-    ? `<img class="map-sheet__img" src="${place.image}" alt="${place.name}" />`
+  const thumb = place.image
+    ? `<div class="map-sheet__thumb-wrap">
+        <img class="map-sheet__img" src="${place.image}" alt="${place.name}" />
+        ${favoriteButtonHtml(place.id, "map-sheet__favorite-btn")}
+      </div>`
     : "";
   const query = encodeURIComponent(place.address || place.name);
   content.innerHTML = `
     <div class="map-sheet__card">
-      ${img}
-      <p class="map-sheet__name">${place.name}</p>
+      ${thumb}
+      <div class="map-sheet__name-row">
+        <p class="map-sheet__name">${place.name}</p>
+        ${place.image ? "" : favoriteButtonHtml(place.id, "map-sheet__favorite-btn map-sheet__favorite-btn--inline")}
+      </div>
       <p class="map-sheet__meta">${[place.region, ...(place.categories || [])].filter(Boolean).join(" · ")}</p>
       ${place.address ? `<p class="map-sheet__row">📍 ${place.address}</p>` : ""}
       ${place.hours ? `<p class="map-sheet__row">⏰ ${place.hours}</p>` : ""}
@@ -38,6 +44,7 @@ function openSheet(place) {
       </div>
     </div>
   `;
+  bindFavoriteButtons(content);
   sheet.classList.add("is-open");
 }
 

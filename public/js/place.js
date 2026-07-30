@@ -40,7 +40,7 @@ async function loadNearbyNav(slot) {
     const res = await fetch(`/api/nearby-place?q=${encodeURIComponent(q)}`);
     const data = await res.json();
     if (!data.found) return;
-    const query = encodeURIComponent(data.address || data.name);
+    const query = encodeURIComponent(data.name || data.address);
     slot.outerHTML = `<a class="place-detail__nav-btn" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">길찾기</a>`;
   } catch (err) {
     console.error(err);

@@ -8,6 +8,45 @@ function row(label, value) {
   `;
 }
 
+// 1차 파일럿: 근처맛집/근처카페에 콤마 없이 업체명 하나만 명확히 적힌 경우
+// 네이버 지역검색 API로 주소를 끌어와 작은 "길찾기" 버튼을 붙인다.
+// 검증 후 대상을 넓힐 예정이라 지금은 특정 장소에만 켜둔다.
+const NEARBY_NAV_PILOT_PLACES = new Set(["현대 모터스튜디오 고양"]);
+
+function isSingleBusinessName(value) {
+  return Boolean(value) && !value.includes(",") && !value.includes("·");
+}
+
+function nearbyRow(label, value, place) {
+  if (!value) return "";
+  const eligible = NEARBY_NAV_PILOT_PLACES.has(place.name) && isSingleBusinessName(value);
+  const navSlot = eligible
+    ? `<span class="place-detail__nav-btn" data-biz-query="${encodeURIComponent(value.trim())}"></span>`
+    : "";
+  return `
+    <div class="place-detail__section">
+      <p class="place-detail__label">${label}</p>
+      <p class="place-detail__value place-detail__value--row">
+        <span>${value}</span>
+        ${navSlot}
+      </p>
+    </div>
+  `;
+}
+
+async function loadNearbyNav(slot) {
+  const q = decodeURIComponent(slot.dataset.bizQuery);
+  try {
+    const res = await fetch(`/api/nearby-place?q=${encodeURIComponent(q)}`);
+    const data = await res.json();
+    if (!data.found) return;
+    const query = encodeURIComponent(data.address || data.name);
+    slot.outerHTML = `<a class="place-detail__nav-btn" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">길찾기</a>`;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 function render(place) {
   const el = document.getElementById("place-detail");
   document.title = `${place.name} | 육진대 맵`;
@@ -50,8 +89,8 @@ function render(place) {
       ${row("✏️ 추천 이유", place.reason)}
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
-      ${row("🍴 근처 맛집", place.nearbyRestaurant)}
-      ${row("☕ 근처 카페", place.nearbyCafe)}
+      ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
+      ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
       ${row("등록자", place.registeredBy)}
 
       <div class="place-detail__actions">
@@ -60,6 +99,8 @@ function render(place) {
       </div>
     </div>
   `;
+
+  el.querySelectorAll(".place-detail__nav-btn[data-biz-query]").forEach(loadNearbyNav);
 }
 
 async function init() {

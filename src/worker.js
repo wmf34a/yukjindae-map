@@ -113,6 +113,60 @@ async function handleImage(env, key) {
   return new Response(object.body, { headers });
 }
 
+async function handleNearbyPlace(env, url) {
+  const q = url.searchParams.get("q");
+  if (!q) {
+    return new Response(JSON.stringify({ error: "q 파라미터가 필요합니다." }), {
+      status: 400,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
+    return new Response(JSON.stringify({ error: "네이버 검색 API 환경변수가 설정되지 않았습니다." }), {
+      status: 500,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  const res = await fetch(
+    `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(q)}&display=1`,
+    {
+      headers: {
+        "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
+        "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const detail = await res.text();
+    return new Response(JSON.stringify({ error: "네이버 검색 API 오류", detail }), {
+      status: 502,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  const data = await res.json();
+  const item = data.items && data.items[0];
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  };
+
+  if (!item) {
+    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
+  }
+
+  return new Response(
+    JSON.stringify({
+      found: true,
+      name: item.title.replace(/<[^>]+>/g, ""),
+      address: item.roadAddress || item.address || "",
+    }),
+    { status: 200, headers }
+  );
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
@@ -135,6 +189,9 @@ export default {
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);
+    }
+    if (url.pathname === "/api/nearby-place") {
+      return handleNearbyPlace(env, url);
     }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));

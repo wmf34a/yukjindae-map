@@ -247,10 +247,23 @@ function isMobileUA() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
-// map.naver.com/p/directions는 좌표 뒤에 이름을 붙인 지점을 순서대로 이어 붙이면
-// 그대로 경유지가 되고, 끝의 모드값을 car로 주면 자동차 탭이 기본으로 열린다.
+// map.naver.com/p/directions(새 지도)는 좌표를 WGS84 위경도가 아니라 Web Mercator
+// (EPSG:3857) 투영 좌표로 받는다 — 이걸 놓치면 지점을 못 알아듣고 이름 텍스트로
+// 재검색하며 모드도 기본값(대중교통)으로 떨어진다.
+function toWebMercator(lat, lng) {
+  const R = 20037508.34;
+  const x = (lng * R) / 180;
+  const y = (Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180)) * (R / 180);
+  return { x, y };
+}
+
+// 좌표 뒤에 이름을 붙인 지점을 순서대로 이어 붙이면 그대로 경유지가 되고,
+// 끝의 모드값을 car로 주면 자동차 탭이 기본으로 열린다.
 function buildWebDirectionsUrl(stops) {
-  const points = stops.map((s) => `${s.lng},${s.lat},${encodeURIComponent(s.name)}`);
+  const points = stops.map((s) => {
+    const { x, y } = toWebMercator(s.lat, s.lng);
+    return `${x},${y},${encodeURIComponent(s.name)}`;
+  });
   return `https://map.naver.com/p/directions/${points.join("/")}/-/car`;
 }
 

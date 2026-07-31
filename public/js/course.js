@@ -4,6 +4,7 @@ const COURSE_PIN_COLORS = ["#1A2F6B", "#F59E0B", "#10B981"];
 
 let courseMap = null;
 let courseMarkers = [];
+let courseSegmentLabels = [];
 let coursePolyline = null;
 let courseCarMarker = null;
 let courseCarRaf = null;
@@ -30,6 +31,17 @@ function courseCarIcon() {
   };
 }
 
+// content 크기가 텍스트 길이에 따라 달라지므로, anchor를 (0,0)으로 고정해두고
+// 내부 요소를 transform:translate(-50%,-50%)로 밀어서 실제 중심을 좌표에 맞춘다.
+function segmentLabelIcon(text) {
+  return {
+    content: `
+      <div style="transform:translate(-50%,-50%);white-space:nowrap;background:#fff;border:1px solid #2563EB;color:#1A2F6B;font-size:10px;font-weight:700;padding:3px 7px;border-radius:999px;box-shadow:0 1px 4px rgba(13,27,62,0.25);">${text}</div>
+    `,
+    anchor: new naver.maps.Point(0, 0),
+  };
+}
+
 function haversineKm(a, b) {
   const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -40,10 +52,50 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function totalDistanceKm(stops) {
-  let total = 0;
-  for (let i = 1; i < stops.length; i++) total += haversineKm(stops[i - 1], stops[i]);
-  return total;
+function midpoint(a, b) {
+  return { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+}
+
+function walkMinutes(distanceM) {
+  return Math.max(1, Math.round((distanceM / 1000 / COURSE_WALK_KMH) * 60));
+}
+
+function formatDistance(distanceM) {
+  return distanceM < 1000 ? `${Math.round(distanceM)}m` : `${(distanceM / 1000).toFixed(1)}km`;
+}
+
+function formatSegmentLabel(segment) {
+  const suffix = segment.estimated ? " (예상)" : "";
+  return `약 ${formatDistance(segment.distanceM)} · 도보 ${walkMinutes(segment.distanceM)}분${suffix}`;
+}
+
+// 네이버 클라우드에는 도보 길찾기 API가 없어서 자동차 길찾기(Direction 5)의 도로
+// 거리값을 대신 쓴다. 이 API가 실패하거나(구간이 너무 짧아 경로를 못 찾는 경우 등)
+// 응답이 없으면 직선거리로 대체하고 "예상"으로 표시한다.
+async function fetchRoadDistance(from, to) {
+  try {
+    const start = `${from.lng},${from.lat}`;
+    const goal = `${to.lng},${to.lat}`;
+    const res = await fetch(`/api/directions?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}`);
+    const data = await res.json();
+    return data.found ? data.distance : null;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+async function resolveSegments(stops) {
+  const pairs = [];
+  for (let i = 1; i < stops.length; i++) pairs.push([stops[i - 1], stops[i]]);
+
+  return Promise.all(
+    pairs.map(async ([from, to]) => {
+      const roadDistanceM = await fetchRoadDistance(from, to);
+      if (roadDistanceM != null) return { from, to, distanceM: roadDistanceM, estimated: false };
+      return { from, to, distanceM: haversineKm(from, to) * 1000, estimated: true };
+    })
+  );
 }
 
 async function geocodeAddress(address) {
@@ -151,7 +203,7 @@ function stopCarAnimation() {
   }
 }
 
-function initCourseMap(stops) {
+function initCourseMap(stops, segments) {
   courseMap = new naver.maps.Map("course-map", {
     center: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
     zoom: 15,
@@ -177,6 +229,16 @@ function initCourseMap(stops) {
       strokeStyle: "shortdash",
     });
 
+    courseSegmentLabels = segments.map((segment, i) => {
+      const mid = midpoint(stops[i], stops[i + 1]);
+      return new naver.maps.Marker({
+        position: new naver.maps.LatLng(mid.lat, mid.lng),
+        map: courseMap,
+        icon: segmentLabelIcon(formatSegmentLabel(segment)),
+        zIndex: 15,
+      });
+    });
+
     courseCarMarker = new naver.maps.Marker({
       position: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
       map: courseMap,
@@ -194,20 +256,28 @@ function buildDirectionsUrl(stops) {
   return `https://map.naver.com/p/directions/${segments.join("/")}/-/walk`;
 }
 
-function renderCourseFooter(stops) {
+function renderCourseFooter(stops, segments) {
   document.getElementById("course-order").textContent = stops.map((s) => s.name).join(" → ");
 
+  const segmentsEl = document.getElementById("course-segments");
   const directionsBtn = document.getElementById("course-directions-btn");
+
   if (stops.length < 2) {
     document.getElementById("course-meta").textContent = "";
+    segmentsEl.innerHTML = "";
     directionsBtn.hidden = true;
     return;
   }
 
-  const distKm = totalDistanceKm(stops);
-  const distText = distKm < 1 ? `${Math.round(distKm * 1000)}m` : `${distKm.toFixed(1)}km`;
-  const walkMin = Math.max(1, Math.round((distKm / COURSE_WALK_KMH) * 60));
-  document.getElementById("course-meta").textContent = `총 거리 ${distText} · 도보 약 ${walkMin}분`;
+  const totalM = segments.reduce((sum, s) => sum + s.distanceM, 0);
+  const anyEstimated = segments.some((s) => s.estimated);
+  const estimatedNote = anyEstimated ? " (일부 구간 예상)" : "";
+  document.getElementById("course-meta").textContent =
+    `총 거리 ${formatDistance(totalM)} · 도보 약 ${walkMinutes(totalM)}분${estimatedNote}`;
+
+  segmentsEl.innerHTML = segments
+    .map((segment, i) => `<p class="course-segment">${stops[i].name} → ${stops[i + 1].name} · ${formatSegmentLabel(segment)}</p>`)
+    .join("");
 
   directionsBtn.href = buildDirectionsUrl(stops);
   directionsBtn.hidden = false;
@@ -217,6 +287,8 @@ function destroyCourseMap() {
   stopCarAnimation();
   courseMarkers.forEach((m) => m.setMap(null));
   courseMarkers = [];
+  courseSegmentLabels.forEach((m) => m.setMap(null));
+  courseSegmentLabels = [];
   if (coursePolyline) {
     coursePolyline.setMap(null);
     coursePolyline = null;
@@ -256,6 +328,7 @@ async function openCourseModal(place) {
   body.innerHTML = `<p class="course-modal__loading">코스를 준비하는 중...</p>`;
   document.getElementById("course-order").textContent = "";
   document.getElementById("course-meta").textContent = "";
+  document.getElementById("course-segments").innerHTML = "";
   document.getElementById("course-directions-btn").hidden = true;
 
   const stops = await resolveCourseStops(place);
@@ -267,9 +340,13 @@ async function openCourseModal(place) {
     return;
   }
 
+  const segments = await resolveSegments(stops);
+
+  if (!overlay.classList.contains("is-open")) return;
+
   body.innerHTML = `<div id="course-map" class="course-modal__map"></div>`;
-  initCourseMap(stops);
-  renderCourseFooter(stops);
+  initCourseMap(stops, segments);
+  renderCourseFooter(stops, segments);
 }
 
 function initCourseModal() {

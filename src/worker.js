@@ -305,6 +305,55 @@ async function handleGeocode(env, url) {
   );
 }
 
+// 네이버 클라우드에는 도보 길찾기 API가 따로 없어서, 자동차 길찾기(Direction 5)의
+// 도로 기반 거리값만 가져다 쓴다. 소요 시간은 이 거리에 도보 속도(4km/h)를 적용해
+// 프론트에서 직접 계산 — 자동차 소요시간을 "도보 시간"으로 보여주면 안 되기 때문.
+async function handleDirections(env, url) {
+  const start = url.searchParams.get("start");
+  const goal = url.searchParams.get("goal");
+  if (!start || !goal) {
+    return new Response(JSON.stringify({ error: "start/goal 파라미터가 필요합니다." }), {
+      status: 400,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) {
+    return new Response(JSON.stringify({ error: "네이버 지도 API 환경변수가 설정되지 않았습니다." }), {
+      status: 500,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  };
+
+  const res = await fetch(
+    `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}&option=trafast`,
+    {
+      headers: {
+        "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
+        "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
+      },
+    }
+  );
+
+  if (!res.ok) {
+    const detail = await res.text();
+    return new Response(JSON.stringify({ error: "네이버 길찾기 API 오류", detail }), { status: 502, headers });
+  }
+
+  const data = await res.json();
+  const summary = data.route && data.route.trafast && data.route.trafast[0] && data.route.trafast[0].summary;
+
+  if (data.code !== 0 || !summary) {
+    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
+  }
+
+  return new Response(JSON.stringify({ found: true, distance: summary.distance }), { status: 200, headers });
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
@@ -336,6 +385,9 @@ export default {
     }
     if (url.pathname === "/api/geocode") {
       return handleGeocode(env, url);
+    }
+    if (url.pathname === "/api/directions") {
+      return handleDirections(env, url);
     }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));

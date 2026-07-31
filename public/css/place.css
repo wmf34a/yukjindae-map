@@ -259,7 +259,22 @@
 .course-meta {
   font-size: 12px;
   color: #8b96b8;
+  margin: 0 0 10px;
+}
+
+.course-segments {
   margin: 0 0 14px;
+}
+
+.course-segments:empty {
+  margin: 0;
+}
+
+.course-segment {
+  font-size: 12px;
+  color: #5A6789;
+  margin: 0 0 4px;
+  line-height: 1.5;
 }
 
 .course-directions-btn {

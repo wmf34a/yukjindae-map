@@ -48,7 +48,9 @@ function haversineKm(a, b) {
 // 하단 텍스트·길찾기 링크는 원래 좌표를 그대로 쓰고, 지도 위 핀 위치만 살짝
 // 부채꼴로 벌려서 전부 보이고 클릭 가능하게 만든다.
 const PIN_OVERLAP_EPSILON_DEG = 0.00005; // 대략 5m
-const PIN_OVERLAP_OFFSET_M = 14;
+// 핀 아이콘 자체가 30x40px라서, 코스가 넓게 퍼져 있어 지도가 줌아웃될 때도 핀끼리
+// 서로 가리지 않게 넉넉히 떨어뜨린다(실제 좌표/거리 계산과는 무관한 화면 표시 전용값).
+const PIN_OVERLAP_OFFSET_M = 70;
 
 function offsetLatLng(lat, lng, bearingDeg, distanceM) {
   const R = 6371000;

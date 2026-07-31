@@ -90,10 +90,21 @@ async function resolveCourseStops(place) {
     resolveNearbyStop(place.nearbyCafe),
   ]);
 
-  return [placeStop, restaurantStop, cafeStop].filter(Boolean).map((stop, i) => {
-    stop.color = COURSE_PIN_COLORS[i];
-    return stop;
-  });
+  // 색상은 역할(장소/맛집/카페) 고정이라, 맛집이 빠져서 카페가 두 번째 정차지가 되는
+  // 경우에도 카페는 항상 초록이어야 한다 — 그래서 필터링 전 배열 위치가 아니라
+  // 역할별로 미리 색을 붙여둔 뒤에 없는 정차지만 걸러낸다.
+  const roled = [
+    { stop: placeStop, color: COURSE_PIN_COLORS[0] },
+    { stop: restaurantStop, color: COURSE_PIN_COLORS[1] },
+    { stop: cafeStop, color: COURSE_PIN_COLORS[2] },
+  ];
+
+  return roled
+    .filter((r) => r.stop)
+    .map((r) => {
+      r.stop.color = r.color;
+      return r.stop;
+    });
 }
 
 function fitBoundsToStops(stops) {

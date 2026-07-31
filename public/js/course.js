@@ -1,10 +1,12 @@
 const COURSE_LEG_MS = 2000;
 const COURSE_WALK_KMH = 4;
+// 자동차 구간(1km 초과)의 fallback 추정 속도 — 도심 평균 주행 속도(신호 대기 포함) 가정.
+const COURSE_CAR_KMH = 25;
+const COURSE_CAR_THRESHOLD_M = 1000;
 const COURSE_PIN_COLORS = ["#1A2F6B", "#F59E0B", "#10B981"];
 
 let courseMap = null;
 let courseMarkers = [];
-let courseSegmentLabels = [];
 let coursePolyline = null;
 let courseCarMarker = null;
 let courseCarRaf = null;
@@ -31,17 +33,6 @@ function courseCarIcon() {
   };
 }
 
-// content 크기가 텍스트 길이에 따라 달라지므로, anchor를 (0,0)으로 고정해두고
-// 내부 요소를 transform:translate(-50%,-50%)로 밀어서 실제 중심을 좌표에 맞춘다.
-function segmentLabelIcon(text) {
-  return {
-    content: `
-      <div style="transform:translate(-50%,-50%);white-space:nowrap;background:#fff;border:1px solid #2563EB;color:#1A2F6B;font-size:10px;font-weight:700;padding:3px 7px;border-radius:999px;box-shadow:0 1px 4px rgba(13,27,62,0.25);">${text}</div>
-    `,
-    anchor: new naver.maps.Point(0, 0),
-  };
-}
-
 function haversineKm(a, b) {
   const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -52,26 +43,32 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function midpoint(a, b) {
-  return { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
-}
-
-function walkMinutes(distanceM) {
-  return Math.max(1, Math.round((distanceM / 1000 / COURSE_WALK_KMH) * 60));
-}
-
 function formatDistance(distanceM) {
   return distanceM < 1000 ? `${Math.round(distanceM)}m` : `${(distanceM / 1000).toFixed(1)}km`;
 }
 
+function travelMode(distanceM) {
+  return distanceM > COURSE_CAR_THRESHOLD_M ? "car" : "walk";
+}
+
+function travelMinutes(distanceM) {
+  const kmh = travelMode(distanceM) === "car" ? COURSE_CAR_KMH : COURSE_WALK_KMH;
+  return Math.max(1, Math.round((distanceM / 1000 / kmh) * 60));
+}
+
 function formatSegmentLabel(segment) {
+  const minutes = travelMinutes(segment.distanceM);
+  const timeText = travelMode(segment.distanceM) === "car" ? `자차 약 ${minutes}분` : `도보 ${minutes}분`;
   const suffix = segment.estimated ? " (예상)" : "";
-  return `약 ${formatDistance(segment.distanceM)} · 도보 ${walkMinutes(segment.distanceM)}분${suffix}`;
+  return `약 ${formatDistance(segment.distanceM)} · ${timeText}${suffix}`;
 }
 
 // 네이버 클라우드에는 도보 길찾기 API가 없어서 자동차 길찾기(Direction 5)의 도로
-// 거리값을 대신 쓴다. 이 API가 실패하거나(구간이 너무 짧아 경로를 못 찾는 경우 등)
-// 응답이 없으면 직선거리로 대체하고 "예상"으로 표시한다.
+// 거리값만 쓸 수 있다. 1km 이내 도보 구간은 차량 도로 경로가 실제 보행 동선(골목,
+// 인도, 지름길)과 달라 의미가 없으므로 API 호출 없이 바로 직선거리 추정치를 쓰고,
+// 1km 초과(자차 기준) 구간만 Direction 5로 실제 도로 거리를 가져온다. 이 API가
+// 실패하면(구간이 너무 짧아 경로를 못 찾는 경우, 상품 미활성화 등) 직선거리로
+// 대체하고 "예상"으로 표시한다.
 async function fetchRoadDistance(from, to) {
   try {
     const start = `${from.lng},${from.lat}`;
@@ -85,17 +82,20 @@ async function fetchRoadDistance(from, to) {
   }
 }
 
+async function resolveSegment(from, to) {
+  const straightM = haversineKm(from, to) * 1000;
+  if (straightM <= COURSE_CAR_THRESHOLD_M) {
+    return { from, to, distanceM: straightM, estimated: true };
+  }
+  const roadDistanceM = await fetchRoadDistance(from, to);
+  if (roadDistanceM != null) return { from, to, distanceM: roadDistanceM, estimated: false };
+  return { from, to, distanceM: straightM, estimated: true };
+}
+
 async function resolveSegments(stops) {
   const pairs = [];
   for (let i = 1; i < stops.length; i++) pairs.push([stops[i - 1], stops[i]]);
-
-  return Promise.all(
-    pairs.map(async ([from, to]) => {
-      const roadDistanceM = await fetchRoadDistance(from, to);
-      if (roadDistanceM != null) return { from, to, distanceM: roadDistanceM, estimated: false };
-      return { from, to, distanceM: haversineKm(from, to) * 1000, estimated: true };
-    })
-  );
+  return Promise.all(pairs.map(([from, to]) => resolveSegment(from, to)));
 }
 
 async function geocodeAddress(address) {
@@ -203,7 +203,9 @@ function stopCarAnimation() {
   }
 }
 
-function initCourseMap(stops, segments) {
+// 지도 위에는 핀/경로선/자동차 애니메이션만 남기고, 구간별 거리·시간은 가독성
+// 문제로 하단 텍스트 설명에서만 보여준다(renderCourseFooter 참고).
+function initCourseMap(stops) {
   courseMap = new naver.maps.Map("course-map", {
     center: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
     zoom: 15,
@@ -229,16 +231,6 @@ function initCourseMap(stops, segments) {
       strokeStyle: "shortdash",
     });
 
-    courseSegmentLabels = segments.map((segment, i) => {
-      const mid = midpoint(stops[i], stops[i + 1]);
-      return new naver.maps.Marker({
-        position: new naver.maps.LatLng(mid.lat, mid.lng),
-        map: courseMap,
-        icon: segmentLabelIcon(formatSegmentLabel(segment)),
-        zIndex: 15,
-      });
-    });
-
     courseCarMarker = new naver.maps.Marker({
       position: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
       map: courseMap,
@@ -251,10 +243,67 @@ function initCourseMap(stops, segments) {
   fitBoundsToStops(stops);
 }
 
-function buildDirectionsUrl(stops) {
-  const segments = stops.map((s) => `${s.lng},${s.lat},${encodeURIComponent(s.name)}`);
-  return `https://map.naver.com/p/directions/${segments.join("/")}/-/walk`;
+function isMobileUA() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
+
+// map.naver.com/p/directions는 좌표 뒤에 이름을 붙인 지점을 순서대로 이어 붙이면
+// 그대로 경유지가 되고, 끝의 모드값을 car로 주면 자동차 탭이 기본으로 열린다.
+function buildWebDirectionsUrl(stops) {
+  const points = stops.map((s) => `${s.lng},${s.lat},${encodeURIComponent(s.name)}`);
+  return `https://map.naver.com/p/directions/${points.join("/")}/-/car`;
+}
+
+// 네이버 지도 앱 URL 스킴(nmap://route/car) — 출발/도착 외 경유지는 v1lat/v1lng/v1name,
+// v2lat.. 순으로 늘어난다. appname은 호출 앱을 식별하는 필수 파라미터라 이 사이트의
+// origin을 넘긴다.
+function buildNmapCarUrl(stops) {
+  const start = stops[0];
+  const goal = stops[stops.length - 1];
+  const vias = stops.slice(1, -1);
+
+  const params = new URLSearchParams();
+  params.set("slat", start.lat);
+  params.set("slng", start.lng);
+  params.set("sname", start.name);
+  vias.forEach((via, i) => {
+    params.set(`v${i + 1}lat`, via.lat);
+    params.set(`v${i + 1}lng`, via.lng);
+    params.set(`v${i + 1}name`, via.name);
+  });
+  params.set("dlat", goal.lat);
+  params.set("dlng", goal.lng);
+  params.set("dname", goal.name);
+  params.set("appname", location.origin);
+
+  return `nmap://route/car?${params.toString()}`;
+}
+
+// 모바일에서는 네이버 지도 앱을 자동차 모드로 먼저 열어보고, 앱이 없어서 반응이
+// 없으면(페이지가 그대로 남아있으면) 일정 시간 뒤 웹 길찾기로 대체한다. 데스크톱은
+// 앱 스킴이 의미 없으니 그냥 href(자동차 모드 웹 링크)를 그대로 새 탭으로 연다.
+// 모달을 열 때마다 같은 버튼 엘리먼트에 다시 바인딩되므로, addEventListener 대신
+// onclick 단일 슬롯을 써서 이전 핸들러가 겹겹이 쌓이는 걸 막는다.
+/* oxlint-disable unicorn/prefer-add-event-listener */
+function bindDirectionsButton(stops) {
+  const btn = document.getElementById("course-directions-btn");
+  const webUrl = buildWebDirectionsUrl(stops);
+  btn.href = webUrl;
+  btn.hidden = false;
+
+  if (!isMobileUA()) {
+    btn.onclick = null;
+    return;
+  }
+
+  btn.onclick = (event) => {
+    event.preventDefault();
+    const fallback = setTimeout(() => window.open(webUrl, "_blank", "noopener"), 1200);
+    window.addEventListener("pagehide", () => clearTimeout(fallback), { once: true });
+    location.href = buildNmapCarUrl(stops);
+  };
+}
+/* oxlint-enable unicorn/prefer-add-event-listener */
 
 function renderCourseFooter(stops, segments) {
   document.getElementById("course-order").textContent = stops.map((s) => s.name).join(" → ");
@@ -266,29 +315,32 @@ function renderCourseFooter(stops, segments) {
     document.getElementById("course-meta").textContent = "";
     segmentsEl.innerHTML = "";
     directionsBtn.hidden = true;
+    /* oxlint-disable-next-line unicorn/prefer-add-event-listener -- bindDirectionsButton과 동일한 이유(단일 슬롯) */
+    directionsBtn.onclick = null;
     return;
   }
 
   const totalM = segments.reduce((sum, s) => sum + s.distanceM, 0);
-  const anyEstimated = segments.some((s) => s.estimated);
-  const estimatedNote = anyEstimated ? " (일부 구간 예상)" : "";
+  // 총 소요시간은 구간별로 도보/자차 기준이 다를 수 있어, 합쳐진 총 거리에
+  // 하나의 속도를 적용하지 않고 각 구간이 이미 계산한 시간을 그대로 더한다.
+  const totalMinutes = segments.reduce((sum, s) => sum + travelMinutes(s.distanceM), 0);
+  const modes = new Set(segments.map((s) => travelMode(s.distanceM)));
+  const modeNote = modes.size > 1 ? " (도보+자차 혼합)" : modes.has("car") ? " (자차)" : " (도보)";
+  const estimatedNote = segments.some((s) => s.estimated) ? " (일부 구간 예상)" : "";
   document.getElementById("course-meta").textContent =
-    `총 거리 ${formatDistance(totalM)} · 도보 약 ${walkMinutes(totalM)}분${estimatedNote}`;
+    `총 거리 ${formatDistance(totalM)} · 이동 약 ${totalMinutes}분${modeNote}${estimatedNote}`;
 
   segmentsEl.innerHTML = segments
     .map((segment, i) => `<p class="course-segment">${stops[i].name} → ${stops[i + 1].name} · ${formatSegmentLabel(segment)}</p>`)
     .join("");
 
-  directionsBtn.href = buildDirectionsUrl(stops);
-  directionsBtn.hidden = false;
+  bindDirectionsButton(stops);
 }
 
 function destroyCourseMap() {
   stopCarAnimation();
   courseMarkers.forEach((m) => m.setMap(null));
   courseMarkers = [];
-  courseSegmentLabels.forEach((m) => m.setMap(null));
-  courseSegmentLabels = [];
   if (coursePolyline) {
     coursePolyline.setMap(null);
     coursePolyline = null;
@@ -345,7 +397,7 @@ async function openCourseModal(place) {
   if (!overlay.classList.contains("is-open")) return;
 
   body.innerHTML = `<div id="course-map" class="course-modal__map"></div>`;
-  initCourseMap(stops, segments);
+  initCourseMap(stops);
   renderCourseFooter(stops, segments);
 }
 

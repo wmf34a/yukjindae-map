@@ -19,6 +19,11 @@ function stripParenthetical(value) {
   return value.replace(/[(（][^)）]*[)）]/g, "").trim();
 }
 
+// course.js도 근처맛집/근처카페 텍스트에서 코스 핀용 검색어를 뽑아낼 때 이 판별/정리
+// 로직을 그대로 써야 해서 전역으로 노출해둔다.
+window.isSingleBusinessName = isSingleBusinessName;
+window.stripParenthetical = stripParenthetical;
+
 function nearbyRow(label, value) {
   if (!value) return "";
   const eligible = isSingleBusinessName(value);
@@ -105,13 +110,17 @@ function render(place) {
 
       <div class="place-detail__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
-        <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
+        <button type="button" class="btn-secondary" id="course-btn">코스보기</button>
       </div>
     </div>
   `;
 
   el.querySelectorAll(".place-detail__nav-slot[data-biz-query]").forEach(loadNearbyNav);
   bindFavoriteButtons(el);
+
+  document.getElementById("course-btn").addEventListener("click", () => {
+    window.openCourseModal(place);
+  });
 }
 
 async function init() {

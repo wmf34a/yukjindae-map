@@ -257,6 +257,54 @@ async function handleNearbyPlace(env, url) {
   );
 }
 
+async function handleGeocode(env, url) {
+  const query = url.searchParams.get("query");
+  if (!query) {
+    return new Response(JSON.stringify({ error: "query 파라미터가 필요합니다." }), {
+      status: 400,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) {
+    return new Response(JSON.stringify({ error: "네이버 지도 API 환경변수가 설정되지 않았습니다." }), {
+      status: 500,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
+  const res = await fetch(
+    `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(query)}`,
+    {
+      headers: {
+        "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
+        "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
+      },
+    }
+  );
+
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  };
+
+  if (!res.ok) {
+    const detail = await res.text();
+    return new Response(JSON.stringify({ error: "네이버 지오코딩 API 오류", detail }), { status: 502, headers });
+  }
+
+  const data = await res.json();
+  const item = data.addresses && data.addresses[0];
+
+  if (!item) {
+    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
+  }
+
+  return new Response(
+    JSON.stringify({ found: true, lat: Number(item.y), lng: Number(item.x) }),
+    { status: 200, headers }
+  );
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
@@ -285,6 +333,9 @@ export default {
     }
     if (url.pathname === "/api/nearby-place") {
       return handleNearbyPlace(env, url);
+    }
+    if (url.pathname === "/api/geocode") {
+      return handleGeocode(env, url);
     }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));

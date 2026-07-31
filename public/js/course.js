@@ -43,6 +43,43 @@ function haversineKm(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+// 카페/맛집이 장소 건물 내부에 있는 경우처럼 좌표가 완전히 겹치면, 나중에 그려진
+// 핀이 먼저 그려진 핀을 그대로 덮어버려 화면에서 사라져 보인다. 실제 거리 계산·
+// 하단 텍스트·길찾기 링크는 원래 좌표를 그대로 쓰고, 지도 위 핀 위치만 살짝
+// 부채꼴로 벌려서 전부 보이고 클릭 가능하게 만든다.
+const PIN_OVERLAP_EPSILON_DEG = 0.00005; // 대략 5m
+const PIN_OVERLAP_OFFSET_M = 14;
+
+function offsetLatLng(lat, lng, bearingDeg, distanceM) {
+  const R = 6371000;
+  const bearing = (bearingDeg * Math.PI) / 180;
+  const latRad = (lat * Math.PI) / 180;
+  const lngRad = (lng * Math.PI) / 180;
+  const angularDist = distanceM / R;
+  const newLatRad = Math.asin(
+    Math.sin(latRad) * Math.cos(angularDist) + Math.cos(latRad) * Math.sin(angularDist) * Math.cos(bearing)
+  );
+  const newLngRad =
+    lngRad +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angularDist) * Math.cos(latRad),
+      Math.cos(angularDist) - Math.sin(latRad) * Math.sin(newLatRad)
+    );
+  return { lat: (newLatRad * 180) / Math.PI, lng: (newLngRad * 180) / Math.PI };
+}
+
+function pinDisplayPositions(stops) {
+  const placed = [];
+  return stops.map((s, i) => {
+    const overlaps = placed.some(
+      (p) => Math.abs(p.lat - s.lat) < PIN_OVERLAP_EPSILON_DEG && Math.abs(p.lng - s.lng) < PIN_OVERLAP_EPSILON_DEG
+    );
+    placed.push({ lat: s.lat, lng: s.lng });
+    if (!overlaps) return { lat: s.lat, lng: s.lng };
+    return offsetLatLng(s.lat, s.lng, i * 120, PIN_OVERLAP_OFFSET_M);
+  });
+}
+
 function formatDistance(distanceM) {
   return distanceM < 1000 ? `${Math.round(distanceM)}m` : `${(distanceM / 1000).toFixed(1)}km`;
 }
@@ -206,15 +243,17 @@ function stopCarAnimation() {
 // 지도 위에는 핀/경로선/자동차 애니메이션만 남기고, 구간별 거리·시간은 가독성
 // 문제로 하단 텍스트 설명에서만 보여준다(renderCourseFooter 참고).
 function initCourseMap(stops) {
+  const displayPositions = pinDisplayPositions(stops);
+
   courseMap = new naver.maps.Map("course-map", {
-    center: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
+    center: new naver.maps.LatLng(displayPositions[0].lat, displayPositions[0].lng),
     zoom: 15,
     logoControlOptions: { position: naver.maps.Position.TOP_LEFT },
   });
 
   courseMarkers = stops.map((s, i) =>
     new naver.maps.Marker({
-      position: new naver.maps.LatLng(s.lat, s.lng),
+      position: new naver.maps.LatLng(displayPositions[i].lat, displayPositions[i].lng),
       map: courseMap,
       icon: coursePinIcon(s.color, String(i + 1)),
       zIndex: 10,
@@ -224,7 +263,7 @@ function initCourseMap(stops) {
   if (stops.length > 1) {
     coursePolyline = new naver.maps.Polyline({
       map: courseMap,
-      path: stops.map((s) => new naver.maps.LatLng(s.lat, s.lng)),
+      path: displayPositions.map((p) => new naver.maps.LatLng(p.lat, p.lng)),
       strokeColor: "#2563EB",
       strokeOpacity: 0.85,
       strokeWeight: 3,
@@ -232,15 +271,15 @@ function initCourseMap(stops) {
     });
 
     courseCarMarker = new naver.maps.Marker({
-      position: new naver.maps.LatLng(stops[0].lat, stops[0].lng),
+      position: new naver.maps.LatLng(displayPositions[0].lat, displayPositions[0].lng),
       map: courseMap,
       icon: courseCarIcon(),
       zIndex: 20,
     });
-    startCarAnimation(stops);
+    startCarAnimation(displayPositions);
   }
 
-  fitBoundsToStops(stops);
+  fitBoundsToStops(displayPositions);
 }
 
 function isMobileUA() {

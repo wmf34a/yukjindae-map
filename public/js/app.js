@@ -237,6 +237,9 @@ async function loadBanners() {
   } catch (err) {
     console.error(err);
   }
+  // 노션 배너 유무가 판가름 난 뒤에야 배너 영역을 드러내서, 기본 배너가 잠깐
+  // 보였다가 노션 배너로 바뀌는 깜빡임 없이 처음부터 최종 내용만 보이게 한다.
+  document.getElementById("hero-banner").classList.remove("is-loading");
   initHeroSlider();
 }
 

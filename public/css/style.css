@@ -324,6 +324,12 @@ body {
   color: var(--color-white);
 }
 
+/* 노션 배너 로딩이 끝나기 전까지는 자리만 잡아두고 안 보이게 해서, 기본
+   배너가 잠깐 보였다가 노션 배너로 바뀌는 깜빡임을 없앤다. */
+.banner.is-loading {
+  visibility: hidden;
+}
+
 .banner__track {
   display: flex;
   transition: transform 0.5s ease;

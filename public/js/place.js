@@ -61,7 +61,7 @@ async function loadNearbyNav(slot) {
 
 function render(place) {
   const el = document.getElementById("place-detail");
-  document.title = `${place.name} | 육진대 맵`;
+  document.title = `${place.name} | 육진대`;
 
   const hero = place.image
     ? `<img class="place-detail__hero" src="${place.image}" alt="${place.name}" />`

@@ -33,6 +33,17 @@ function courseCarIcon() {
   };
 }
 
+function courseWalkIcon() {
+  return {
+    content: `<div style="font-size:24px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.35));">🚶</div>`,
+    anchor: new naver.maps.Point(12, 12),
+  };
+}
+
+function courseTravelIcon(mode) {
+  return mode === "car" ? courseCarIcon() : courseWalkIcon();
+}
+
 function haversineKm(a, b) {
   const R = 6371;
   const dLat = ((b.lat - a.lat) * Math.PI) / 180;
@@ -86,6 +97,13 @@ function formatDistance(distanceM) {
   return distanceM < 1000 ? `${Math.round(distanceM)}m` : `${(distanceM / 1000).toFixed(1)}km`;
 }
 
+function formatMinutes(minutes) {
+  if (minutes < 60) return `${minutes}분`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest === 0 ? `${hours}시간` : `${hours}시간 ${rest}분`;
+}
+
 function travelMode(distanceM) {
   return distanceM > COURSE_CAR_THRESHOLD_M ? "car" : "walk";
 }
@@ -97,7 +115,7 @@ function travelMinutes(distanceM) {
 
 function formatSegmentLabel(segment) {
   const minutes = travelMinutes(segment.distanceM);
-  const timeText = travelMode(segment.distanceM) === "car" ? `자차 약 ${minutes}분` : `도보 ${minutes}분`;
+  const timeText = travelMode(segment.distanceM) === "car" ? `자차 약 ${formatMinutes(minutes)}` : `도보 ${formatMinutes(minutes)}`;
   const suffix = segment.estimated ? " (예상)" : "";
   return `약 ${formatDistance(segment.distanceM)} · ${timeText}${suffix}`;
 }
@@ -209,17 +227,28 @@ function fitBoundsToStops(stops) {
 
 // 정차 없이 코스를 계속 보여주기 위해, 마지막 핀에 닿으면 방향을 뒤집어 왕복시킨다
 // (역방향으로 계속 진행하면 경로선 밖으로 벗어나는 순간이 생기기 때문).
-function startCarAnimation(stops) {
+// segments[i]는 stops[i] → stops[i+1] 구간이라, 역방향으로 도는 동안에도
+// 같은 물리 구간이면 같은 이동수단(도보/자차) 아이콘을 써야 한다.
+function startCarAnimation(stops, segments) {
   if (stops.length < 2) return;
   let index = 0;
   let direction = 1;
   let legStart = performance.now();
+  let currentMode = null;
 
   function tick(now) {
     if (!courseCarMarker) return;
     const t = Math.min(1, (now - legStart) / COURSE_LEG_MS);
     const from = stops[index];
     const to = stops[index + direction];
+
+    const legIndex = direction === 1 ? index : index - 1;
+    const mode = travelMode(segments[legIndex].distanceM);
+    if (mode !== currentMode) {
+      currentMode = mode;
+      courseCarMarker.setIcon(courseTravelIcon(mode));
+    }
+
     courseCarMarker.setPosition(
       new naver.maps.LatLng(from.lat + (to.lat - from.lat) * t, from.lng + (to.lng - from.lng) * t)
     );
@@ -244,7 +273,7 @@ function stopCarAnimation() {
 
 // 지도 위에는 핀/경로선/자동차 애니메이션만 남기고, 구간별 거리·시간은 가독성
 // 문제로 하단 텍스트 설명에서만 보여준다(renderCourseFooter 참고).
-function initCourseMap(stops) {
+function initCourseMap(stops, segments) {
   const displayPositions = pinDisplayPositions(stops);
 
   courseMap = new naver.maps.Map("course-map", {
@@ -275,10 +304,10 @@ function initCourseMap(stops) {
     courseCarMarker = new naver.maps.Marker({
       position: new naver.maps.LatLng(displayPositions[0].lat, displayPositions[0].lng),
       map: courseMap,
-      icon: courseCarIcon(),
+      icon: courseTravelIcon(travelMode(segments[0].distanceM)),
       zIndex: 20,
     });
-    startCarAnimation(displayPositions);
+    startCarAnimation(displayPositions, segments);
   }
 
   fitBoundsToStops(displayPositions);
@@ -359,8 +388,15 @@ function bindDirectionsButton(stops) {
 }
 /* oxlint-enable unicorn/prefer-add-event-listener */
 
+// 지도 위 핀(coursePinIcon)과 색상·번호를 그대로 맞춰서, 아래 장소명 목록만 보고도
+// 어떤 핀인지 바로 알아볼 수 있게 한다.
 function renderCourseFooter(stops, segments) {
-  document.getElementById("course-order").textContent = stops.map((s) => s.name).join(" → ");
+  document.getElementById("course-order").innerHTML = stops
+    .map(
+      (s, i) =>
+        `<span class="course-order__stop"><span class="course-order__badge" style="background:${s.color}">${i + 1}</span>${s.name}</span>`
+    )
+    .join(`<span class="course-order__arrow">→</span>`);
 
   const segmentsEl = document.getElementById("course-segments");
   const directionsBtn = document.getElementById("course-directions-btn");
@@ -382,7 +418,7 @@ function renderCourseFooter(stops, segments) {
   const modeNote = modes.size > 1 ? " (도보+자차 혼합)" : modes.has("car") ? " (자차)" : " (도보)";
   const estimatedNote = segments.some((s) => s.estimated) ? " (일부 구간 예상)" : "";
   document.getElementById("course-meta").textContent =
-    `총 거리 ${formatDistance(totalM)} · 이동 약 ${totalMinutes}분${modeNote}${estimatedNote}`;
+    `총 거리 ${formatDistance(totalM)} · 이동 약 ${formatMinutes(totalMinutes)}${modeNote}${estimatedNote}`;
 
   segmentsEl.innerHTML = segments
     .map((segment, i) => `<p class="course-segment">${stops[i].name} → ${stops[i + 1].name} · ${formatSegmentLabel(segment)}</p>`)
@@ -451,7 +487,7 @@ async function openCourseModal(place) {
   if (!overlay.classList.contains("is-open")) return;
 
   body.innerHTML = `<div id="course-map" class="course-modal__map"></div>`;
-  initCourseMap(stops);
+  initCourseMap(stops, segments);
   renderCourseFooter(stops, segments);
 }
 

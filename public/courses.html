@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>테마 코스 모음 | 육진대</title>
+<link rel="icon" type="image/svg+xml" href="assets/logo/character-logo.svg" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#1A2F6B" />
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <span class="header__title">테마 코스 모음</span>
+  </header>
+
+  <section class="section">
+    <div class="course-list" id="course-list">
+      <p class="place-list__loading">불러오는 중...</p>
+    </div>
+  </section>
+
+  <nav class="tabbar">
+    <a class="tabbar__item" href="index.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5"/></svg></span>홈</a>
+    <a class="tabbar__item" href="map.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.6 7-11.5A7 7 0 0 0 5 9.5C5 14.4 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>주변</a>
+    <a class="tabbar__item" href="favorite.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.5-9.3C1.2 8 2.7 4.8 6 4.2c2-.4 3.7.5 6 2.8 2.3-2.3 4-3.2 6-2.8 3.3.6 4.8 3.8 3.5 7-2 4.7-9.5 9.3-9.5 9.3z"/></svg></span>찜</a>
+    <a class="tabbar__item" href="about.html"><img class="tabbar__icon tabbar__icon--img" src="assets/logo/character-logo.svg" alt="" />육진대</a>
+  </nav>
+
+</div>
+
+<script src="js/courses.js"></script>
+<script src="js/pwa.js"></script>
+</body>
+</html>

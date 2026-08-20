@@ -452,65 +452,170 @@ body {
   margin: 0 0 14px;
 }
 
-.region-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.region-grid__item {
+/* 대한민국 인터랙티브 지도 */
+.region-map {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 4px;
+  justify-content: center;
   background: var(--color-white);
   border: 1px solid #EFF1F5;
   border-radius: 16px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-text);
+  padding: 6px;
   box-shadow: 0 2px 8px rgba(13, 27, 62, 0.05);
 }
 
-.region-grid__icon {
-  width: 44px;
-  height: 44px;
+.region-map__svg {
+  width: 100%;
+  height: auto;
+}
+
+.region-map__path {
+  stroke: var(--color-white);
+  stroke-width: 0.5;
+  cursor: pointer;
+  opacity: 0.88;
+  transition: opacity 0.15s ease, stroke-width 0.15s ease;
+}
+
+.region-map__path:hover {
+  opacity: 1;
+}
+
+.region-map__path.is-active {
+  opacity: 1;
+  stroke: #1A2F6B;
+  stroke-width: 1.4;
+}
+
+.region-map.has-selection .region-map__path:not(.is-active) {
+  opacity: 0.32;
+}
+
+.region-map__marker {
+  cursor: pointer;
+}
+
+.region-map__marker circle {
+  stroke: var(--color-white);
+  stroke-width: 0.8;
+  filter: drop-shadow(0 1px 1.5px rgba(13, 27, 62, 0.35));
+}
+
+.region-map__marker text {
+  font-size: 4.6px;
+  font-weight: 700;
+  fill: var(--color-white);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.region-map.has-selection .region-map__marker:not(.is-active) {
+  opacity: 0.45;
+}
+
+.region-map__marker.is-active circle {
+  stroke: #1A2F6B;
+  stroke-width: 1.2;
+}
+
+.region-map__caption {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b96b8;
+  margin: 8px 0 0;
+}
+
+/* 지도 아래 번호-지역명 매핑 범례 */
+.region-legend {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.region-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.region-legend__item.is-active {
+  background: #E9EEFF;
+  border-color: var(--color-primary);
+}
+
+.region-legend__dot {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
-  background: linear-gradient(145deg, #E9EEFF, #D7E1FF);
-}
-
-.region-grid__icon svg {
-  width: 28px;
-  height: 28px;
-}
-
-.region-grid__label {
-  line-height: 1.2;
-}
-
-.region-grid__item.is-active {
-  background: linear-gradient(155deg, var(--color-secondary), var(--color-primary));
-  border-color: var(--color-primary);
-  color: var(--color-white);
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
-}
-
-.region-grid__item.is-active .region-grid__label {
-  color: var(--color-white);
-}
-
-.region-grid__item small {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 700;
+  color: var(--color-white);
+}
+
+.region-legend__name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.region-legend__count {
+  font-size: 11px;
+  font-weight: 600;
   color: #8b96b8;
 }
 
-.region-grid__item.is-active small {
-  color: rgba(255, 255, 255, 0.85);
+/* 축제/코스 큐레이션 카드 */
+.curated-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.curated-links__item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-white);
+  border: 1px solid #EFF1F5;
+  border-radius: 14px;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(13, 27, 62, 0.05);
+}
+
+.curated-links__icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #E9EEFF, #D7E1FF);
+}
+
+.curated-links__icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 /* Category tags */
@@ -625,6 +730,103 @@ body {
   color: #8b96b8;
   font-size: 13px;
   padding: 32px 0;
+}
+
+/* 테마 코스 모음 */
+.course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.course-card {
+  background: var(--color-white);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 14px rgba(13, 27, 62, 0.08);
+}
+
+.course-card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.course-card__thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: var(--color-surface);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.course-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.course-card__name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.course-card__desc {
+  font-size: 12px;
+  color: #8b96b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-card__count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.course-card__stops {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #EFF1F5;
+}
+
+.course-card__stops[hidden] {
+  display: none;
+}
+
+.course-card__stop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  text-decoration: none;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.course-card__stop-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 /* 찜한 장소 */

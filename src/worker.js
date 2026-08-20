@@ -1,4 +1,4 @@
-import { toPlace, toBanner } from "./notion.js";
+import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 
 export function matchesQuery(place, { region, category, q }) {
   if (region && place.region !== region) return false;
@@ -128,11 +128,11 @@ async function shortHash(text) {
 // 해시를 박아 넣어서(content-addressed), 배너 이미지를 바꾸면 자동으로 새 키/새
 // URL이 되도록 한다 — 이렇게 안 하면 이미지가 바뀌어도 기존 R2 객체(및 브라우저의
 // immutable 캐시)가 그대로 남아있어서 반영이 안 되는 문제가 있었다.
-async function ensureBannerImage(env, pageId, source) {
+async function ensureMirroredImage(env, prefix, pageId, source) {
   if (!source || !env.IMAGES) return "";
 
   const fingerprint = source.stable ? source.url : source.url.split("?")[0];
-  const key = `banners/${pageId}-${await shortHash(fingerprint)}.${guessImageExt(fingerprint)}`;
+  const key = `${prefix}/${pageId}-${await shortHash(fingerprint)}.${guessImageExt(fingerprint)}`;
 
   const existing = await env.IMAGES.head(key);
   if (existing) return `/images/${key}`;
@@ -183,7 +183,7 @@ async function handleBanners(env) {
     const banners = await Promise.all(
       data.results.map(async (page) => {
         const banner = toBanner(page);
-        const image = await ensureBannerImage(env, banner.id, banner.imageSource);
+        const image = await ensureMirroredImage(env, "banners", banner.id, banner.imageSource);
         return {
           id: banner.id,
           createdAt: banner.createdAt,
@@ -196,6 +196,111 @@ async function handleBanners(env) {
     );
 
     return new Response(JSON.stringify({ banners: banners.filter((b) => b.image) }), { status: 200, headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+  }
+}
+
+async function handleCourses(env) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_COURSE_DATABASE_ID) {
+    return new Response(JSON.stringify({ courses: [] }), { status: 200, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_COURSE_DATABASE_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        filter: { property: "공개여부", checkbox: { equals: true } },
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+    }
+
+    const data = await res.json();
+    const courses = await Promise.all(
+      data.results.map(async (page) => {
+        const course = toCourse(page);
+        const image = await ensureMirroredImage(env, "courses", course.id, course.imageSource);
+        return {
+          id: course.id,
+          createdAt: course.createdAt,
+          name: course.name,
+          description: course.description,
+          image,
+          placeIds: course.placeIds,
+        };
+      })
+    );
+
+    return new Response(JSON.stringify({ courses: courses.filter((c) => c.name && c.placeIds.length) }), {
+      status: 200,
+      headers,
+    });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+  }
+}
+
+async function handleFestivals(env) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_FESTIVAL_DATABASE_ID) {
+    return new Response(JSON.stringify({ festivals: [] }), { status: 200, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        sorts: [{ property: "순서", direction: "ascending" }],
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+    }
+
+    const data = await res.json();
+    const festivals = await Promise.all(
+      data.results.slice(0, 10).map(async (page) => {
+        const festival = toFestival(page);
+        const image = await ensureMirroredImage(env, "festivals", festival.id, festival.imageSource);
+        return {
+          id: festival.id,
+          createdAt: festival.createdAt,
+          title: festival.title,
+          periodStart: festival.periodStart,
+          periodEnd: festival.periodEnd,
+          placeName: festival.placeName,
+          image,
+          link: festival.link,
+          region: festival.region,
+          order: festival.order,
+        };
+      })
+    );
+
+    return new Response(JSON.stringify({ festivals: festivals.filter((f) => f.title) }), { status: 200, headers });
   } catch (err) {
     return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
   }
@@ -389,6 +494,12 @@ export default {
     }
     if (url.pathname === "/api/banners") {
       return handleBanners(env);
+    }
+    if (url.pathname === "/api/courses") {
+      return handleCourses(env);
+    }
+    if (url.pathname === "/api/festivals") {
+      return handleFestivals(env);
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);

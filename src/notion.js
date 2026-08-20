@@ -73,3 +73,32 @@ export function toBanner(page) {
     imageSource: firstFileSource(p["이미지"]),
   };
 }
+
+export function toCourse(page) {
+  const p = page.properties;
+  return {
+    id: page.id,
+    createdAt: page.created_time,
+    name: title(p["코스명"]),
+    description: text(p["설명"]),
+    imageSource: firstFileSource(p["대표이미지"]),
+    placeIds: (p["장소"] && p["장소"].relation ? p["장소"].relation : []).map((r) => r.id),
+  };
+}
+
+export function toFestival(page) {
+  const p = page.properties;
+  const date = p["기간"] && p["기간"].date;
+  return {
+    id: page.id,
+    createdAt: page.created_time,
+    title: title(p["제목"]),
+    periodStart: (date && date.start) || "",
+    periodEnd: (date && date.end) || "",
+    placeName: text(p["장소명"]),
+    imageSource: firstFileSource(p["이미지"]),
+    link: (p["링크"] && p["링크"].url) || "",
+    region: selectName(p["지역"]),
+    order: (p["순서"] && p["순서"].number) ?? 0,
+  };
+}

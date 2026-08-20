@@ -408,6 +408,14 @@ async function loadPlaces() {
   renderPlaces();
 }
 
+// 검색어를 입력하면 배너·지역 지도 섹션을 접어서, 스크롤 없이 검색 결과가 바로
+// 보이도록 한다. 검색어를 지우면 원래대로 되돌아온다.
+function updateSearchModeUI() {
+  const searching = Boolean(state.query);
+  document.getElementById("hero-banner").hidden = searching;
+  document.getElementById("region-section").hidden = searching;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
@@ -417,6 +425,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
+    updateSearchModeUI();
     renderPlaces();
   });
 

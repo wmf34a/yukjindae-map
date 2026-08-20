@@ -534,13 +534,11 @@ body {
    구석에 작게 띄워서 세로 공간을 아낀다. */
 .region-legend {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
-  width: 44%;
-  max-height: 60%;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 3px;
   padding: 5px;
   background: rgba(255, 255, 255, 0.92);
@@ -552,14 +550,15 @@ body {
 
 .region-legend__item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 2px 4px;
+  gap: 1px;
+  padding: 2px 1px;
   background: none;
   border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
 }
 
 .region-legend__item.is-active {
@@ -581,8 +580,8 @@ body {
 }
 
 .region-legend__name {
-  flex: 1;
-  font-size: 10px;
+  width: 100%;
+  font-size: 8.5px;
   font-weight: 600;
   color: var(--color-text);
   overflow: hidden;
@@ -590,10 +589,10 @@ body {
   white-space: nowrap;
 }
 
+/* 5열로 좁아져서 개수까지 넣으면 너무 빽빽해져 숨김(지도/범례 클릭하면
+   캡션에서 어차피 "지역명 · N곳"으로 보여줌) */
 .region-legend__count {
-  font-size: 9px;
-  font-weight: 600;
-  color: #8b96b8;
+  display: none;
 }
 
 /* 축제/코스 큐레이션 카드 */

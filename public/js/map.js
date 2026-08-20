@@ -16,6 +16,66 @@ let map;
 let markers = [];
 let places = [];
 let sheetHistoryPushed = false;
+let myLocation = null;
+
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function formatDistance(km) {
+  if (km < 1) return `${Math.round(km * 1000)}m`;
+  return `${km.toFixed(1)}km`;
+}
+
+// 내 위치를 알고 있고 장소 목록도 불러온 상태여야 렌더링한다 — 둘 다
+// 비동기라 어느 쪽이 먼저 끝나든 이 함수가 호출되면 조건을 다시 확인한다.
+function renderNearbyList() {
+  const wrap = document.getElementById("map-nearby");
+  if (!myLocation || !places.length) {
+    wrap.hidden = true;
+    wrap.innerHTML = "";
+    return;
+  }
+
+  const nearest = places
+    .map((p) => ({ ...p, distanceKm: haversineKm(myLocation, { lat: p.lat, lng: p.lng }) }))
+    .toSorted((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, 10);
+
+  wrap.hidden = false;
+  wrap.innerHTML = `
+    <p class="map-nearby__title">내 위치에서 가까운 순</p>
+    <div class="map-nearby__track">
+      ${nearest
+        .map(
+          (p) => `
+        <button class="map-nearby__card" data-id="${p.id}">
+          <img class="map-nearby__thumb" src="${p.image || ""}" alt="" />
+          <span class="map-nearby__name">${p.name}</span>
+          <span class="map-nearby__dist">${formatDistance(p.distanceKm)}</span>
+        </button>`
+        )
+        .join("")}
+    </div>
+  `;
+
+  wrap.querySelectorAll("[data-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const place = nearest.find((p) => p.id === btn.dataset.id);
+      if (!place) return;
+      map.setCenter(new naver.maps.LatLng(place.lat, place.lng));
+      map.setZoom(14);
+      openSheet(place);
+    });
+  });
+}
 
 function openSheet(place) {
   const sheet = document.getElementById("map-sheet");
@@ -169,6 +229,7 @@ async function loadPlaces() {
   const data = await res.json();
   places = (data.places || []).filter((p) => typeof p.lat === "number" && typeof p.lng === "number");
   renderMarkers(places);
+  renderNearbyList();
 }
 
 let myLocationMarker = null;
@@ -188,6 +249,8 @@ function showMyLocation(latitude, longitude, { recenter = true, zoom = 13 } = {}
       anchor: new naver.maps.Point(20, 20),
     },
   });
+  myLocation = { lat: latitude, lng: longitude };
+  renderNearbyList();
 }
 
 function locateMe(options) {

@@ -8,7 +8,7 @@
 
 .map-toolbar {
   padding: 10px 0;
-  border-bottom: 1px solid #E5EAF7;
+  border-bottom: 1px solid var(--color-border);
   flex: none;
 }
 
@@ -21,19 +21,19 @@
 
 .map-chip {
   flex: none;
-  padding: 6px 14px;
+  padding: 7px 15px;
   border-radius: 999px;
-  border: 1px solid var(--color-accent);
-  color: var(--color-secondary);
+  border: none;
+  color: var(--color-text-secondary);
   font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
-  background: var(--color-white);
+  background: var(--color-bg);
 }
 
 .map-chip.is-active {
   background: var(--color-secondary);
   color: var(--color-white);
-  border-color: var(--color-secondary);
 }
 
 .map-canvas {
@@ -46,7 +46,7 @@
 .map-nearby {
   flex: none;
   padding: 10px 0;
-  border-bottom: 1px solid #E5EAF7;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .map-nearby__title {
@@ -109,7 +109,7 @@
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid #E5EAF7;
+  border: 1px solid var(--color-border);
   background: var(--color-white);
   box-shadow: 0 2px 8px rgba(13, 27, 62, 0.15);
   color: var(--color-secondary);

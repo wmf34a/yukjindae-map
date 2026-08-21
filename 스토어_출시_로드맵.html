@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>육진대 맵 출시 로드맵</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --paper:#EEEAD9;
+    --paper-card:#F8F5EA;
+    --ink:#23281F;
+    --ink-soft:#565A4A;
+    --ink-faint:#8B8A72;
+    --pine:#3B6A4C;
+    --pine-soft:#E4EBE1;
+    --ochre:#B8842E;
+    --ochre-soft:#F3E7CE;
+    --brick:#9C4A32;
+    --brick-soft:#F2DFD5;
+    --line:#D9D2B9;
+    --shadow: 0 1px 2px rgba(35,40,31,0.06), 0 4px 16px rgba(35,40,31,0.05);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper:#1B1E17;
+      --paper-card:#23271D;
+      --ink:#EAE5D3;
+      --ink-soft:#B9B49F;
+      --ink-faint:#7C7A63;
+      --pine:#74A98A;
+      --pine-soft:#28352B;
+      --ochre:#DDAD5F;
+      --ochre-soft:#332A17;
+      --brick:#D9836A;
+      --brick-soft:#372019;
+      --line:#3B3F30;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --paper:#1B1E17;
+    --paper-card:#23271D;
+    --ink:#EAE5D3;
+    --ink-soft:#B9B49F;
+    --ink-faint:#7C7A63;
+    --pine:#74A98A;
+    --pine-soft:#28352B;
+    --ochre:#DDAD5F;
+    --ochre-soft:#332A17;
+    --brick:#D9836A;
+    --brick-soft:#372019;
+    --line:#3B3F30;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.25);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background:var(--pine); color:var(--paper-card); }
+
+  a{ color:var(--pine); }
+
+  .wrap{
+    max-width:800px;
+    margin:0 auto;
+    padding:0 24px 96px;
+  }
+
+  header.masthead{
+    padding:64px 0 32px;
+    border-bottom:1px solid var(--line);
+  }
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12.5px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--pine);
+    margin:0 0 14px;
+  }
+  h1{
+    font-family:"Gowun Batang",serif;
+    font-weight:700;
+    font-size:clamp(32px,5vw,46px);
+    line-height:1.25;
+    margin:0 0 16px;
+    text-wrap:balance;
+    letter-spacing:-0.01em;
+  }
+  .lede{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:62ch;
+    margin:0 0 32px;
+  }
+  .stat-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+  }
+  .stat{
+    background:var(--paper-card);
+    padding:16px 18px;
+  }
+  .stat .label{
+    font-size:12px;
+    color:var(--ink-faint);
+    margin:0 0 6px;
+  }
+  .stat .value{
+    font-family:"IBM Plex Mono",monospace;
+    font-variant-numeric:tabular-nums;
+    font-size:18px;
+    font-weight:600;
+    color:var(--ink);
+  }
+
+  nav.phasenav{
+    position:sticky;
+    top:0;
+    z-index:10;
+    background:var(--paper);
+    padding:14px 0;
+    border-bottom:1px solid var(--line);
+    margin-bottom:8px;
+  }
+  nav.phasenav .track{
+    display:flex;
+    gap:8px;
+    overflow-x:auto;
+    scrollbar-width:none;
+    padding:0 24px;
+    margin:0 -24px;
+  }
+  nav.phasenav .track::-webkit-scrollbar{ display:none; }
+  nav.phasenav a{
+    flex:0 0 auto;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12.5px;
+    text-decoration:none;
+    color:var(--ink-soft);
+    background:var(--paper-card);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:6px 13px;
+    white-space:nowrap;
+  }
+  nav.phasenav a b{ color:var(--pine); font-weight:600; margin-right:5px;}
+  nav.phasenav a.track-divider{
+    background:transparent;
+    border:none;
+    color:var(--ink-faint);
+    padding:6px 2px;
+    pointer-events:none;
+  }
+
+  section.phase{
+    padding:52px 0;
+    border-bottom:1px solid var(--line);
+    scroll-margin-top:64px;
+  }
+  section.phase:last-of-type{ border-bottom:none; }
+  .part-label{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;
+    letter-spacing:0.1em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 6px;
+  }
+  .phase-head{
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    margin-bottom:8px;
+  }
+  .phase-num{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:14px;
+    color:var(--pine);
+    background:var(--pine-soft);
+    border-radius:6px;
+    padding:3px 9px;
+  }
+  h2{
+    font-family:"Gowun Batang",serif;
+    font-size:26px;
+    font-weight:700;
+    margin:0;
+    text-wrap:balance;
+  }
+  .phase-sub{
+    color:var(--ink-soft);
+    font-size:15px;
+    margin:0 0 28px;
+    max-width:64ch;
+  }
+
+  .step{
+    display:grid;
+    grid-template-columns:34px 1fr;
+    gap:14px;
+    margin:0 0 22px;
+  }
+  .step-tag{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;
+    color:var(--ink-faint);
+    padding-top:3px;
+  }
+  .step h3{
+    font-size:16px;
+    font-weight:600;
+    margin:0 0 6px;
+    color:var(--ink);
+  }
+  .step p{
+    margin:0;
+    color:var(--ink-soft);
+    font-size:15px;
+  }
+  .step p + p{ margin-top:8px; }
+
+  .callout{
+    grid-column:1 / -1;
+    margin:10px 0 22px;
+    padding:14px 16px;
+    border-radius:8px;
+    border:1px solid transparent;
+    font-size:14.5px;
+  }
+  .callout .tag{
+    display:inline-block;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    font-weight:600;
+    padding:2px 8px;
+    border-radius:999px;
+    margin-bottom:8px;
+  }
+  .callout p{ margin:0; color:var(--ink); }
+  .callout.warn{ background:var(--ochre-soft); }
+  .callout.warn .tag{ background:var(--ochre); color:var(--paper-card); }
+  .callout.critical{ background:var(--brick-soft); }
+  .callout.critical .tag{ background:var(--brick); color:var(--paper-card); }
+  .callout.note{ background:var(--pine-soft); }
+  .callout.note .tag{ background:var(--pine); color:var(--paper-card); }
+
+  .table-wrap{ overflow-x:auto; margin:10px 0; }
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14.5px;
+    min-width:560px;
+  }
+  th{
+    text-align:left;
+    font-family:"IBM Plex Mono",monospace;
+    font-size:11.5px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    font-weight:500;
+    padding:0 12px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  td{
+    padding:12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+    color:var(--ink-soft);
+  }
+  td:first-child{ color:var(--ink); font-weight:500; }
+  td.num{
+    font-family:"IBM Plex Mono",monospace;
+    font-variant-numeric:tabular-nums;
+    color:var(--ink);
+    white-space:nowrap;
+  }
+  tfoot td{
+    border-bottom:none;
+    border-top:2px solid var(--ink);
+    font-weight:700;
+    color:var(--ink);
+    padding-top:14px;
+  }
+
+  .checklist{
+    list-style:none;
+    margin:16px 0;
+    padding:0;
+    display:grid;
+    gap:10px;
+  }
+  .checklist li{
+    display:flex;
+    gap:10px;
+    align-items:flex-start;
+    font-size:14.5px;
+    color:var(--ink-soft);
+  }
+  .checklist .box{
+    flex:0 0 auto;
+    width:16px;height:16px;
+    border:1.5px solid var(--ink-faint);
+    border-radius:4px;
+    margin-top:2px;
+  }
+  .checklist strong{ color:var(--ink); font-weight:600; }
+  .group-label{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;
+    color:var(--pine);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin:24px 0 4px;
+  }
+  .group-label:first-child{ margin-top:0; }
+
+  footer{
+    padding:40px 0 0;
+    color:var(--ink-faint);
+    font-size:13px;
+  }
+
+  @media (max-width:560px){
+    .stat-row{ grid-template-columns:1fr; }
+    .step{ grid-template-columns:24px 1fr; }
+  }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">Notion PWA &rarr; 정식 앱 (회원·제보·관리자 포함)</p>
+    <h1>육진대 맵 출시 로드맵</h1>
+    <p class="lede">스토어 입점 전에 정식 앱다운 기능(회원 DB, 소셜 로그인, 장소 제보, 관리자 콘솔)부터 갖춰야 한다는 판단 아래 로드맵을 확장했습니다. 앞부분(0&ndash;5)은 백엔드·기능 확장, 뒷부분(6&ndash;11)은 기존에 정리했던 스토어 제출 절차입니다.</p>
+    <div class="stat-row">
+      <div class="stat"><p class="label">예상 소요 기간(스토어 절차)</p><p class="value">6&ndash;10주</p></div>
+      <div class="stat"><p class="label">최소 현금 비용</p><p class="value">약 12&ndash;15만원</p></div>
+      <div class="stat"><p class="label">필요 계정/신고</p><p class="value">7건</p></div>
+    </div>
+  </header>
+
+  <nav class="phasenav">
+    <div class="track">
+      <a href="#p0"><b>0</b>현황 진단</a>
+      <a href="#p1"><b>1</b>데이터 전환</a>
+      <a href="#p2"><b>2</b>회원 인증</a>
+      <a href="#p3"><b>3</b>제보 기능</a>
+      <a href="#p4"><b>4</b>관리자 콘솔</a>
+      <a href="#p5"><b>5</b>안전장치</a>
+      <a href="#p6"><b>6</b>법률·행정</a>
+      <a href="#p7"><b>7</b>개발자 계정</a>
+      <a href="#p8"><b>8</b>앱 패키징</a>
+      <a href="#p9"><b>9</b>스토어 준비물</a>
+      <a href="#p10"><b>10</b>제출·심사</a>
+      <a href="#p11"><b>11</b>출시 후</a>
+      <a href="#cost"><b>$</b>비용 요약</a>
+      <a href="#check"><b>&#10003;</b>체크리스트</a>
+    </div>
+  </nav>
+
+  <section class="phase" id="p0">
+    <p class="part-label">1부 &middot; 정식 앱 기능 확장</p>
+    <div class="phase-head"><span class="phase-num">PHASE 0</span><h2>현황 진단과 기술 경로 결정</h2></div>
+    <p class="phase-sub">본격적으로 계정을 만들기 전에, 어떤 방식으로 앱을 패키징할지부터 정해야 이후 단계가 낭비 없이 진행됩니다.</p>
+
+    <div class="step">
+      <span class="step-tag">0.1</span>
+      <div>
+        <h3>현재 스택 확인</h3>
+        <p>public/manifest.json, public/sw.js, public/offline.html이 이미 존재 &mdash; 즉 이미 설치 가능한 PWA입니다. 지도는 네이버 Maps Dynamic Map(NCP), 데이터는 Notion API를 Cloudflare Workers가 프록시하는 구조이며, 이미지용 R2 버킷(yukjindae-map-images)도 바인딩되어 있습니다.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-tag">0.2</span>
+      <div>
+        <h3>패키징 방식 선택</h3>
+        <p><strong style="color:var(--ink)">옵션 A &mdash; TWA(Bubblewrap):</strong> Android만 노릴 때 가장 빠르지만 iOS엔 쓸 수 없음.</p>
+        <p><strong style="color:var(--ink)">옵션 B &mdash; Capacitor(Ionic):</strong> 기존 vanilla JS 코드를 거의 그대로 WebView에 얹어 Android/iOS 동시 대응.</p>
+        <p><strong style="color:var(--ink)">옵션 C &mdash; 전면 네이티브 재작성:</strong> 이 프로젝트 규모 대비 과함.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-tag">0.3</span>
+      <div>
+        <h3>핵심 결정 확정</h3>
+        <p>패키징은 <strong style="color:var(--ink)">Capacitor</strong>, 데이터베이스는 <strong style="color:var(--ink)">Cloudflare D1</strong>, 로그인은 <strong style="color:var(--ink)">구글·카카오·네이버 소셜 로그인 직접 구현</strong>, 관리자 권한은 <strong style="color:var(--ink)">운영진 / 슈퍼관리자 2단계</strong>로 확정하고 아래 단계를 진행합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="phase" id="p1">
+    <div class="phase-head"><span class="phase-num">PHASE 1</span><h2>데이터 기반 전환 (Notion &rarr; Cloudflare D1)</h2></div>
+    <p class="phase-sub">회원·제보 기능이 들어가면 Notion API의 초당 요청 제한과 트랜잭션 부재가 바로 병목이 됩니다. 이미 Workers·R2를 쓰고 있으니 네이티브로 붙는 D1이 가장 무리 없는 선택입니다.</p>
+
+    <div class="step">
+      <span class="step-tag">1.1</span>
+      <div><h3>D1 스키마 설계</h3><p>places / festivals / courses / banners 등 기존 Notion 데이터베이스 구조를 관계형 테이블로 재설계합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">1.2</span>
+      <div><h3>Notion &rarr; D1 이관 스크립트</h3><p>Notion API로 기존 데이터를 모두 읽어 D1에 적재하는 1회성 ETL 스크립트를 작성합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">1.3</span>
+      <div><h3>worker.js 프록시 로직 교체</h3><p>Notion API 호출 부분을 D1 쿼리로 바꾸되, 프론트엔드가 받는 응답 포맷은 그대로 유지해 public/js 쪽 변경을 최소화합니다.</p></div>
+    </div>
+
+    <div class="callout note">
+      <span class="tag">왜 Postgres가 아닌가</span>
+      <p>D1은 SQLite 기반이라 대량 동시 쓰기엔 약하지만, 이 앱처럼 읽기가 압도적으로 많고 쓰기는 제보 정도로 적은 구조엔 정확히 맞습니다. 나중에 정밀 반경 검색(PostGIS)이나 무거운 분석 쿼리가 필요해지면 Hyperdrive로 Neon/Supabase Postgres에 붙이면 되고, 지금 스키마 규모라면 그때 가서 이전해도 비용이 크지 않습니다.</p>
+    </div>
+  </section>
+
+  <section class="phase" id="p2">
+    <div class="phase-head"><span class="phase-num">PHASE 2</span><h2>회원 인증 (구글&middot;카카오&middot;네이버 로그인)</h2></div>
+    <p class="phase-sub">호스티드 인증 서비스 대부분은 카카오·네이버를 지원하지 않아, 세 곳을 다 붙이려면 결국 직접 구현과 큰 차이가 없습니다. 셋 다 표준 OAuth2라 Workers의 fetch만으로 구현 가능합니다.</p>
+
+    <div class="step">
+      <span class="step-tag">2.1</span>
+      <div><h3>회원 스키마 설계</h3><p>users(role: user / 운영진 / 슈퍼관리자), oauth_accounts(provider, provider_user_id), sessions 테이블을 설계합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">2.2</span>
+      <div><h3>소셜 로그인 앱 등록</h3><p>구글 클라우드 콘솔, 카카오 디벨로퍼스, 네이버 개발자센터에 각각 앱을 등록하고 리다이렉트 URI를 지정합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">2.3</span>
+      <div><h3>OAuth2 콜백 핸들러 구현</h3><p>구글은 OIDC라 id_token 검증으로 깔끔하게 처리되고, 카카오·네이버는 access_token을 받은 뒤 각자의 프로필 API(카카오 /v2/user/me, 네이버 /v1/nid/me)를 호출하는 방식으로 구현합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">2.4</span>
+      <div><h3>세션 발급 &amp; 검증</h3><p>Workers는 stateless이므로 JWT 또는 D1 세션 테이블 + 쿠키 방식 중 하나를 선택해 구현합니다.</p></div>
+    </div>
+
+    <div class="callout critical">
+      <span class="tag">검수 리드타임</span>
+      <p>카카오·네이버는 이메일 등 확장 프로필 항목을 쓰려면 각 개발자센터에서 앱 심사를 거쳐야 합니다. 계정을 만들자마자 되는 게 아니므로 이 단계는 가장 먼저 신청해두세요.</p>
+    </div>
+  </section>
+
+  <section class="phase" id="p3">
+    <div class="phase-head"><span class="phase-num">PHASE 3</span><h2>장소 제보 기능</h2></div>
+    <p class="phase-sub">로그인 기반이 있어야 의미가 있는 기능이라 Phase 2 이후에 진행합니다.</p>
+
+    <div class="step">
+      <span class="step-tag">3.1</span>
+      <div><h3>제보 테이블 설계</h3><p>place_submissions(status: pending/approved/rejected, submitter_user_id) &mdash; 사진은 이미 바인딩된 R2 버킷(yukjindae-map-images)을 그대로 재사용합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">3.2</span>
+      <div><h3>제보 폼 UI</h3><p>로그인한 사용자만 접근 가능한 &ldquo;장소 제보&rdquo; 폼을 추가합니다.</p></div>
+    </div>
+  </section>
+
+  <section class="phase" id="p4">
+    <div class="phase-head"><span class="phase-num">PHASE 4</span><h2>관리자 콘솔 (운영진 / 슈퍼관리자)</h2></div>
+    <p class="phase-sub">권한을 두 단계로 나누기로 했으니, 화면과 API 모두 역할별로 분리해서 설계합니다.</p>
+
+    <div class="step">
+      <span class="step-tag">4.1</span>
+      <div><h3>운영진 권한</h3><p>제보 검토·승인·반려, 기존 장소 정보 수정 권한을 가집니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">4.2</span>
+      <div><h3>슈퍼관리자 권한</h3><p>운영진 임명/해제, 장소 직접 등록·삭제, 전체 통계 열람 권한을 가집니다. 운영진 권한 위에 상위 권한만 추가되는 구조로 설계해 권한 체크 로직을 단순하게 유지합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">4.3</span>
+      <div><h3>관리자 라우트 보호</h3><p>역할 확인 미들웨어로 /admin 계열 라우트와 API를 감쌉니다.</p></div>
+    </div>
+  </section>
+
+  <section class="phase" id="p5">
+    <div class="phase-head"><span class="phase-num">PHASE 5</span><h2>안전장치 &amp; 개인정보 정비</h2></div>
+    <p class="phase-sub">회원가입과 제보 기능이 생기면서 늘어난 리스크를 여기서 한 번에 정리합니다.</p>
+
+    <div class="step">
+      <span class="step-tag">5.1</span>
+      <div><h3>어뷰징 방지</h3><p>로그인·제보 엔드포인트에 rate limiting을 적용합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">5.2</span>
+      <div><h3>개인정보처리방침 갱신</h3><p>회원가입으로 새로 수집하는 항목(소셜 로그인 식별자, 이메일 등)을 반영해 방침을 갱신합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">5.3</span>
+      <div><h3>회원 탈퇴 처리</h3><p>정보통신망법에 따라 탈퇴 시 개인정보 파기 절차를 구현합니다.</p></div>
+    </div>
+  </section>
+
+  <section class="phase" id="p6">
+    <p class="part-label">2부 &middot; 스토어 출시</p>
+    <div class="phase-head"><span class="phase-num">PHASE 6</span><h2>법률·행정 준비</h2></div>
+    <p class="phase-sub">스토어 심사보다 먼저, 그리고 별도로 진행해야 하는 항목들입니다.</p>
+
+    <div class="step">
+      <span class="step-tag">6.1</span>
+      <div>
+        <h3>사업자등록 필요 여부</h3>
+        <p>앱이 무료이고 광고·결제가 없다면 사업자등록은 필수가 아닙니다. 인앱결제나 광고 수익화를 계획한다면 사업자등록과 이후 세무 신고가 필요합니다. 구글·애플 개발자 계정 자체는 개인 명의(Individual)로도 개설 가능하며, 조직 계정으로 하려면 사업자등록증과 D-U-N-S 번호가 필요합니다.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <span class="step-tag">6.2</span>
+      <div>
+        <h3>위치기반서비스사업 신고</h3>
+        <p>지도 위에 장소를 표시·검색하는 기능은 위치정보법상 &ldquo;위치기반서비스&rdquo;에 해당할 가능성이 높습니다. 방송통신위원회(실무 접수는 한국인터넷진흥원 KISA)에 위치기반서비스사업 신고가 필요합니다. 신고 자체는 무료지만 처리 기간이 있으므로 스토어 제출 훨씬 전에 미리 진행하세요.</p>
+      </div>
+    </div>
+    <div class="callout critical">
+      <span class="tag">놓치기 쉬움</span>
+      <p>단순 지도 표시를 넘어 &ldquo;내 주변&rdquo; 같은 실시간 GPS 개인 위치 수집 기능을 넣는다면 개인위치정보 처리에 대한 추가 의무(손해배상 책임보험 가입 등)가 발생할 수 있습니다. 기능을 확정하기 전에 KISA에 사전 문의로 해당 여부를 확인하는 것을 권장합니다.</p>
+    </div>
+
+    <div class="step">
+      <span class="step-tag">6.3</span>
+      <div>
+        <h3>저작권·콘텐츠 점검</h3>
+        <p>네이버 지도 API 약관상 상업적 배포 시 사용량 구간별 과금이 적용되고, 지도 내 네이버 로고·저작권 표기를 임의로 제거할 수 없습니다. 스토어 등록 전에 네이버클라우드플랫폼 콘솔에서 배포될 앱의 패키지명(Android)/Bundle ID(iOS)와 서비스 URL을 추가 등록해야 지도가 정상 동작합니다.</p>
+        <p>프로젝트 루트의 지역별 자료(서울_서울근교_BEST.pdf, 전라도.pdf, 충청도.pdf 등)에 포함된 사진·글이 육진대 구성원이 직접 촬영·작성한 것인지, 다른 블로그나 SNS에서 가져온 이미지가 섞여 있지는 않은지 다시 확인하세요. 스토어 등록은 노출도가 크게 늘어나는 시점이므로 출처가 불분명한 이미지는 교체하거나 사전에 사용 허락을 받아두는 것이 안전합니다.</p>
+      </div>
+    </div>
+    <div class="callout warn">
+      <span class="tag">확인 권장</span>
+      <p>앱 이름 &ldquo;육진대&rdquo;의 상표 충돌 여부를 특허청 키프리스(KIPRIS)에서 미리 검색해보세요. 서비스가 커질 경우를 대비해 상표 출원도 선택지로 고려할 만합니다.</p>
+    </div>
+  </section>
+
+  <section class="phase" id="p7">
+    <div class="phase-head"><span class="phase-num">PHASE 7</span><h2>개발자 계정 &amp; API 준비</h2></div>
+    <p class="phase-sub">계정 승인에는 며칠씩 걸릴 수 있으므로 기술 작업과 병행해서 최대한 먼저 신청하세요. 소셜 로그인용 개발자 콘솔 등록은 Phase 2에서 이미 진행합니다.</p>
+
+    <div class="step">
+      <span class="step-tag">7.1</span>
+      <div><h3>Google Play Console 개발자 등록</h3><p>$25, 1회 결제로 평생 유효합니다. 결제 정보와 신원 확인이 필요하며 승인까지 며칠 소요될 수 있습니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">7.2</span>
+      <div><h3>Apple Developer Program 등록</h3><p>$99/년, 매년 갱신이 필요합니다. 개인(Individual) 명의로 충분하며 신원 확인에 1~2일 소요될 수 있습니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">7.3</span>
+      <div><h3>네이버클라우드플랫폼 콘솔 갱신</h3><p>기존 웹 도메인 외에 앱에서 사용할 패키지명/Bundle ID와 배포 URL을 추가 등록해야 지도 API 키가 정상 동작합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">7.4</span>
+      <div><h3>커스텀 도메인 소유권 확인</h3><p>TWA 방식을 병행한다면 Digital Asset Links(assetlinks.json)를 실제 소유한 도메인에 호스팅해 소유권을 검증해야 합니다. 현재 Cloudflare Workers 배포 도메인이 개인 소유 커스텀 도메인인지 확인하세요.</p></div>
+    </div>
+  </section>
+
+  <section class="phase" id="p8">
+    <div class="phase-head"><span class="phase-num">PHASE 8</span><h2>앱 패키징 (기술 작업)</h2></div>
+    <p class="phase-sub">Capacitor 기준으로 진행한다고 가정한 작업 목록입니다.</p>
+
+    <div class="step">
+      <span class="step-tag">8.1</span>
+      <div><h3>Capacitor 프로젝트 초기화</h3><p>기존 public/ 정적 자산을 그대로 번들링하거나, 라이브 URL을 원격 콘텐츠로 로드하는 방식(server.url 설정) 중 선택합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">8.2</span>
+      <div><h3>아이콘 &amp; 스플래시 스크린</h3><p>기존 icon-192/512, maskable 아이콘을 iOS의 여러 해상도, Android adaptive icon 규격에 맞게 재출력합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">8.3</span>
+      <div><h3>네이티브 권한 설정</h3><p>위치 권한을 쓴다면 iOS Info.plist에 NSLocationWhenInUseUsageDescription 문구가 필수이며, Android는 AndroidManifest.xml에 권한을 선언해야 합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">8.4</span>
+      <div><h3>&ldquo;앱다움&rdquo; 보강</h3><p>네이티브 공유 시트, 즐겨찾기 로컬 저장, 푸시 알림 중 최소 1~2개를 추가해 단순 웹뷰 이상의 기능을 갖추는 것이 좋습니다.</p></div>
+    </div>
+    <div class="callout critical">
+      <span class="tag">애플 리젝 위험</span>
+      <p>App Review Guideline 4.2(Minimum Functionality)는 웹사이트를 그대로 감싼 앱을 명시적으로 반려 대상에 포함합니다. 이미 있는 오프라인 캐싱(sw.js)에 더해, 네이티브다운 기능을 최소 한두 개 얹어야 첫 심사 통과 가능성이 높아집니다.</p>
+    </div>
+    <div class="step">
+      <span class="step-tag">8.5</span>
+      <div><h3>실기기 테스트</h3><p>Android 실기기·에뮬레이터와 iOS 실기기(시뮬레이터는 위치·카메라 등 일부 기능이 제한됨) 양쪽에서 지도 로딩, 오프라인 모드, 소셜 로그인, 제보 플로우, 딥링크를 확인합니다.</p></div>
+    </div>
+  </section>
+
+  <section class="phase" id="p9">
+    <div class="phase-head"><span class="phase-num">PHASE 9</span><h2>스토어 등록 준비물</h2></div>
+    <p class="phase-sub">두 스토어 공통 항목과 각 스토어 전용 항목을 나눠 정리했습니다.</p>
+
+    <p class="group-label">공통</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>고해상도 앱 아이콘 원본(1024&times;1024 등)</span></li>
+      <li><span class="box"></span><span>기기별 스크린샷 &mdash; iPhone 6.9&Prime;/6.5&Prime;, 필요 시 iPad 추가 / Android 폰·7&Prime;·10&Prime; 태블릿</span></li>
+      <li><span class="box"></span><span>한국어 소개 문구·상세 설명(글로벌 노출 원하면 영어 병기)</span></li>
+      <li><span class="box"></span><span>개인정보처리방침 URL(회원 가입·소셜 로그인 수집 항목 반영된 최신본)</span></li>
+    </ul>
+
+    <p class="group-label">Google Play 전용</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>콘텐츠 등급 설문(IARC) 응답</span></li>
+      <li><span class="box"></span><span>데이터 안전성(Data Safety) 섹션 &mdash; 위치정보 및 회원 계정 정보 수집 여부·목적 명시</span></li>
+      <li><span class="box"></span><strong>신규 개인 개발자 계정 정책 재확인</strong> &mdash; 제출 시점에 프로덕션 공개 전 비공개 테스트 트랙에서 일정 인원·기간의 테스트를 요구하는 정책이 적용 중인지 Play Console에서 최신 요건을 확인</li>
+    </ul>
+
+    <p class="group-label">Apple App Store 전용</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>App Privacy(&ldquo;Nutrition Label&rdquo;) &mdash; 수집 데이터 유형별 신고</span></li>
+      <li><span class="box"></span><span>TestFlight 내부 테스트 최소 1회 권장</span></li>
+      <li><span class="box"></span><span>앱 이름·서브타이틀·키워드 최종 확정(심사 후 일부 항목은 수정 제약)</span></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="p10">
+    <div class="phase-head"><span class="phase-num">PHASE 10</span><h2>제출 &amp; 심사</h2></div>
+    <div class="step">
+      <span class="step-tag">10.1</span>
+      <div><h3>Google Play 검토</h3><p>보통 며칠 내 완료되지만 최대 1~2주까지 변동될 수 있습니다. 반려 시 사유를 확인해 재제출합니다.</p></div>
+    </div>
+    <div class="step">
+      <span class="step-tag">10.2</span>
+      <div><h3>Apple 심사</h3><p>보통 1~3일 내 결과가 나옵니다. 4.2 등의 사유로 반려되면 Resolution Center를 통해 소명하거나 기술적으로 보완한 뒤 재제출할 수 있습니다.</p></div>
+    </div>
+    <div class="callout warn">
+      <span class="tag">일정 팁</span>
+      <p>첫 제출은 반려를 전제로 1~2주의 버퍼를 미리 일정에 넣어두는 것을 권장합니다.</p>
+    </div>
+  </section>
+
+  <section class="phase" id="p11">
+    <div class="phase-head"><span class="phase-num">PHASE 11</span><h2>출시 후 유지보수</h2></div>
+    <ul class="checklist">
+      <li><span class="box"></span><span>업데이트 시 각 콘솔에 새 빌드 업로드 &mdash; Apple은 매번 재심사, Google은 자동 배포 전 심사</span></li>
+      <li><span class="box"></span><span>네이버 지도/검색 API 사용량 모니터링 &mdash; 트래픽 증가 시 유료 구간 진입 여부 확인</span></li>
+      <li><span class="box"></span><span>Cloudflare Workers·D1 트래픽/사용량 모니터링</span></li>
+      <li><span class="box"></span><span>회원·제보 데이터 정기 백업</span></li>
+      <li><span class="box"></span><span>신규 기능(특히 위치 기반 기능) 추가 시 개인정보처리방침 갱신</span></li>
+    </ul>
+  </section>
+
+  <section class="phase" id="cost">
+    <div class="phase-head"><span class="phase-num">$</span><h2>비용 요약</h2></div>
+    <p class="phase-sub">확정 비용과 트래픽에 따라 변동되는 비용을 구분해뒀습니다. 신규 백엔드 기능(D1, 소셜 로그인)은 대부분 현금 비용보다 개발 시간이 드는 항목입니다.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>항목</th><th>금액</th><th>주기</th><th>비고</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Google Play 개발자 등록</td><td class="num">$25 (약 3.5만원)</td><td>1회</td><td>평생 유효</td></tr>
+          <tr><td>Apple Developer Program</td><td class="num">$99 (약 14만원)</td><td>매년</td><td>미갱신 시 앱 자동 비공개</td></tr>
+          <tr><td>사업자등록</td><td class="num">무료</td><td>&mdash;</td><td>인앱결제·광고 수익화 시에만 필요</td></tr>
+          <tr><td>위치기반서비스사업 신고</td><td class="num">무료</td><td>&mdash;</td><td>처리 기간 있음, 사전 신고 권장</td></tr>
+          <tr><td>Cloudflare D1</td><td class="num">무료&ndash;종량제</td><td>매월</td><td>읽기·쓰기 사용량 초과 시 과금</td></tr>
+          <tr><td>구글&middot;카카오&middot;네이버 로그인 API</td><td class="num">무료</td><td>&mdash;</td><td>카카오·네이버는 확장 항목 사용 시 검수 필요</td></tr>
+          <tr><td>네이버 지도·검색 API</td><td class="num">무료&ndash;종량제</td><td>매월</td><td>트래픽에 따라 변동</td></tr>
+          <tr><td>Cloudflare Workers</td><td class="num">무료&ndash;$5+</td><td>매월</td><td>현재 트래픽이면 무료 티어 가능성 높음</td></tr>
+          <tr><td>디자인 리소스(아이콘·스크린샷)</td><td class="num">0&ndash;외주비</td><td>1회</td><td>직접 제작 시 시간 투입만</td></tr>
+          <tr><td>상표 출원(선택)</td><td class="num">약 6&ndash;7만원~</td><td>1회</td><td>특허청 출원료, 선택 사항</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td>최소 현금 지출(1년차)</td><td class="num" colspan="3">약 12&ndash;15만원</td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="phase" id="check" style="border-bottom:none;">
+    <div class="phase-head"><span class="phase-num">&#10003;</span><h2>제출 전 최종 체크리스트</h2></div>
+
+    <p class="group-label">데이터 &amp; 인증</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>Notion &rarr; D1 이관 완료 및 응답 포맷 검증</span></li>
+      <li><span class="box"></span><span>구글&middot;카카오&middot;네이버 로그인 앱 등록 및 확장 항목 검수 완료</span></li>
+      <li><span class="box"></span><span>세션/쿠키 만료·재발급 동작 확인</span></li>
+    </ul>
+
+    <p class="group-label">제보 &amp; 관리자</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>제보 승인/반려 플로우 및 R2 이미지 업로드 확인</span></li>
+      <li><span class="box"></span><span>운영진/슈퍼관리자 권한 분리 및 라우트 보호 확인</span></li>
+      <li><span class="box"></span><span>로그인·제보 엔드포인트 rate limiting 적용 확인</span></li>
+    </ul>
+
+    <p class="group-label">법률</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>위치기반서비스사업 신고 완료</span></li>
+      <li><span class="box"></span><span>개인정보처리방침 &middot; 이용약관 게시(회원가입 항목 반영)</span></li>
+      <li><span class="box"></span><span>지역별 자료(PDF/DOCX)의 이미지·글 출처 재확인</span></li>
+      <li><span class="box"></span><span>&ldquo;육진대&rdquo; 상표 충돌 여부 확인</span></li>
+    </ul>
+
+    <p class="group-label">기술</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>네이버클라우드플랫폼에 앱 패키지명/Bundle ID·URL 등록</span></li>
+      <li><span class="box"></span><span>iOS/Android 실기기에서 지도·오프라인 모드 테스트</span></li>
+      <li><span class="box"></span><span>네이티브 기능 최소 1개 이상 추가(공유·로컬 저장·알림 등)</span></li>
+    </ul>
+
+    <p class="group-label">스토어</p>
+    <ul class="checklist">
+      <li><span class="box"></span><span>Google Play 콘텐츠 등급·데이터 안전성 설문 제출</span></li>
+      <li><span class="box"></span><span>Apple App Privacy 라벨 작성</span></li>
+      <li><span class="box"></span><span>기기별 스크린샷 전체 규격 준비</span></li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>정책·수수료·심사 기준은 구글·애플·카카오·네이버가 수시로 변경합니다. 제출 직전 각 콘솔의 최신 고지 사항을 한 번 더 확인하세요.</p>
+  </footer>
+</div>
+</body>
+</html>

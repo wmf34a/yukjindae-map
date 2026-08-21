@@ -496,18 +496,29 @@ body {
 
 .region-map__marker {
   cursor: pointer;
+}
+
+.region-map__marker circle {
   stroke: var(--color-white);
-  stroke-width: 0.8;
+  stroke-width: 0.7;
   filter: drop-shadow(0 1px 1.5px rgba(13, 27, 62, 0.35));
+}
+
+.region-map__marker text {
+  font-size: 3.4px;
+  font-weight: 700;
+  fill: var(--color-white);
+  text-anchor: middle;
+  pointer-events: none;
 }
 
 .region-map.has-selection .region-map__marker:not(.is-active) {
   opacity: 0.45;
 }
 
-.region-map__marker.is-active {
+.region-map__marker.is-active circle {
   stroke: #1A2F6B;
-  stroke-width: 1.2;
+  stroke-width: 1.1;
 }
 
 .region-map__caption {

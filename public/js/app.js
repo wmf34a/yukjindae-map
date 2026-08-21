@@ -106,10 +106,13 @@ function renderRegionMap() {
     const active = state.region === region ? " is-active" : "";
     return `<path class="region-map__path${active}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" style="fill:${regionColor(region)}"><title>${region}</title></path>`;
   }).join("");
-  const markers = REGIONS.map((region) => {
+  const markers = REGIONS.map((region, i) => {
     const [mx, my] = REGION_MAP_MARKERS[region];
     const active = state.region === region ? " is-active" : "";
-    return `<circle class="region-map__marker${active}" data-region="${region}" cx="${mx}" cy="${my}" r="4.4" style="fill:${regionColor(region)}"/>`;
+    return `<g class="region-map__marker${active}" data-region="${region}" transform="translate(${mx},${my})">
+      <circle r="3.3" style="fill:${regionColor(region)}"/>
+      <text dy="1.15">${i + 1}</text>
+    </g>`;
   }).join("");
   // 실제 컨텐츠(지역 폴리곤+마커)가 원래 좌표계(0 0 100 130)의 왼쪽 절반/아래쪽에
   // 치우쳐 있어서 여백이 컸다 — 실제 쓰이는 영역(-3 15 93 104)으로 뷰박스를

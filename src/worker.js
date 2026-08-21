@@ -1,5 +1,27 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 
+// 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
+// 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
+// 필요하지 않으므로, 엣지에서 짧게 캐싱해서 재방문/새로고침을 빠르게 만든다.
+async function withEdgeCache(request, ctx, ttlSeconds, handler) {
+  const cache = caches.default;
+  const cacheKey = new Request(request.url, request);
+
+  const cached = await cache.match(cacheKey);
+  if (cached) return cached;
+
+  const response = await handler();
+  if (response.status === 200) {
+    const toCache = new Response(response.body, response);
+    toCache.headers.set("cache-control", `public, max-age=${ttlSeconds}`);
+    const forCache = toCache.clone();
+    if (ctx) ctx.waitUntil(cache.put(cacheKey, forCache));
+    else await cache.put(cacheKey, forCache);
+    return toCache;
+  }
+  return response;
+}
+
 export function matchesQuery(place, { region, category, q }) {
   if (region && place.region !== region) return false;
   if (category && !place.categories.includes(category)) return false;
@@ -486,20 +508,23 @@ function handleNaverConfig(env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/places") {
+      if (request.method === "GET" && !url.search) {
+        return withEdgeCache(request, ctx, 60, () => handlePlaces(env, url));
+      }
       return handlePlaces(env, url);
     }
     if (url.pathname === "/api/banners") {
-      return handleBanners(env);
+      return withEdgeCache(request, ctx, 60, () => handleBanners(env));
     }
     if (url.pathname === "/api/courses") {
-      return handleCourses(env);
+      return withEdgeCache(request, ctx, 60, () => handleCourses(env));
     }
     if (url.pathname === "/api/festivals") {
-      return handleFestivals(env);
+      return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);

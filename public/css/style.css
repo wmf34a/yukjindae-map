@@ -545,22 +545,19 @@ body {
   margin: 8px 0 0;
 }
 
-/* 지도 우측 하단에 작게 겹쳐 보이는 번호-지역명 매핑 범례. 예전엔 지도 아래
-   2열 그리드로 전체 폭을 차지해서 스크롤을 많이 잡아먹었다 — 지도 위 여백
-   구석에 작게 띄워서 세로 공간을 아낀다. */
+/* 번호-지역명 매핑 범례. 한때 지도 위에 절대배치로 겹쳐 띄워 세로 공간을
+   아꼈으나, 제주 마커가 지도 뷰박스 맨 아래 가장자리에 붙어 있어서 겹치는
+   범례에 가려 아예 안 보이는 문제가 있었다 — 지도 바로 아래 일반 흐름으로
+   배치해 겹침 자체를 없앴다. */
 .region-legend {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 3px;
-  padding: 5px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(2px);
+  gap: 6px;
+  padding: 10px;
+  background: var(--color-white);
   border: 1px solid var(--color-border);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
 

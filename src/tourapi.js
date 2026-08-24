@@ -35,6 +35,14 @@ export function parseSearchItems(data) {
   return Array.isArray(item) ? item : [item];
 }
 
+// TourAPI의 homepage 필드는 가끔 순수 URL이 아니라 `<a href="...">라벨</a>` 형태의
+// HTML 조각으로 온다 — href 값만 뽑아낸다.
+function extractHomepageUrl(raw) {
+  if (!raw) return "";
+  const match = raw.match(/href=["']([^"']+)["']/i);
+  return match ? match[1] : raw.trim();
+}
+
 export function parseOverview(data) {
   const items = parseSearchItems(data);
   const first = items[0];
@@ -43,6 +51,7 @@ export function parseOverview(data) {
     overview: first.overview || "",
     addr1: first.addr1 || "",
     addr2: first.addr2 || "",
+    homepage: extractHomepageUrl(first.homepage),
   };
 }
 
@@ -89,6 +98,7 @@ export async function fetchFestivalDescription(env, title) {
     return {
       description: detail.overview,
       address: [detail.addr1, detail.addr2].filter(Boolean).join(" "),
+      link: detail.homepage,
     };
   } catch {
     return null;

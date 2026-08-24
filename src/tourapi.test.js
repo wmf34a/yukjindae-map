@@ -61,11 +61,27 @@ describe("parseSearchItems", () => {
 });
 
 describe("parseOverview", () => {
-  it("overview/addr1/addr2를 뽑아낸다", () => {
+  it("overview/addr1/addr2/homepage를 뽑아낸다", () => {
     const data = {
-      response: { body: { items: { item: [{ overview: "설명", addr1: "강릉시", addr2: "경포동" }] } } },
+      response: {
+        body: { items: { item: [{ overview: "설명", addr1: "강릉시", addr2: "경포동", homepage: "https://example.com" }] } },
+      },
     };
-    expect(parseOverview(data)).toEqual({ overview: "설명", addr1: "강릉시", addr2: "경포동" });
+    expect(parseOverview(data)).toEqual({
+      overview: "설명",
+      addr1: "강릉시",
+      addr2: "경포동",
+      homepage: "https://example.com",
+    });
+  });
+
+  it("homepage가 <a href>로 감싸져 오면 href만 뽑아낸다", () => {
+    const data = {
+      response: {
+        body: { items: { item: [{ overview: "설명", homepage: '<a href="https://example.com" target="_blank">공식 사이트</a>' }] } },
+      },
+    };
+    expect(parseOverview(data).homepage).toBe("https://example.com");
   });
 
   it("결과가 없으면 null이다", () => {

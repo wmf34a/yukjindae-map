@@ -478,7 +478,7 @@ async function festivalToPayload(env, page) {
 // 노션에 "설명"을 직접 채워두지 않은 축제는 한국관광공사 TourAPI에서 제목이
 // 확실히 일치하는 항목을 찾아 개요/주소를 보충한다(확신 없는 매칭은 tourapi.js가
 // 알아서 null을 반환).
-async function handleFestivalDetail(env, id) {
+async function handleFestivalDetail(env, id, ctx) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
   if (!env.NOTION_API_KEY || !env.NOTION_FESTIVAL_DATABASE_ID) {
@@ -515,6 +515,27 @@ async function handleFestivalDetail(env, id) {
       if (enrichment) {
         festival.description = enrichment.description || festival.description;
         festival.address = festival.address || enrichment.address;
+        festival.link = festival.link || enrichment.link;
+
+        // 한 번 찾은 설명/링크는 노션에 그대로 써넣어서, 다음 요청부터는
+        // TourAPI를 다시 호출하지 않고 노션 데이터만으로 바로 응답한다.
+        const patchProperties = {};
+        if (enrichment.description) patchProperties["설명"] = { rich_text: [{ text: { content: enrichment.description.slice(0, 2000) } }] };
+        if (!page.properties["주소"]?.rich_text?.length && enrichment.address) {
+          patchProperties["주소"] = { rich_text: [{ text: { content: enrichment.address.slice(0, 200) } }] };
+        }
+        if (!page.properties["링크"]?.url && enrichment.link) {
+          patchProperties["링크"] = { url: enrichment.link };
+        }
+        if (Object.keys(patchProperties).length > 0) {
+          const patchPromise = fetch(`https://api.notion.com/v1/pages/${id}`, {
+            method: "PATCH",
+            headers: notionHeaders,
+            body: JSON.stringify({ properties: patchProperties }),
+          }).catch(() => {});
+          if (ctx) ctx.waitUntil(patchPromise);
+          else await patchPromise;
+        }
       }
     }
 
@@ -887,7 +908,7 @@ export default {
     }
     if (url.pathname.startsWith("/api/festivals/")) {
       const id = url.pathname.slice("/api/festivals/".length);
-      return withEdgeCache(request, ctx, 300, () => handleFestivalDetail(env, id));
+      return withEdgeCache(request, ctx, 3600, () => handleFestivalDetail(env, id, ctx));
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);

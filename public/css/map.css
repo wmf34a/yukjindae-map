@@ -17,6 +17,11 @@
   gap: 8px;
   overflow-x: auto;
   padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.map-toolbar__regions::-webkit-scrollbar {
+  display: none;
 }
 
 .map-chip {
@@ -61,6 +66,11 @@
   gap: 8px;
   overflow-x: auto;
   padding: 0 16px;
+  scrollbar-width: none;
+}
+
+.map-nearby__track::-webkit-scrollbar {
+  display: none;
 }
 
 .map-nearby__card {

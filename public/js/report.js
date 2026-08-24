@@ -27,14 +27,37 @@ function updateSubmitState() {
   btn.textContent = ready ? "제보하기" : "제보 기능을 준비 중이에요";
 }
 
+function showTurnstileLoadError() {
+  const errorEl = document.getElementById("report-error");
+  if (!errorEl) return;
+  errorEl.innerHTML = '보안 인증을 불러오지 못했어요. <a href="#" id="report-turnstile-retry">다시 시도</a>';
+  errorEl.hidden = false;
+  const retryLink = document.getElementById("report-turnstile-retry");
+  if (retryLink) {
+    // 재시도할 때마다 이 함수가 다시 실행되며 링크 엘리먼트도 innerHTML로 새로
+    // 만들어지므로, addEventListener 대신 매번 덮어써도 되는 onclick을 쓴다.
+    // oxlint-disable-next-line unicorn/prefer-add-event-listener -- 위 주석 참고
+    retryLink.onclick = (e) => {
+      e.preventDefault();
+      errorEl.hidden = true;
+      renderTurnstile();
+    };
+  }
+}
+
 // Turnstile 스크립트는 place.html에서 async로 로드되므로, 모달을 여는 시점에
-// 아직 window.turnstile이 없을 수 있다 — 짧게 재시도한다.
-function renderTurnstile(retriesLeft = 20) {
+// 아직 window.turnstile이 없을 수 있다 — 느린 회선이나 확장프로그램 차단으로
+// 스크립트 로딩이 오래 걸리는 경우까지 감안해 15초 정도 재시도한 뒤, 그래도
+// 안 되면 버튼만 계속 비활성 상태로 두지 않고 이유와 재시도 링크를 보여준다.
+function renderTurnstile(retriesLeft = 50) {
   const container = document.getElementById("report-turnstile");
   if (!container || turnstileWidgetId !== null || !hasTurnstileSiteKey()) return;
 
   if (!window.turnstile) {
-    if (retriesLeft <= 0) return;
+    if (retriesLeft <= 0) {
+      showTurnstileLoadError();
+      return;
+    }
     setTimeout(() => renderTurnstile(retriesLeft - 1), 300);
     return;
   }
@@ -48,6 +71,10 @@ function renderTurnstile(retriesLeft = 20) {
     "expired-callback": () => {
       turnstileToken = "";
       updateSubmitState();
+    },
+    "error-callback": () => {
+      turnstileWidgetId = null;
+      showTurnstileLoadError();
     },
   });
 }

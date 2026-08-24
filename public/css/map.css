@@ -23,12 +23,12 @@
   flex: none;
   padding: 7px 15px;
   border-radius: 999px;
-  border: none;
-  color: var(--color-text-secondary);
+  border: 1px solid #f0ddd4;
+  color: #8a5a48;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  background: var(--color-bg);
+  background: var(--color-white);
 }
 
 .map-chip.is-active {
@@ -152,7 +152,7 @@
 .map-sheet__handle {
   width: 36px;
   height: 4px;
-  background: #D6DEF5;
+  background: #f0ddd4;
   border-radius: 999px;
   margin: 10px auto;
 }
@@ -271,7 +271,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: rgba(37, 99, 235, 0.18);
+  background: rgba(28, 46, 82, 0.18);
   animation: map-my-location-pulse 2.2s ease-out infinite;
 }
 

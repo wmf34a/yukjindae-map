@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary);
+  color: var(--color-white);
   text-decoration: none;
   padding: 4px 8px 4px 0;
 }
@@ -117,6 +117,59 @@
   color: var(--color-secondary);
   text-decoration: none;
   white-space: nowrap;
+}
+
+.place-detail__status-badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.place-detail__status-badge--verified {
+  background: #E4F5EA;
+  color: #1E8A4C;
+}
+
+.place-detail__status-badge--hint {
+  background: #FFF4DA;
+  color: #A9760A;
+}
+
+.place-detail__status-badge--stale {
+  background: #F1F2F6;
+  color: #8b96b8;
+}
+
+.place-detail__tag--dday {
+  background: #f5c4a8;
+  color: #1c2e52;
+  font-weight: 700;
+}
+
+.place-detail__source-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-secondary);
+  text-decoration: none;
+}
+
+.place-detail__report-link {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  border: none;
+  background: none;
+  color: #8b96b8;
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .place-detail__amenities {
@@ -320,4 +373,176 @@
 
 .course-directions-btn[hidden] {
   display: none;
+}
+
+/* 제보 모달 */
+.report-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 27, 62, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.report-modal-overlay.is-open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.report-modal {
+  width: 100%;
+  max-width: var(--max-width);
+  background: var(--color-white);
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+  overflow: hidden;
+}
+
+.report-modal-overlay.is-open .report-modal {
+  transform: translateY(0);
+}
+
+.report-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.report-modal__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0;
+}
+
+.report-modal__close {
+  border: none;
+  background: transparent;
+  color: #9AA5C3;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.report-modal__body {
+  padding: 18px;
+}
+
+.report-modal__label {
+  display: block;
+  font-size: 12px;
+  color: #8b96b8;
+  margin: 0 0 6px;
+}
+
+.report-modal__field {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 14px;
+  background: var(--color-white);
+  color: var(--color-text);
+}
+
+.report-modal__value-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.report-modal__value-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.report-modal__value-btn.is-selected {
+  border-color: var(--color-secondary);
+  background: var(--color-bg);
+  color: var(--color-secondary);
+}
+
+.report-modal__value-input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  font-size: 14px;
+  font-family: inherit;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+}
+
+.report-modal__value-input[hidden],
+.report-modal__value-group[hidden] {
+  display: none;
+}
+
+.report-modal__turnstile {
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.report-modal__error {
+  font-size: 12px;
+  color: #D64545;
+  margin: 4px 0 0;
+}
+
+.report-modal__error[hidden] {
+  display: none;
+}
+
+.report-modal__success {
+  padding: 24px 18px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-text);
+  margin: 0;
+}
+
+.report-modal__success[hidden] {
+  display: none;
+}
+
+.report-modal__footer {
+  padding: 0 18px 20px;
+}
+
+.report-modal__footer button {
+  width: 100%;
+  padding: 13px;
+  border-radius: 12px;
+  border: none;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.report-modal__footer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

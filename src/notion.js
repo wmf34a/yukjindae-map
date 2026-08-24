@@ -17,6 +17,14 @@ export function multiSelectNames(prop) {
   return prop.multi_select.map((o) => o.name);
 }
 
+export function urlValue(prop) {
+  return (prop && prop.url) || "";
+}
+
+export function dateValue(prop) {
+  return (prop && prop.date && prop.date.start) || "";
+}
+
 export function firstFileUrl(prop) {
   if (!prop || !prop.files || prop.files.length === 0) return "";
   const f = prop.files[0];
@@ -55,6 +63,11 @@ export function toPlace(page) {
     strollerAccess: selectName(p["유모차동선"]),
     diaperChange: p["기저귀교환대"] && p["기저귀교환대"].checkbox,
     nursingRoom: p["수유실"] && p["수유실"].checkbox,
+    kidsChair: p["유아의자"] && p["유아의자"].checkbox,
+    freeAgePolicy: text(p["무료입장연령"]),
+    sourceUrl: urlValue(p["정보출처"]),
+    verifiedAt: dateValue(p["정보확인일"]),
+    verifiedStatus: selectName(p["확인상태"]),
     nearbyRestaurant: text(p["근처맛집"]),
     nearbyCafe: text(p["근처카페"]),
     registeredBy: text(p["등록자"]),
@@ -100,5 +113,9 @@ export function toFestival(page) {
     link: (p["링크"] && p["링크"].url) || "",
     region: selectName(p["지역"]),
     order: (p["순서"] && p["순서"].number) ?? 0,
+    description: text(p["설명"]),
+    address: text(p["주소"]),
+    published: Boolean(p["공개여부"] && p["공개여부"].checkbox),
+    tourApiId: text(p["TourAPI_ID"]),
   };
 }

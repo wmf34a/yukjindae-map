@@ -18,5 +18,18 @@
       "binding": "IMAGES",
       "bucket_name": "yukjindae-map-images"
     }
-  ]
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT",
+      "id": "fb985d035ef04d20911f768fcf337d0e"
+    }
+  ],
+  // 매일 새벽 4시(KST, UTC+9)에 미확인 장소를 블로그 검색으로 보충 시도하고,
+  // 매주 월요일에는 TourAPI에서 다가오는 축제를 가져와 검토 대기로 추가한다.
+  // 두 스케줄 모두 같은 scheduled() 핸들러가 받으므로 worker.js의
+  // FESTIVAL_IMPORT_CRON 상수와 아래 두 번째 크론 표현식이 항상 일치해야 한다.
+  "triggers": {
+    "crons": ["0 19 * * *", "0 19 * * 1"]
+  }
 }

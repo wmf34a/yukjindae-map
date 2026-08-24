@@ -1,4 +1,8 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
+import { decodeNaverHtml } from "./text-utils.js";
+import { runEnrichment } from "./enrich.js";
+import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
+import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
 // 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
@@ -22,6 +26,33 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
   return response;
 }
 
+// wrangler.jsonc의 triggers.crons 중 축제 자동 수집용 주간 스케줄을 식별하는 값 —
+// scheduled()에서 이 값과 event.cron을 비교해 매일 도는 블로그 enrichment와
+// 구분한다.
+const FESTIVAL_IMPORT_CRON = "0 19 * * 1";
+
+const REPORTABLE_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자", "무료입장연령"]);
+const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
+const BOOLEAN_VALUES = new Set(["있음", "없음"]);
+const REPORT_VALUE_MAX_LENGTH = 200;
+const REPORT_RATE_LIMIT_PER_HOUR = 5;
+
+// placeId/field는 화이트리스트로, 텍스트값은 필드 성격(불리언 vs 자유서술)에 맞게
+// 검증한다 — 임의 필드에 임의 값을 쓸 수 없게 해서 승인 큐로 들어오는 데이터의
+// 신뢰도를 최소한으로 보장한다(Broken Access Control / 입력 검증 방지).
+export function validateReportPayload({ placeId, field, value, turnstileToken }) {
+  if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
+  if (typeof field !== "string" || !REPORTABLE_FIELDS.has(field)) return "지원하지 않는 필드입니다.";
+  if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
+  if (typeof value !== "string" || !value.trim()) return "제안값이 필요합니다.";
+  if (BOOLEAN_FIELDS.has(field)) {
+    if (!BOOLEAN_VALUES.has(value)) return "제안값은 있음/없음 중 하나여야 합니다.";
+  } else if (value.length > REPORT_VALUE_MAX_LENGTH) {
+    return "제안값이 너무 깁니다.";
+  }
+  return null;
+}
+
 export function matchesQuery(place, { region, category, q }) {
   if (region && place.region !== region) return false;
   if (category && !place.categories.includes(category)) return false;
@@ -33,14 +64,9 @@ export function matchesQuery(place, { region, category, q }) {
   return true;
 }
 
-async function handlePlaces(env, url) {
-  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
-    return new Response(JSON.stringify({ error: "Notion 환경변수가 설정되지 않았습니다." }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
+// handlePlaces(목록 API)와 enrich.js(블로그 힌트 배치)가 같은 전체 장소 목록이
+// 필요해서, 노션 페이지네이션 순회 로직을 공용 헬퍼로 뺐다.
+async function fetchAllPlaces(env) {
   const notionHeaders = {
     Authorization: `Bearer ${env.NOTION_API_KEY}`,
     "Notion-Version": "2022-06-28",
@@ -50,36 +76,44 @@ async function handlePlaces(env, url) {
   let results = [];
   let cursor = undefined;
 
+  // 다음 페이지 커서가 이전 응답에서만 나오므로 순차 호출이 필수라 병렬화 불가
+  /* oxlint-disable no-await-in-loop */
+  do {
+    const body = {
+      page_size: 100,
+      filter: { property: "공개여부", checkbox: { equals: true } },
+    };
+    if (cursor) body.start_cursor = cursor;
+
+    const res = await fetch(
+      `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
+      { method: "POST", headers: notionHeaders, body: JSON.stringify(body) }
+    );
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`Notion API 오류: ${errBody}`);
+    }
+
+    const data = await res.json();
+    results = results.concat(data.results);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  /* oxlint-enable no-await-in-loop */
+
+  return results.map(toPlace).filter((p) => p.name);
+}
+
+async function handlePlaces(env, url) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
+    return new Response(JSON.stringify({ error: "Notion 환경변수가 설정되지 않았습니다." }), {
+      status: 500,
+      headers: { "content-type": "application/json; charset=utf-8" },
+    });
+  }
+
   try {
-    // 다음 페이지 커서가 이전 응답에서만 나오므로 순차 호출이 필수라 병렬화 불가
-    /* oxlint-disable no-await-in-loop */
-    do {
-      const body = {
-        page_size: 100,
-        filter: { property: "공개여부", checkbox: { equals: true } },
-      };
-      if (cursor) body.start_cursor = cursor;
-
-      const res = await fetch(
-        `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
-        { method: "POST", headers: notionHeaders, body: JSON.stringify(body) }
-      );
-
-      if (!res.ok) {
-        const errBody = await res.text();
-        return new Response(JSON.stringify({ error: "Notion API 오류", detail: errBody }), {
-          status: 502,
-          headers: { "content-type": "application/json; charset=utf-8" },
-        });
-      }
-
-      const data = await res.json();
-      results = results.concat(data.results);
-      cursor = data.has_more ? data.next_cursor : undefined;
-    } while (cursor);
-    /* oxlint-enable no-await-in-loop */
-
-    const places = results.map(toPlace).filter((p) => p.name);
+    const places = await fetchAllPlaces(env);
 
     const limitParam = url.searchParams.get("limit");
     if (!limitParam) {
@@ -118,19 +152,6 @@ async function handlePlaces(env, url) {
       headers: { "content-type": "application/json; charset=utf-8" },
     });
   }
-}
-
-// 네이버 검색 API는 title/description을 HTML로 반환해서 매칭된 키워드를 <b> 태그로
-// 감싸고 &, <, > 같은 문자를 엔티티로 이스케이프한다. 태그만 벗겨내고 엔티티를
-// 그대로 두면 "&amp;"처럼 이스케이프된 문자열이 그대로 화면에 노출된다.
-function decodeNaverHtml(text) {
-  return text
-    .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&");
 }
 
 function guessImageExt(fingerprint) {
@@ -293,7 +314,8 @@ async function handleFestivals(env) {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
-        sorts: [{ property: "순서", direction: "ascending" }],
+        filter: { property: "공개여부", checkbox: { equals: true } },
+        sorts: [{ property: "기간", direction: "ascending" }],
       }),
     });
 
@@ -303,26 +325,200 @@ async function handleFestivals(env) {
     }
 
     const data = await res.json();
+    // 공개여부 체크만으로는 담당자가 종료 후 체크 해제를 깜빡하면 지난 축제가 계속
+    // 노출된다 — top 10을 뽑기 전에 종료일이 지난 항목부터 걸러낸다.
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const upcoming = data.results.filter((page) => {
+      const { periodEnd, periodStart } = toFestival(page);
+      const end = (periodEnd || periodStart || "").slice(0, 10);
+      return !end || end >= todayStr;
+    });
     const festivals = await Promise.all(
-      data.results.slice(0, 10).map(async (page) => {
-        const festival = toFestival(page);
-        const image = await ensureMirroredImage(env, "festivals", festival.id, festival.imageSource);
-        return {
-          id: festival.id,
-          createdAt: festival.createdAt,
-          title: festival.title,
-          periodStart: festival.periodStart,
-          periodEnd: festival.periodEnd,
-          placeName: festival.placeName,
-          image,
-          link: festival.link,
-          region: festival.region,
-          order: festival.order,
-        };
-      })
+      upcoming.slice(0, 10).map((page) => festivalToPayload(env, page))
     );
 
     return new Response(JSON.stringify({ festivals: festivals.filter((f) => f.title) }), { status: 200, headers });
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+  }
+}
+
+// runFestivalImport(중복 검사)와 fetchFestivalsForAutoImport가 함께 쓰는, 공개
+// 여부와 무관하게 전체 축제 페이지를 순회하는 헬퍼.
+async function fetchAllFestivalPages(env) {
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  let results = [];
+  let cursor = undefined;
+
+  /* oxlint-disable no-await-in-loop */
+  do {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+
+    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`Notion API 오류: ${await res.text()}`);
+
+    const data = await res.json();
+    results = results.concat(data.results);
+    cursor = data.has_more ? data.next_cursor : undefined;
+  } while (cursor);
+  /* oxlint-enable no-await-in-loop */
+
+  return results.map(toFestival);
+}
+
+function yyyymmdd(date) {
+  return date.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+async function createFestivalPage(env, properties) {
+  const res = await fetch("https://api.notion.com/v1/pages", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.NOTION_API_KEY}`,
+      "Notion-Version": "2022-06-28",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ parent: { database_id: env.NOTION_FESTIVAL_DATABASE_ID }, properties }),
+  });
+  if (!res.ok) throw new Error(`Notion 페이지 생성 실패: ${await res.text()}`);
+}
+
+// Cron Trigger(매주 1회)로 실행 — TourAPI에서 앞으로 2개월 내 진행되는 축제를
+// 모아 가족 단위 키워드로 걸러 순위를 매기고, 새로운 것만 "공개여부=false"
+// (검토 대기) 상태로 노션에 만든다. 실제 노출은 사람이 확인 후 체크박스를
+// 켜야 한다 — 키워드 필터는 완벽하지 않아 자동 공개는 하지 않는다.
+async function runScheduledFestivalImport(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_FESTIVAL_DATABASE_ID || !env.TOUR_API_KEY) return;
+
+  const existing = await fetchAllFestivalPages(env);
+  const existingIds = existing.map((f) => f.tourApiId);
+  const maxOrder = existing.reduce((max, f) => Math.max(max, f.order || 0), 0);
+
+  const today = new Date();
+  const windowEnd = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const candidates = await searchFestivalsInRange(env, {
+    startDate: yyyymmdd(today),
+    endDate: yyyymmdd(windowEnd),
+  });
+
+  const ranked = rankCandidates(candidates, { limit: 10 });
+  const fresh = selectNewCandidates(ranked, existingIds, { limit: 10 });
+
+  let order = maxOrder;
+  // 순서(순번)를 겹치지 않게 이어서 매기려면 이전 생성 결과를 알아야 해서
+  // 순차 실행이 필요하다.
+  /* oxlint-disable no-await-in-loop */
+  for (const item of fresh) {
+    order += 1;
+    await createFestivalPage(env, toNotionProperties(item, order));
+  }
+  /* oxlint-enable no-await-in-loop */
+
+  await notifyFestivalCandidates(env, fresh);
+}
+
+// SLACK_WEBHOOK_URL이 없으면(로컬 등) 조용히 건너뛴다. 알림 실패가 원래 하려던
+// 작업(노션 등록 등)을 막을 이유는 없으므로 에러도 조용히 무시한다.
+async function notifySlack(env, text) {
+  if (!env.SLACK_WEBHOOK_URL) return;
+  try {
+    await fetch(env.SLACK_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+  } catch {
+    // 무시 — 위 주석 참고.
+  }
+}
+
+// 새로 등록된 축제 후보는 항상 공개여부=false(검토 대기)로 들어가므로, 사람이
+// 노션을 열어 확인하지 않으면 계속 묻힌다 — 매주 슬랙으로 리마인드한다.
+async function notifyFestivalCandidates(env, items) {
+  if (items.length === 0) return;
+
+  const dbUrl = `https://www.notion.so/${env.NOTION_FESTIVAL_DATABASE_ID.replace(/-/g, "")}`;
+  const lines = items.map((item) => {
+    const start = item.eventStartDate ? `${item.eventStartDate.slice(4, 6)}.${item.eventStartDate.slice(6, 8)}~` : "";
+    return `• ${item.title}${start ? ` (${start})` : ""}`;
+  });
+  const text = `🎪 새 축제 후보 ${items.length}개가 노션에 추가됐어요 (검토 대기)\n${lines.join("\n")}\n${dbUrl}`;
+  await notifySlack(env, text);
+}
+
+async function festivalToPayload(env, page) {
+  const festival = toFestival(page);
+  const image = await ensureMirroredImage(env, "festivals", festival.id, festival.imageSource);
+  return {
+    id: festival.id,
+    createdAt: festival.createdAt,
+    title: festival.title,
+    periodStart: festival.periodStart,
+    periodEnd: festival.periodEnd,
+    placeName: festival.placeName,
+    image,
+    link: festival.link,
+    region: festival.region,
+    order: festival.order,
+    description: festival.description,
+    address: festival.address,
+  };
+}
+
+// 노션에 "설명"을 직접 채워두지 않은 축제는 한국관광공사 TourAPI에서 제목이
+// 확실히 일치하는 항목을 찾아 개요/주소를 보충한다(확신 없는 매칭은 tourapi.js가
+// 알아서 null을 반환).
+async function handleFestivalDetail(env, id) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_FESTIVAL_DATABASE_ID) {
+    return new Response(JSON.stringify({ error: "축제 정보가 설정되지 않았습니다." }), { status: 500, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const pageRes = await fetch(`https://api.notion.com/v1/pages/${id}`, { headers: notionHeaders });
+    if (!pageRes.ok) {
+      return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
+    }
+    const page = await pageRes.json();
+    const belongsToFestivalDb =
+      page.parent &&
+      page.parent.database_id &&
+      page.parent.database_id.replace(/-/g, "") === env.NOTION_FESTIVAL_DATABASE_ID.replace(/-/g, "");
+    if (!belongsToFestivalDb || !toFestival(page).published) {
+      return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
+    }
+
+    const festival = await festivalToPayload(env, page);
+    if (!festival.title) {
+      return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
+    }
+
+    if (!festival.description) {
+      const enrichment = await fetchFestivalDescription(env, festival.title);
+      if (enrichment) {
+        festival.description = enrichment.description || festival.description;
+        festival.address = festival.address || enrichment.address;
+      }
+    }
+
+    return new Response(JSON.stringify({ festival }), { status: 200, headers });
   } catch (err) {
     return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
   }
@@ -494,9 +690,119 @@ async function handleDirections(env, url) {
   return new Response(JSON.stringify({ found: true, distance: summary.distance }), { status: 200, headers });
 }
 
+async function verifyTurnstile(env, token, ip) {
+  const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ secret: env.TURNSTILE_SECRET_KEY, response: token, remoteip: ip || "" }),
+  });
+  if (!res.ok) return false;
+  const data = await res.json();
+  return data.success === true;
+}
+
+// IP 자체는 저장하지 않고 해시만 남긴다 — 스팸 패턴 파악용이지 개인 식별용이 아님.
+async function checkRateLimit(env, ip) {
+  const key = `report:${await shortHash(ip)}`;
+  const raw = await env.RATE_LIMIT.get(key);
+  const count = raw ? parseInt(raw, 10) : 0;
+  if (count >= REPORT_RATE_LIMIT_PER_HOUR) return false;
+  await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: 3600 });
+  return true;
+}
+
+async function handleReport(request, env, ctx) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify({ error: "허용되지 않은 메서드입니다." }), { status: 405, headers });
+  }
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.NOTION_REPORTS_DATABASE_ID || !env.TURNSTILE_SECRET_KEY) {
+    return new Response(JSON.stringify({ error: "제보 기능이 설정되지 않았습니다." }), { status: 500, headers });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "잘못된 요청 본문입니다." }), { status: 400, headers });
+  }
+
+  const validationError = validateReportPayload(body || {});
+  if (validationError) {
+    return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
+  }
+  const { placeId, field, value, turnstileToken } = body;
+
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+
+  const allowed = await checkRateLimit(env, ip);
+  if (!allowed) {
+    return new Response(JSON.stringify({ error: "잠시 후 다시 시도해주세요." }), { status: 429, headers });
+  }
+
+  const isHuman = await verifyTurnstile(env, turnstileToken, ip);
+  if (!isHuman) {
+    return new Response(JSON.stringify({ error: "사람인지 확인에 실패했습니다." }), { status: 400, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  // placeId가 우리 장소 DB에 실제 존재하는 공개 페이지인지 서버에서 직접 확인한다.
+  // 클라이언트가 보낸 placeId를 그대로 믿고 관계를 만들면 임의 페이지 ID를 넣어
+  // 엉뚱한 노션 페이지에 관계를 거는 것도 가능해지기 때문.
+  const placeRes = await fetch(`https://api.notion.com/v1/pages/${placeId}`, { headers: notionHeaders });
+  if (!placeRes.ok) {
+    return new Response(JSON.stringify({ error: "존재하지 않는 장소입니다." }), { status: 404, headers });
+  }
+  const placePage = await placeRes.json();
+  const belongsToPlaceDb =
+    placePage.parent &&
+    placePage.parent.database_id &&
+    placePage.parent.database_id.replace(/-/g, "") === env.NOTION_DATABASE_ID.replace(/-/g, "");
+  const place = belongsToPlaceDb ? toPlace(placePage) : null;
+  if (!place || !place.name) {
+    return new Response(JSON.stringify({ error: "존재하지 않는 장소입니다." }), { status: 404, headers });
+  }
+
+  const ipHash = await shortHash(ip);
+  const createRes = await fetch("https://api.notion.com/v1/pages", {
+    method: "POST",
+    headers: notionHeaders,
+    body: JSON.stringify({
+      parent: { database_id: env.NOTION_REPORTS_DATABASE_ID },
+      properties: {
+        "장소명": { title: [{ text: { content: place.name.slice(0, 200) } }] },
+        "장소": { relation: [{ id: placeId }] },
+        "필드명": { select: { name: field } },
+        "제안값": { rich_text: [{ text: { content: value.trim().slice(0, REPORT_VALUE_MAX_LENGTH) } }] },
+        "상태": { select: { name: "대기중" } },
+        "제보자IP해시": { rich_text: [{ text: { content: ipHash } }] },
+      },
+    }),
+  });
+
+  if (!createRes.ok) {
+    const detail = await createRes.text();
+    return new Response(JSON.stringify({ error: "제보 저장에 실패했습니다.", detail }), { status: 502, headers });
+  }
+
+  const reportsDbUrl = `https://www.notion.so/${env.NOTION_REPORTS_DATABASE_ID.replace(/-/g, "")}`;
+  ctx.waitUntil(
+    notifySlack(env, `📝 새 제보가 도착했어요\n• ${place.name} — ${field}: ${value.trim().slice(0, REPORT_VALUE_MAX_LENGTH)}\n${reportsDbUrl}`)
+  );
+
+  return new Response(JSON.stringify({ ok: true }), { status: 201, headers });
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
+    TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY || "",
   })};`;
   return new Response(body, {
     status: 200,
@@ -504,6 +810,59 @@ function handleNaverConfig(env) {
       "content-type": "application/javascript; charset=utf-8",
       "cache-control": "public, max-age=3600",
     },
+  });
+}
+
+async function searchNaverBlog(env, query) {
+  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return [];
+
+  const res = await fetch(
+    `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=5&sort=sim`,
+    {
+      headers: {
+        "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
+        "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
+      },
+    }
+  );
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return (data.items || []).map((item) => ({
+    title: decodeNaverHtml(item.title || ""),
+    description: decodeNaverHtml(item.description || ""),
+    link: item.link || "",
+  }));
+}
+
+async function patchPlaceProperties(env, placeId, properties) {
+  const res = await fetch(`https://api.notion.com/v1/pages/${placeId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${env.NOTION_API_KEY}`,
+      "Notion-Version": "2022-06-28",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ properties }),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Notion PATCH 실패: ${detail}`);
+  }
+}
+
+// Cron Trigger(매일 1회)로 실행 — 블로그 검색은 무료 API지만 일일 25,000회
+// 한도가 있어 배치당 처리 장소 수를 enrich.js의 maxPlaces(기본 10)로 제한한다.
+async function runScheduledEnrichment(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) return;
+
+  const places = await fetchAllPlaces(env);
+  const today = new Date().toISOString().slice(0, 10);
+  await runEnrichment({
+    places,
+    today,
+    searchBlog: (query) => searchNaverBlog(env, query),
+    patchPlace: (placeId, properties) => patchPlaceProperties(env, placeId, properties),
   });
 }
 
@@ -526,6 +885,10 @@ export default {
     if (url.pathname === "/api/festivals") {
       return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
     }
+    if (url.pathname.startsWith("/api/festivals/")) {
+      const id = url.pathname.slice("/api/festivals/".length);
+      return withEdgeCache(request, ctx, 300, () => handleFestivalDetail(env, id));
+    }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);
     }
@@ -538,10 +901,21 @@ export default {
     if (url.pathname === "/api/directions") {
       return handleDirections(env, url);
     }
+    if (url.pathname === "/api/reports") {
+      return handleReport(request, env, ctx);
+    }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));
     }
 
     return env.ASSETS.fetch(request);
+  },
+
+  async scheduled(event, env, ctx) {
+    if (event.cron === FESTIVAL_IMPORT_CRON) {
+      ctx.waitUntil(runScheduledFestivalImport(env));
+      return;
+    }
+    ctx.waitUntil(runScheduledEnrichment(env));
   },
 };

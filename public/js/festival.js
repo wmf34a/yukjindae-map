@@ -8,19 +8,19 @@ function formatPeriod(festival) {
 
 function festivalCardHtml(festival) {
   const period = formatPeriod(festival);
+  const dday = festivalDday(festival);
   const thumb = festival.image
-    ? `<img class="place-grid__thumb" src="${festival.image}" alt="${festival.title}" loading="lazy" />`
+    ? `<img class="place-grid__thumb" src="${escapeHtml(festival.image)}" alt="${escapeHtml(festival.title)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
+  const badge = dday ? `<span class="place-grid__dday">${escapeHtml(dday)}</span>` : "";
   const inner = `
-    <div class="place-grid__thumb-wrap">${thumb}</div>
+    <div class="place-grid__thumb-wrap">${thumb}${badge}</div>
     <div class="place-grid__body">
-      <p class="place-grid__name">${festival.title}</p>
-      <p class="place-grid__region">${[period, festival.placeName].filter(Boolean).join(" · ")}</p>
+      <p class="place-grid__name">${escapeHtml(festival.title)}</p>
+      <p class="place-grid__region">${escapeHtml([period, festival.placeName].filter(Boolean).join(" · "))}</p>
     </div>
   `;
-  return festival.link
-    ? `<a class="place-grid__card" href="${festival.link}" target="_blank" rel="noopener">${inner}</a>`
-    : `<div class="place-grid__card">${inner}</div>`;
+  return `<a class="place-grid__card" href="festival-detail.html?id=${encodeURIComponent(festival.id)}">${inner}</a>`;
 }
 
 async function loadFestivals() {

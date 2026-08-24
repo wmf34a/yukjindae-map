@@ -1,5 +1,17 @@
 import { describe, it, expect } from "vitest";
-import { text, title, selectName, multiSelectNames, firstFileUrl, firstFileSource, toPlace, toBanner } from "./notion.js";
+import {
+  text,
+  title,
+  selectName,
+  multiSelectNames,
+  firstFileUrl,
+  firstFileSource,
+  urlValue,
+  dateValue,
+  toPlace,
+  toBanner,
+  toFestival,
+} from "./notion.js";
 
 describe("text", () => {
   it("rich_text 배열을 하나의 문자열로 합친다", () => {
@@ -41,6 +53,28 @@ describe("multiSelectNames", () => {
 
   it("비어있으면 빈 배열을 반환한다", () => {
     expect(multiSelectNames({ multi_select: [] })).toEqual([]);
+  });
+});
+
+describe("urlValue", () => {
+  it("url 값을 반환한다", () => {
+    expect(urlValue({ url: "https://blog.naver.com/a" })).toBe("https://blog.naver.com/a");
+  });
+
+  it("url이 없으면 빈 문자열을 반환한다", () => {
+    expect(urlValue({ url: null })).toBe("");
+    expect(urlValue(undefined)).toBe("");
+  });
+});
+
+describe("dateValue", () => {
+  it("date.start 값을 반환한다", () => {
+    expect(dateValue({ date: { start: "2026-08-24" } })).toBe("2026-08-24");
+  });
+
+  it("date가 없으면 빈 문자열을 반환한다", () => {
+    expect(dateValue({ date: null })).toBe("");
+    expect(dateValue(undefined)).toBe("");
   });
 });
 
@@ -97,6 +131,11 @@ describe("toPlace", () => {
         "유모차동선": { select: { name: "가능" } },
         "기저귀교환대": { checkbox: true },
         "수유실": { checkbox: false },
+        "유아의자": { checkbox: true },
+        "무료입장연령": { rich_text: [{ plain_text: "36개월 미만" }] },
+        "정보출처": { url: "https://blog.naver.com/example" },
+        "정보확인일": { date: { start: "2026-08-24" } },
+        "확인상태": { select: { name: "확인됨" } },
         "근처맛집": { rich_text: [{ plain_text: "진심" }] },
         "근처카페": { rich_text: [{ plain_text: "봉스디" }] },
         "등록자": { rich_text: [{ plain_text: "육진대" }] },
@@ -117,6 +156,31 @@ describe("toPlace", () => {
       image: "https://x.com/a.jpg",
       diaperChange: true,
       nursingRoom: false,
+      kidsChair: true,
+      freeAgePolicy: "36개월 미만",
+      sourceUrl: "https://blog.naver.com/example",
+      verifiedAt: "2026-08-24",
+      verifiedStatus: "확인됨",
+    });
+  });
+
+  it("새 필드가 비어있으면 빈 값으로 변환한다", () => {
+    const page = {
+      id: "page-2",
+      created_time: "2026-07-20T03:00:00.000Z",
+      properties: {
+        "장소명": { title: [{ plain_text: "빈필드테스트" }] },
+      },
+    };
+
+    const place = toPlace(page);
+
+    expect(place).toMatchObject({
+      kidsChair: undefined,
+      freeAgePolicy: "",
+      sourceUrl: "",
+      verifiedAt: "",
+      verifiedStatus: "",
     });
   });
 });
@@ -168,5 +232,56 @@ describe("toBanner", () => {
       order: 0,
       imageSource: null,
     });
+  });
+});
+
+describe("toFestival", () => {
+  it("Notion 페이지 객체를 축제 객체로 변환한다", () => {
+    const page = {
+      id: "festival-1",
+      created_time: "2026-08-01T00:00:00.000Z",
+      properties: {
+        "제목": { title: [{ plain_text: "강릉 경포벚꽃축제" }] },
+        "기간": { date: { start: "2026-04-01", end: "2026-04-10" } },
+        "장소명": { rich_text: [{ plain_text: "경포 습지광장" }] },
+        "이미지": { files: [{ type: "external", external: { url: "https://x.com/f.jpg" } }] },
+        "링크": { url: "https://visitgangneung.net" },
+        "지역": { select: { name: "강원도" } },
+        "순서": { number: 2 },
+        "설명": { rich_text: [{ plain_text: "벚꽃길 축제" }] },
+        "주소": { rich_text: [{ plain_text: "강원특별자치도 강릉시 경포로 365" }] },
+        "공개여부": { checkbox: true },
+        "TourAPI_ID": { rich_text: [{ plain_text: "695592" }] },
+      },
+    };
+
+    expect(toFestival(page)).toEqual({
+      id: "festival-1",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      title: "강릉 경포벚꽃축제",
+      periodStart: "2026-04-01",
+      periodEnd: "2026-04-10",
+      placeName: "경포 습지광장",
+      imageSource: { url: "https://x.com/f.jpg", stable: true },
+      link: "https://visitgangneung.net",
+      region: "강원도",
+      order: 2,
+      description: "벚꽃길 축제",
+      address: "강원특별자치도 강릉시 경포로 365",
+      published: true,
+      tourApiId: "695592",
+    });
+  });
+
+  it("설명/주소/공개여부가 없으면 각각 빈 문자열/false다", () => {
+    const page = {
+      id: "festival-2",
+      created_time: "2026-08-02T00:00:00.000Z",
+      properties: {
+        "제목": { title: [{ plain_text: "제목만" }] },
+      },
+    };
+
+    expect(toFestival(page)).toMatchObject({ description: "", address: "", published: false, tourApiId: "" });
   });
 });

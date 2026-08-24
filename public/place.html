@@ -50,6 +50,37 @@
     </div>
   </div>
 
+  <div class="report-modal-overlay" id="report-modal-overlay">
+    <div class="report-modal" role="dialog" aria-modal="true" aria-label="정보 제보">
+      <div class="report-modal__header">
+        <p class="report-modal__title">정보 제보하기</p>
+        <button type="button" class="report-modal__close" aria-label="닫기">✕</button>
+      </div>
+      <div class="report-modal__body">
+        <label class="report-modal__label" for="report-field">어떤 정보인가요?</label>
+        <select class="report-modal__field" id="report-field">
+          <option value="기저귀교환대">기저귀교환대</option>
+          <option value="수유실">수유실</option>
+          <option value="유아의자">유아의자</option>
+          <option value="무료입장연령">무료입장 연령</option>
+        </select>
+
+        <div id="report-value-boolean" class="report-modal__value-group">
+          <button type="button" class="report-modal__value-btn" data-value="있음">있어요</button>
+          <button type="button" class="report-modal__value-btn" data-value="없음">없어요</button>
+        </div>
+        <input type="text" id="report-value-text" class="report-modal__value-input" placeholder="예: 36개월 미만 무료" hidden maxlength="200" />
+
+        <div id="report-turnstile" class="report-modal__turnstile"></div>
+        <p class="report-modal__error" id="report-error" hidden></p>
+      </div>
+      <p class="report-modal__success" id="report-success" hidden>제보해주셔서 감사합니다! 확인 후 반영할게요.</p>
+      <div class="report-modal__footer">
+        <button type="button" class="btn-primary" id="report-submit-btn" disabled>제보하기</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="tabbar">
     <a class="tabbar__item" href="index.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5"/></svg></span>홈</a>
     <a class="tabbar__item" href="map.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.6 7-11.5A7 7 0 0 0 5 9.5C5 14.4 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>주변</a>
@@ -63,8 +94,11 @@
 <script>
   document.write('<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=' + window.__ENV__.NAVER_MAP_CLIENT_ID + '"><\/script>');
 </script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="js/util.js"></script>
 <script src="js/favorites.js"></script>
 <script src="js/place.js"></script>
+<script src="js/report.js"></script>
 <script src="js/course.js"></script>
 <script src="js/pwa.js"></script>
 </body>

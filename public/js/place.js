@@ -2,10 +2,26 @@ function row(label, value) {
   if (!value) return "";
   return `
     <div class="place-detail__section">
-      <p class="place-detail__label">${label}</p>
-      <p class="place-detail__value">${value}</p>
+      <p class="place-detail__label">${escapeHtml(label)}</p>
+      <p class="place-detail__value">${escapeHtml(value)}</p>
     </div>
   `;
+}
+
+const STALE_AFTER_MS = 1000 * 60 * 60 * 24 * 180; // 6개월
+
+function verifiedBadgeHtml(place) {
+  if (!place.verifiedStatus) return "";
+  const stale = place.verifiedAt && Date.now() - new Date(place.verifiedAt).getTime() > STALE_AFTER_MS;
+  const label = stale ? "재확인 필요" : place.verifiedStatus;
+  const tone = stale ? "stale" : place.verifiedStatus === "확인됨" ? "verified" : "hint";
+  return `<span class="place-detail__status-badge place-detail__status-badge--${tone}">${escapeHtml(label)}</span>`;
+}
+
+function sourceLinkHtml(place) {
+  const href = safeHref(place.sourceUrl);
+  if (!href) return "";
+  return `<a class="place-detail__source-link" href="${escapeHtml(href)}" target="_blank" rel="noopener">정보 출처 ↗</a>`;
 }
 
 // 근처맛집/근처카페에 콤마 없이 업체명 하나만 명확히 적힌 경우, 네이버 지역검색
@@ -33,9 +49,9 @@ function nearbyRow(label, value) {
     : "";
   return `
     <div class="place-detail__section">
-      <p class="place-detail__label">${label}</p>
+      <p class="place-detail__label">${escapeHtml(label)}</p>
       <p class="place-detail__value place-detail__value--row">
-        <span>${value}</span>
+        <span>${escapeHtml(value)}</span>
         ${navSlot}
       </p>
     </div>
@@ -64,22 +80,25 @@ function render(place) {
   document.title = `${place.name} | 육진대`;
 
   const hero = place.image
-    ? `<img class="place-detail__hero" src="${place.image}" alt="${place.name}" />`
+    ? `<img class="place-detail__hero" src="${escapeHtml(place.image)}" alt="${escapeHtml(place.name)}" />`
     : "";
 
   const tags = [place.region, ...(place.categories || [])]
     .filter(Boolean)
-    .map((t) => `<span class="place-detail__tag">${t}</span>`)
+    .map((t) => `<span class="place-detail__tag">${escapeHtml(t)}</span>`)
     .join("");
 
   const amenities = [];
-  if (place.strollerAccess) amenities.push(`🍼 유모차 동선 ${place.strollerAccess}`);
+  if (place.strollerAccess) amenities.push(`🍼 유모차 동선 ${escapeHtml(place.strollerAccess)}`);
   if (place.diaperChange) amenities.push("🍼 기저귀교환대 O");
   if (place.nursingRoom) amenities.push("🍼 수유실 O");
+  if (place.kidsChair) amenities.push("🪑 유아의자 O");
   const amenitiesHtml = amenities.length
-    ? `<div class="place-detail__section"><p class="place-detail__label">유아 편의시설</p><div class="place-detail__amenities">${amenities
-        .map((a) => `<span class="place-detail__amenity">${a}</span>`)
-        .join("")}</div></div>`
+    ? `<div class="place-detail__section">
+        <p class="place-detail__label">유아 편의시설 ${verifiedBadgeHtml(place)}</p>
+        <div class="place-detail__amenities">${amenities.map((a) => `<span class="place-detail__amenity">${a}</span>`).join("")}</div>
+        ${sourceLinkHtml(place)}
+      </div>`
     : "";
 
   let parking = "";
@@ -93,7 +112,7 @@ function render(place) {
     ${hero}
     <div class="place-detail__body">
       <div class="place-detail__name-row">
-        <h1 class="place-detail__name">${place.name}</h1>
+        <h1 class="place-detail__name">${escapeHtml(place.name)}</h1>
         ${favoriteButtonHtml(place.id, "place-detail__favorite-btn")}
       </div>
       <div class="place-detail__tags">${tags}</div>
@@ -101,6 +120,7 @@ function render(place) {
       ${row("📍 주소", place.address)}
       ${row("⏰ 운영시간", place.hours)}
       ${row("💰 입장료", place.fee)}
+      ${row("👶 무료입장 연령", place.freeAgePolicy)}
       ${row("✏️ 추천 이유", place.reason)}
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
@@ -112,6 +132,7 @@ function render(place) {
         <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
         <button type="button" class="btn-secondary" id="course-btn">코스보기</button>
       </div>
+      <button type="button" class="place-detail__report-link" id="report-btn">잘못된 정보가 있나요? 제보하기</button>
     </div>
   `;
 
@@ -120,6 +141,9 @@ function render(place) {
 
   document.getElementById("course-btn").addEventListener("click", () => {
     window.openCourseModal(place);
+  });
+  document.getElementById("report-btn").addEventListener("click", () => {
+    window.openReportModal(place);
   });
 }
 

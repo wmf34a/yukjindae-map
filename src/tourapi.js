@@ -57,7 +57,12 @@ async function callTourApi(env, path, params) {
     _type: "json",
     ...params,
   });
-  const res = await fetch(`${TOUR_API_BASE}/${path}?${query.toString()}`);
+  // TourAPI가 느려질 때 상세페이지 요청이 무한정 대기하지 않도록 짧게 끊는다 —
+  // 실패해도 fetchFestivalDescription이 조용히 null로 처리해 노션 데이터만으로
+  // 페이지가 뜨게 되어 있다.
+  const res = await fetch(`${TOUR_API_BASE}/${path}?${query.toString()}`, {
+    signal: AbortSignal.timeout(4000),
+  });
   if (!res.ok) return null;
   return res.json();
 }

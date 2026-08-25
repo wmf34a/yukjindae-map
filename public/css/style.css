@@ -496,7 +496,7 @@ body {
 
 .region-map__path {
   cursor: pointer;
-  opacity: 0.88;
+  opacity: 0.92;
   transition: opacity 0.15s ease, filter 0.15s ease;
 }
 
@@ -506,6 +506,7 @@ body {
 
 .region-map__path.is-active {
   opacity: 1;
+  filter: drop-shadow(0 0 1.1px rgba(60, 72, 58, 0.55)) drop-shadow(0 0 3px rgba(60, 72, 58, 0.25));
 }
 
 .region-map.has-selection .region-map__path:not(.is-active) {

@@ -44,16 +44,27 @@ function regionColor(region, alpha = 1, lightness = 60) {
   return `hsl(${hue} 55% ${lightness}% / ${alpha})`;
 }
 
-// 지역 지도는 시군구 단위 폴리곤을 이어붙인 데이터라, 흰색 테두리를 그으면
-// 같은 지역 내부의 폴리곤 경계마다 잔선이 잔뜩 생겨 지저분해 보였다.
-// 채우기와 같은 색으로 두껍게 테두리를 그어 내부 잔선을 지우고,
-// drop-shadow로 지역 바깥쪽 경계(다른 지역과 맞닿는 부분)만 은은하게 구분한다.
-function regionPathStyle(region, active) {
-  const color = regionColor(region);
-  const shadow = active
-    ? "drop-shadow(0 0 1px rgba(45,55,90,0.9))"
-    : "drop-shadow(0 0 0.35px rgba(40,40,60,0.55))";
-  return `fill:${color};stroke:${color};stroke-width:1.6;stroke-linejoin:round;filter:${shadow}`;
+// 지도 채우기 전용 파스텔 톤. 범례/선택 강조에 쓰는 regionColor보다 채도는
+// 낮추고 명도는 높여 "페이퍼컷" 느낌을 낸다.
+function regionMapColor(region) {
+  const i = REGIONS.indexOf(region);
+  const hue = (i * 36) % 360;
+  return `hsl(${hue} 48% 80%)`;
+}
+
+// 지역 지도는 시군구 단위 폴리곤을 이어붙인 데이터라, 폴리곤 경계마다 흰
+// 잔선이 잔뜩 생겨 지저분해 보였다. 지도 배경색(흰색)으로 한 번, 그 위에
+// 파스텔 색으로 한 번 더 겹쳐 그려서 내부 잔선은 지우고, 겹쳐 그린 색이
+// 못 덮는 지역 사이 여백만 종이를 오려 붙인 듯 은은하게 남긴다.
+const REGION_MAP_BG = "#FFFFFF";
+
+function regionHaloPath(region) {
+  return `<path d="${REGION_MAP_PATHS[region]}" fill="${REGION_MAP_BG}" stroke="${REGION_MAP_BG}" stroke-width="2" stroke-linejoin="round"/>`;
+}
+
+function regionBodyPath(region, active) {
+  const color = regionMapColor(region);
+  return `<path class="region-map__path${active ? " is-active" : ""}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" fill="${color}" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"><title>${region}</title></path>`;
 }
 
 const state = {
@@ -110,14 +121,13 @@ function selectRegion(region) {
 function renderRegionMap() {
   const mapEl = document.getElementById("region-map");
   mapEl.classList.toggle("has-selection", Boolean(state.region));
-  const paths = REGIONS.map((region) => {
-    const active = state.region === region;
-    return `<path class="region-map__path${active ? " is-active" : ""}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" style="${regionPathStyle(region, active)}"><title>${region}</title></path>`;
-  }).join("");
+  const halos = REGIONS.map(regionHaloPath).join("");
+  const bodies = REGIONS.map((region) => regionBodyPath(region, state.region === region)).join("");
   // 실제 컨텐츠(지역 폴리곤)가 원래 좌표계(0 0 100 130)의 왼쪽 절반/아래쪽에
   // 치우쳐 있어서 여백이 컸다 — 실제 쓰이는 영역(-3 15 93 104)으로 뷰박스를
-  // 잘라서 지도가 카드를 꽉 채우도록 확대했다.
-  mapEl.innerHTML = `<svg class="region-map__svg" viewBox="-3 15 93 104">${paths}</svg>`;
+  // 잘라서 지도가 카드를 꽉 채우도록 확대했다. halo를 모두 그린 뒤 body를
+  // 전부 그려야, 옆 지역 halo에 이쪽 body가 가려지지 않는다.
+  mapEl.innerHTML = `<svg class="region-map__svg" viewBox="-3 15 93 104"><g>${halos}</g><g>${bodies}</g></svg>`;
 
   mapEl.querySelectorAll("[data-region]").forEach((el) => {
     el.addEventListener("click", () => selectRegion(el.dataset.region));

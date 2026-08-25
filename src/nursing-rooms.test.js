@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { parseBusanItems, normalizeBusanItem, parseKorailItems, filterNursingStations } from "./nursing-rooms.js";
+import {
+  parseBusanItems,
+  normalizeBusanItem,
+  parseKorailItems,
+  filterNursingStations,
+  parseSeoulMetroNursingItems,
+} from "./nursing-rooms.js";
 
 describe("parseBusanItems", () => {
   it("item이 배열이면 그대로 반환한다", () => {
@@ -73,5 +79,46 @@ describe("filterNursingStations", () => {
       { stn_nm: "", nrsrm_estnc: "Y" },
     ];
     expect(filterNursingStations(items)).toEqual([{ name: "강릉" }]);
+  });
+});
+
+describe("parseSeoulMetroNursingItems", () => {
+  it("<item> 블록들을 파싱해 필요한 필드만 뽑아낸다", () => {
+    const xml = `<?xml version='1.0' encoding='UTF-8'?><response><body><items>` +
+      `<item><stnNm>종로3가</stnNm><lineNm>1호선</lineNm><stnFlr>B1</stnFlr><exitNo>12</exitNo>` +
+      `<dtlPstn>B1 고객안전실 인접</dtlPstn><operInstTelno>0261101301</operInstTelno><utztnHr>영업시간내</utztnHr></item>` +
+      `<item><stnNm>왕십리</stnNm><lineNm>2호선</lineNm><stnFlr>1</stnFlr><exitNo>3</exitNo>` +
+      `<dtlPstn></dtlPstn><operInstTelno></operInstTelno><utztnHr>24시간</utztnHr></item>` +
+      `</items></body></response>`;
+    expect(parseSeoulMetroNursingItems(xml)).toEqual([
+      {
+        stnNm: "종로3가",
+        lineNm: "1호선",
+        stnFlr: "B1",
+        exitNo: "12",
+        dtlPstn: "B1 고객안전실 인접",
+        tel: "0261101301",
+        utztnHr: "영업시간내",
+      },
+      {
+        stnNm: "왕십리",
+        lineNm: "2호선",
+        stnFlr: "1",
+        exitNo: "3",
+        dtlPstn: "",
+        tel: "",
+        utztnHr: "24시간",
+      },
+    ]);
+  });
+
+  it("stnNm이 없는 블록은 제외한다", () => {
+    const xml = `<item><lineNm>1호선</lineNm></item>`;
+    expect(parseSeoulMetroNursingItems(xml)).toEqual([]);
+  });
+
+  it("빈 값/잘못된 값은 빈 배열이다", () => {
+    expect(parseSeoulMetroNursingItems("")).toEqual([]);
+    expect(parseSeoulMetroNursingItems(null)).toEqual([]);
   });
 });

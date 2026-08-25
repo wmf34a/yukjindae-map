@@ -1,19 +1,22 @@
 // 공공데이터포털의 지역별 수유실 API를 모아 지도 레이어용으로 정규화한다.
 // - 부산광역시: 좌표를 직접 주는 API라 요청마다 바로 불러온다.
-// - 한국철도공사: 역명/역코드만 주고 좌표가 없어서, 주간 크론이 미리 네이버
+// - 한국철도공사/서울교통공사: 역명만 주고 좌표가 없어서, 주간 크론이 미리 네이버
 //   지오코딩으로 좌표를 붙여 KV에 캐싱해두고 /api/nursing-rooms는 그 결과만 읽는다
 //   (요청마다 역 100여 개를 라이브로 지오코딩하면 느리고 Workers 서브리퀘스트
 //   한도에 걸릴 수 있음).
 const BUSAN_BASE = "https://apis.data.go.kr/6260000/BusanNursingroomInfoService/getNursingroomInfo";
 const KORAIL_BASE = "https://apis.data.go.kr/B551457/convenience";
+const SEOUL_METRO_BASE = "https://apis.data.go.kr/B553766/facility";
 const KORAIL_KV_KEY = "nursing-rooms:korail";
-const KORAIL_KV_TTL_SECONDS = 60 * 60 * 24 * 14; // 크론은 매주 도니까 2주치 여유
+const SEOUL_METRO_KV_KEY = "nursing-rooms:seoul-metro";
+const STATION_KV_TTL_SECONDS = 60 * 60 * 24 * 14; // 크론은 매주 도니까 2주치 여유
 
 // 장소 자동 보강 시 "정보출처"에 넣을 원본 데이터셋 링크 — 사람이 검토할 때
 // 근거를 바로 확인할 수 있게 한다.
 export const NURSING_SOURCE_URLS = {
   "부산광역시": "https://www.data.go.kr/data/15034033/openapi.do",
   "한국철도공사": "https://www.data.go.kr/data/15125774/openapi.do",
+  "서울교통공사": "https://www.data.go.kr/data/15143841/openapi.do",
 };
 
 export function parseBusanItems(data) {
@@ -122,38 +125,115 @@ export async function geocodeStation(env, stationName) {
   }
 }
 
-// 주간 크론에서만 호출된다 — 역 100여 개를 순차 지오코딩해 KV에 통째로 저장한다.
-export async function runKorailGeocodeRefresh(env) {
+// 서울교통공사 편의시설위치정보(B553766)는 JSON 응답을 지원하지 않아 XML만 온다
+// — Workers 런타임엔 DOMParser가 없어서 <item>...</item> 블록 단위로 정규식
+// 파싱한다. 데이터가 정부기관 API라 구조가 안정적이라 이 정도로 충분하다.
+function extractTag(block, tag) {
+  const match = block.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+  return match ? match[1] : "";
+}
+
+export function parseSeoulMetroNursingItems(xml) {
+  const blocks = [...String(xml || "").matchAll(/<item>([\s\S]*?)<\/item>/g)].map((m) => m[1]);
+  return blocks
+    .map((block) => ({
+      stnNm: extractTag(block, "stnNm"),
+      lineNm: extractTag(block, "lineNm"),
+      stnFlr: extractTag(block, "stnFlr"),
+      exitNo: extractTag(block, "exitNo"),
+      dtlPstn: extractTag(block, "dtlPstn"),
+      tel: extractTag(block, "operInstTelno"),
+      utztnHr: extractTag(block, "utztnHr"),
+    }))
+    .filter((item) => item.stnNm);
+}
+
+export async function fetchSeoulMetroNursingRooms(env) {
+  if (!env.TOUR_API_KEY) return [];
+
+  const query = new URLSearchParams({
+    serviceKey: decodeURIComponent(env.TOUR_API_KEY),
+    numOfRows: "500",
+    pageNo: "1",
+  });
+
+  try {
+    const res = await fetch(`${SEOUL_METRO_BASE}/getFcNrsrm?${query.toString()}`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return [];
+    return parseSeoulMetroNursingItems(await res.text());
+  } catch {
+    return [];
+  }
+}
+
+// 정류장명이 겹치는 환승역(예: 종로3가 1/3/5호선)까지 매번 다시 지오코딩할
+// 이유가 없어 역명 기준으로 한 번만 좌표를 구하고 나머지 항목에 재사용한다.
+async function geocodeUniqueStations(env, stationNames) {
+  const coordByName = new Map();
+  // 네이버 지역검색 API는 초당 호출 제한이 있어 순차 호출이 필요하다.
+  /* oxlint-disable no-await-in-loop */
+  for (const name of stationNames) {
+    const coord = await geocodeStation(env, name);
+    if (coord) coordByName.set(name, coord);
+  }
+  /* oxlint-enable no-await-in-loop */
+  return coordByName;
+}
+
+// 주간 크론에서만 호출된다 — 코레일/서울교통공사 역명 100여 개를 순차
+// 지오코딩해 KV에 통째로 저장한다.
+export async function runStationNursingGeocodeRefresh(env) {
   if (!env.RATE_LIMIT) return;
 
-  const stations = await fetchKorailNursingStations(env);
-  const rooms = [];
+  const [korailStations, seoulMetroItems] = await Promise.all([
+    fetchKorailNursingStations(env),
+    fetchSeoulMetroNursingRooms(env),
+  ]);
 
-  // 네이버 지오코딩 API는 초당 호출 제한이 있어 순차 호출이 필요하다.
-  /* oxlint-disable no-await-in-loop */
-  for (const station of stations) {
-    const coord = await geocodeStation(env, station.name);
-    if (!coord) continue;
-    rooms.push({
-      name: `${station.name}역`,
+  const korailCoords = await geocodeUniqueStations(env, korailStations.map((s) => s.name));
+  const korailRooms = korailStations
+    .filter((s) => korailCoords.has(s.name))
+    .map((s) => ({
+      name: `${s.name}역`,
       address: "",
       place: "",
       tel: "",
-      lat: coord.lat,
-      lng: coord.lng,
+      lat: korailCoords.get(s.name).lat,
+      lng: korailCoords.get(s.name).lng,
       fatherAllowed: false,
       source: "한국철도공사",
       sourceUrl: NURSING_SOURCE_URLS["한국철도공사"],
-    });
-  }
-  /* oxlint-enable no-await-in-loop */
+    }));
 
-  await env.RATE_LIMIT.put(KORAIL_KV_KEY, JSON.stringify(rooms), { expirationTtl: KORAIL_KV_TTL_SECONDS });
+  const seoulMetroStationNames = [...new Set(seoulMetroItems.map((i) => i.stnNm))];
+  const seoulMetroCoords = await geocodeUniqueStations(env, seoulMetroStationNames);
+  const seoulMetroRooms = seoulMetroItems
+    .filter((i) => seoulMetroCoords.has(i.stnNm))
+    .map((i) => ({
+      name: `${i.stnNm}역 (${i.lineNm})`,
+      address: "",
+      place: [i.stnFlr, i.exitNo ? `${i.exitNo}번 출구` : "", i.dtlPstn].filter(Boolean).join(" · "),
+      tel: i.tel,
+      lat: seoulMetroCoords.get(i.stnNm).lat,
+      lng: seoulMetroCoords.get(i.stnNm).lng,
+      fatherAllowed: false,
+      source: "서울교통공사",
+      sourceUrl: NURSING_SOURCE_URLS["서울교통공사"],
+    }));
+
+  await Promise.all([
+    env.RATE_LIMIT.put(KORAIL_KV_KEY, JSON.stringify(korailRooms), { expirationTtl: STATION_KV_TTL_SECONDS }),
+    env.RATE_LIMIT.put(SEOUL_METRO_KV_KEY, JSON.stringify(seoulMetroRooms), {
+      expirationTtl: STATION_KV_TTL_SECONDS,
+    }),
+  ]);
 }
 
-async function readKorailNursingRooms(env) {
+async function readCachedRooms(env, key) {
   if (!env.RATE_LIMIT) return [];
-  const raw = await env.RATE_LIMIT.get(KORAIL_KV_KEY);
+  const raw = await env.RATE_LIMIT.get(key);
   if (!raw) return [];
   try {
     return JSON.parse(raw);
@@ -164,6 +244,10 @@ async function readKorailNursingRooms(env) {
 
 // 새 지역 API가 늘어나도 프론트는 이 함수 하나만 호출하면 되도록 결과를 합쳐서 준다.
 export async function fetchAllNursingRooms(env) {
-  const [busan, korail] = await Promise.all([fetchBusanNursingRooms(env), readKorailNursingRooms(env)]);
-  return [...busan, ...korail];
+  const [busan, korail, seoulMetro] = await Promise.all([
+    fetchBusanNursingRooms(env),
+    readCachedRooms(env, KORAIL_KV_KEY),
+    readCachedRooms(env, SEOUL_METRO_KV_KEY),
+  ]);
+  return [...busan, ...korail, ...seoulMetro];
 }

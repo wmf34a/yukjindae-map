@@ -992,9 +992,10 @@ export default {
       if (request.headers.get("x-admin-token") !== "a4bb20e1-46fe-471b-b33b-6fc04fa2ee10") {
         return new Response("Forbidden", { status: 403 });
       }
-      await runStationNursingGeocodeRefresh(env);
-      await runPublicDataPlaceMatch(env);
-      return new Response("done", { status: 200 });
+      ctx.waitUntil(
+        runStationNursingGeocodeRefresh(env).then(() => runPublicDataPlaceMatch(env))
+      );
+      return new Response("started", { status: 202 });
     }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));

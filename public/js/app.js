@@ -38,22 +38,10 @@ const VIRTUAL_CATEGORY_FREE_AGE = "영유아 무료입장";
 // 찍는 위치. 서울강북/서울강남은 실제 중심점이 거의 붙어있어(약 1.6 단위 차이) 핀이
 // 겹치므로, 핀 표시 위치만 남/북으로 좀 더 벌려서 손으로 조정했다(면 색칠 자체는
 // 실제 경계를 그대로 씀 — 핀 위치만 보정).
-const REGION_MAP_MARKERS = {
-  "서울강북": [31, 32],
-  "서울강남": [31, 40],
-  "경기북부": [34.71, 24],
-  "인천·부천": [18, 36.09],
-  "경기남부": [35.94, 46],
-  "강원도": [55, 30],
-  "충청도": [37.28, 52.89],
-  "전라도": [26, 78],
-  "경상도": [58, 62],
-  "제주": [26.73, 112],
-};
-
-function regionColor(region) {
+function regionColor(region, alpha = 1) {
   const i = REGIONS.indexOf(region);
-  return `hsl(${(i * 36) % 360}, 55%, 60%)`;
+  const hue = (i * 36) % 360;
+  return `hsl(${hue} 55% 60% / ${alpha})`;
 }
 
 const state = {
@@ -97,10 +85,14 @@ function regionCount(region) {
 }
 
 function selectRegion(region) {
-  state.region = state.region === region ? null : region;
+  const isSelecting = state.region !== region;
+  state.region = isSelecting ? region : null;
   renderRegionMap();
   renderRegionLegend();
   renderPlaces();
+  if (isSelecting) {
+    document.getElementById("place-list").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 function renderRegionMap() {
@@ -110,18 +102,10 @@ function renderRegionMap() {
     const active = state.region === region ? " is-active" : "";
     return `<path class="region-map__path${active}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" style="fill:${regionColor(region)}"><title>${region}</title></path>`;
   }).join("");
-  const markers = REGIONS.map((region, i) => {
-    const [mx, my] = REGION_MAP_MARKERS[region];
-    const active = state.region === region ? " is-active" : "";
-    return `<g class="region-map__marker${active}" data-region="${region}" transform="translate(${mx},${my})">
-      <circle r="3.3" style="fill:${regionColor(region)}"/>
-      <text dy="1.15">${i + 1}</text>
-    </g>`;
-  }).join("");
-  // 실제 컨텐츠(지역 폴리곤+마커)가 원래 좌표계(0 0 100 130)의 왼쪽 절반/아래쪽에
+  // 실제 컨텐츠(지역 폴리곤)가 원래 좌표계(0 0 100 130)의 왼쪽 절반/아래쪽에
   // 치우쳐 있어서 여백이 컸다 — 실제 쓰이는 영역(-3 15 93 104)으로 뷰박스를
   // 잘라서 지도가 카드를 꽉 채우도록 확대했다.
-  mapEl.innerHTML = `<svg class="region-map__svg" viewBox="-3 15 93 104">${paths}${markers}</svg>`;
+  mapEl.innerHTML = `<svg class="region-map__svg" viewBox="-3 15 93 104">${paths}</svg>`;
 
   mapEl.querySelectorAll("[data-region]").forEach((el) => {
     el.addEventListener("click", () => selectRegion(el.dataset.region));
@@ -135,10 +119,12 @@ function renderRegionMap() {
 
 function renderRegionLegend() {
   const legend = document.getElementById("region-legend");
-  legend.innerHTML = REGIONS.map((region, i) => {
-    const active = state.region === region ? " is-active" : "";
-    return `<button class="region-legend__item${active}" data-region="${region}">
-      <span class="region-legend__dot" style="background:${regionColor(region)}">${i + 1}</span>
+  legend.innerHTML = REGIONS.map((region) => {
+    const active = state.region === region;
+    const style = active
+      ? ` style="border-color:${regionColor(region)};background:${regionColor(region, 0.16)};color:${regionColor(region)}"`
+      : "";
+    return `<button class="region-legend__item${active ? " is-active" : ""}" data-region="${region}"${style}>
       <span class="region-legend__name">${region}</span>
       <span class="region-legend__count">${regionCount(region)}</span>
     </button>`;

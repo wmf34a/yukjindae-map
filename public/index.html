@@ -64,6 +64,21 @@
     <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
   </div>
 
+  <section class="section" id="region-section">
+    <h2 class="section__title">지역별로 찾아보기</h2>
+    <div class="region-map-wrap">
+      <div class="region-map" id="region-map">
+        <!-- 대한민국 인터랙티브 지도(서울강북/서울강남/경기북부/인천·부천/경기남부/
+             강원도/충청도/전라도/경상도/제주), REGION_MAP_PATHS 참고 -->
+      </div>
+      <div class="region-legend" id="region-legend"></div>
+    </div>
+    <p class="region-map__caption" id="region-map-caption">지도를 눌러 지역을 선택해보세요</p>
+    <div class="curated-links" id="curated-links">
+      <!-- 축제·행사 TOP10 / 테마 코스 모음, CURATED_LINKS 참고 -->
+    </div>
+  </section>
+
   <section class="banner is-loading" id="hero-banner">
     <div class="banner__track" id="hero-track">
       <div class="banner__slide">
@@ -80,21 +95,6 @@
       </div>
     </div>
     <div class="banner__dots" id="hero-dots"></div>
-  </section>
-
-  <section class="section" id="region-section">
-    <h2 class="section__title">지역별로 찾아보기</h2>
-    <div class="region-map-wrap">
-      <div class="region-map" id="region-map">
-        <!-- 대한민국 인터랙티브 지도(서울강북/서울강남/경기북부/인천·부천/경기남부/
-             강원도/충청도/전라도/경상도/제주), REGION_MAP_PATHS/REGION_MAP_MARKERS 참고 -->
-      </div>
-      <div class="region-legend" id="region-legend"></div>
-    </div>
-    <p class="region-map__caption" id="region-map-caption">지도를 눌러 지역을 선택해보세요</p>
-    <div class="curated-links" id="curated-links">
-      <!-- 축제·행사 TOP10 / 테마 코스 모음, CURATED_LINKS 참고 -->
-    </div>
   </section>
 
   <div class="tag-filter" id="tag-filter">

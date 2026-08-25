@@ -244,6 +244,24 @@ async function handleBanners(env) {
   }
 }
 
+// 장소 DB의 "사진"은 festivals/banners/courses와 달리 요청마다 R2로 미러링하지
+// 않고, 등록 시점에 이미 안정적인 URL(R2 또는 외부 호스팅)로 저장돼 있다 —
+// toPlace().image를 그대로 쓰면 된다.
+async function fetchFirstStopImage(env, placeId) {
+  try {
+    const res = await fetch(`https://api.notion.com/v1/pages/${placeId}`, {
+      headers: {
+        Authorization: `Bearer ${env.NOTION_API_KEY}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+    if (!res.ok) return "";
+    return toPlace(await res.json()).image;
+  } catch {
+    return "";
+  }
+}
+
 async function handleCourses(env) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
@@ -275,7 +293,12 @@ async function handleCourses(env) {
     const courses = await Promise.all(
       data.results.map(async (page) => {
         const course = toCourse(page);
-        const image = await ensureMirroredImage(env, "courses", course.id, course.imageSource);
+        let image = await ensureMirroredImage(env, "courses", course.id, course.imageSource);
+        // 대표이미지를 안 채워둔 코스는 첫 번째 정류장 장소의 사진을 대신 썸네일로
+        // 쓴다 — places 목록에서 이미 한 번 미러링된 이미지라 대부분 R2 캐시 히트.
+        if (!image && course.placeIds[0]) {
+          image = await fetchFirstStopImage(env, course.placeIds[0]);
+        }
         return {
           id: course.id,
           createdAt: course.createdAt,

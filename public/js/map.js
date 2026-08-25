@@ -196,16 +196,24 @@ function clearMarkers() {
   markers = [];
 }
 
+// 각지고 딱딱한 깃발-핀 대신, 둥근 물방울(마커) 모양 안에 캐릭터 로고를 담은
+// 좀 더 친근한 느낌의 핀으로 변경. border-radius 트릭(세 모서리만 둥글게 +
+// 45도 회전)으로 물방울 실루엣을 만들고, 안쪽 내용물은 반대로 회전시켜
+// 로고가 똑바로 보이게 한다.
 const FLAG_ICON = {
   content: `
-    <div style="position:relative;width:34px;height:44px;">
-      <div style="position:absolute;left:2px;top:8px;width:2px;height:36px;background:#1A2F6B;border-radius:1px;"></div>
-      <div style="position:absolute;left:3px;top:0;width:28px;height:22px;background:#fff;border:2px solid #1A2F6B;border-radius:2px 9px 9px 2px;box-shadow:0 2px 5px rgba(13,27,62,0.35);display:flex;align-items:center;justify-content:center;overflow:hidden;">
-        <img src="/assets/logo/character-logo.svg" style="width:18px;height:18px;object-fit:contain;" alt="" />
+    <div style="position:relative;width:36px;height:36px;">
+      <div style="position:absolute;inset:0;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+           background:linear-gradient(135deg, var(--color-primary, #5B6B95), var(--color-primary-dark, #3C4972));
+           box-shadow:0 3px 8px rgba(58,67,99,0.4);"></div>
+      <div style="position:absolute;top:3px;left:3px;width:30px;height:30px;border-radius:50%;
+           background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;
+           box-shadow:0 1px 3px rgba(58,67,99,0.25);">
+        <img src="/assets/logo/character-logo.svg" style="width:22px;height:22px;object-fit:contain;" alt="" />
       </div>
     </div>
   `,
-  anchor: new naver.maps.Point(3, 44),
+  anchor: new naver.maps.Point(18, 36),
 };
 
 function renderMarkers(list) {

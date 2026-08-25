@@ -164,6 +164,28 @@
   height: 21px;
 }
 
+.map-layer-btn {
+  position: fixed;
+  right: 16px;
+  bottom: calc(var(--tabbar-height) + 68px);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  box-shadow: 0 2px 8px rgba(58, 67, 99, 0.15);
+  font-size: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.map-layer-btn.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
 .map-sheet {
   position: fixed;
   left: 50%;

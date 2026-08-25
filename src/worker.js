@@ -3,6 +3,8 @@ import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
+import { fetchAllNursingRooms, runKorailGeocodeRefresh } from "./nursing-rooms.js";
+import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
 // 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
@@ -30,6 +32,8 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
 // scheduled()에서 이 값과 event.cron을 비교해 매일 도는 블로그 enrichment와
 // 구분한다.
 const FESTIVAL_IMPORT_CRON = "0 19 * * 1";
+const KORAIL_GEOCODE_CRON = "0 20 * * 1";
+const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 1";
 
 const REPORTABLE_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자", "무료입장연령"]);
 const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
@@ -583,6 +587,15 @@ async function handleImage(env, key) {
   return new Response(object.body, { headers });
 }
 
+// 공공데이터 수유실은 부모가 직접 큐레이션하는 장소 DB와 성격이 달라(구청/보건소
+// 등 일반 공공시설) 노션에 넣지 않고, 주변지도에 얹는 별도 레이어로만 캐싱해서
+// 보여준다. 데이터가 자주 바뀌지 않아 엣지 캐시를 길게(하루) 잡는다.
+async function handleNursingRooms(env) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  const rooms = await fetchAllNursingRooms(env);
+  return new Response(JSON.stringify({ rooms }), { status: 200, headers });
+}
+
 async function handleNearbyPlace(env, url) {
   const q = url.searchParams.get("q");
   if (!q) {
@@ -910,6 +923,27 @@ async function runScheduledEnrichment(env) {
   });
 }
 
+// Cron Trigger(매주 1회, 코레일 지오코딩 다음 슬롯)로 실행 — 우리 장소 좌표와
+// 공공 수유실 좌표를 150m 반경으로 대조해서, 아직 수유실이 미확인인 장소에
+// "수유실" 체크박스를 자동으로 켜준다. 확신할 수 없는 매칭이라 확인상태는
+// 항상 "공공데이터"(검토 대기)로만 남기고, 최종 확정은 사람이 한다.
+async function runPublicDataPlaceMatch(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) return;
+
+  const [places, rooms] = await Promise.all([fetchAllPlaces(env), fetchAllNursingRooms(env)]);
+  const today = new Date().toISOString().slice(0, 10);
+  const candidates = places.filter(needsPublicDataMatch);
+
+  // 순서대로 PATCH해야 Notion API 요청 실패가 다른 장소 처리에 영향을 안 준다.
+  /* oxlint-disable no-await-in-loop */
+  for (const place of candidates) {
+    const match = findNearestRoom(place, rooms);
+    if (!match) continue;
+    await patchPlaceProperties(env, place.id, buildPublicDataPatchProperties(match, today));
+  }
+  /* oxlint-enable no-await-in-loop */
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -932,6 +966,9 @@ export default {
     if (url.pathname.startsWith("/api/festivals/")) {
       const id = url.pathname.slice("/api/festivals/".length);
       return withEdgeCache(request, ctx, 3600, () => handleFestivalDetail(env, id, ctx));
+    }
+    if (url.pathname === "/api/nursing-rooms") {
+      return withEdgeCache(request, ctx, 86400, () => handleNursingRooms(env));
     }
     if (url.pathname === "/naver-config") {
       return handleNaverConfig(env);
@@ -956,6 +993,14 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    if (event.cron === KORAIL_GEOCODE_CRON) {
+      ctx.waitUntil(runKorailGeocodeRefresh(env));
+      return;
+    }
+    if (event.cron === PUBLIC_DATA_PLACE_MATCH_CRON) {
+      ctx.waitUntil(runPublicDataPlaceMatch(env));
+      return;
+    }
     if (event.cron === FESTIVAL_IMPORT_CRON) {
       ctx.waitUntil(runScheduledFestivalImport(env));
       return;

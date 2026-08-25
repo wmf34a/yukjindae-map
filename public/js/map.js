@@ -77,9 +77,24 @@ function renderNearbyList() {
   });
 }
 
-function openSheet(place) {
+// openSheet(장소)와 openNursingSheet(수유실)가 시트를 여는 절차(히스토리 push 등)를
+// 공유하기 위해 뺀 공통부. 내용만 다르고 여닫는 동작은 동일하기 때문.
+function presentSheet(contentHtml) {
   const sheet = document.getElementById("map-sheet");
   const content = document.getElementById("map-sheet-content");
+  content.innerHTML = contentHtml;
+  bindFavoriteButtons(content);
+  sheet.classList.add("is-open");
+
+  // 시트를 히스토리에 한 단계로 쌓아둬서, 뒤로가기를 눌렀을 때 지도 페이지를
+  // 벗어나 홈으로 가버리지 않고 시트만 닫히도록 한다.
+  if (!sheetHistoryPushed) {
+    history.pushState({ mapSheet: true }, "");
+    sheetHistoryPushed = true;
+  }
+}
+
+function openSheet(place) {
   const thumb = place.image
     ? `<div class="map-sheet__thumb-wrap">
         <img class="map-sheet__img" src="${place.image}" alt="${place.name}" />
@@ -87,7 +102,7 @@ function openSheet(place) {
       </div>`
     : "";
   const query = encodeURIComponent(place.address || place.name);
-  content.innerHTML = `
+  presentSheet(`
     <div class="map-sheet__card">
       ${thumb}
       <div class="map-sheet__name-row">
@@ -104,16 +119,28 @@ function openSheet(place) {
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
       </div>
     </div>
-  `;
-  bindFavoriteButtons(content);
-  sheet.classList.add("is-open");
+  `);
+}
 
-  // 시트를 히스토리에 한 단계로 쌓아둬서, 뒤로가기를 눌렀을 때 지도 페이지를
-  // 벗어나 홈으로 가버리지 않고 시트만 닫히도록 한다.
-  if (!sheetHistoryPushed) {
-    history.pushState({ mapSheet: true }, "");
-    sheetHistoryPushed = true;
-  }
+// 공공데이터(정부기관 API)라 사용자 입력보다는 신뢰도가 높지만, 앱이 직접
+// 관리하는 값이 아닌 외부 데이터라 다른 화면과 동일하게 이스케이프해서 넣는다.
+function openNursingSheet(room) {
+  const query = encodeURIComponent(room.address || room.name);
+  presentSheet(`
+    <div class="map-sheet__card">
+      <div class="map-sheet__name-row">
+        <p class="map-sheet__name">🍼 ${escapeHtml(room.name)}</p>
+      </div>
+      <p class="map-sheet__meta">${escapeHtml(room.source)} 공공데이터 · ${room.fatherAllowed ? "아빠도 이용 가능" : "이용 대상 확인 필요"}</p>
+      ${room.place ? `<p class="map-sheet__row">📍 ${escapeHtml(room.place)}</p>` : ""}
+      ${room.address ? `<p class="map-sheet__row">${escapeHtml(room.address)}</p>` : ""}
+      ${room.tel ? `<p class="map-sheet__row">☎️ ${escapeHtml(room.tel)}</p>` : ""}
+      <div class="map-sheet__actions">
+        <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
+        <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
+      </div>
+    </div>
+  `);
 }
 
 function closeSheet() {
@@ -194,6 +221,68 @@ function renderMarkers(list) {
     naver.maps.Event.addListener(marker, "click", () => openSheet(place));
     markers.push(marker);
   });
+}
+
+const NURSING_ICON = {
+  content: `<div style="width:26px;height:26px;border-radius:50%;background:#2563EB;border:2px solid #fff;box-shadow:0 2px 5px rgba(13,27,62,0.35);display:flex;align-items:center;justify-content:center;font-size:13px;">🍼</div>`,
+  anchor: new naver.maps.Point(13, 13),
+};
+
+let nursingMarkers = [];
+let nursingRooms = [];
+let nursingLoaded = false;
+let nursingVisible = false;
+
+function clearNursingMarkers() {
+  nursingMarkers.forEach((m) => m.setMap(null));
+  nursingMarkers = [];
+}
+
+function renderNursingMarkers() {
+  clearNursingMarkers();
+  nursingRooms.forEach((room) => {
+    const marker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(room.lat, room.lng),
+      map,
+      title: room.name,
+      icon: NURSING_ICON,
+      zIndex: 50,
+    });
+    naver.maps.Event.addListener(marker, "click", () => openNursingSheet(room));
+    nursingMarkers.push(marker);
+  });
+}
+
+// 큐레이션된 장소 목록과 달리 자주 안 바뀌는 공공데이터라, 토글을 처음 켤 때만
+// 불러오고 이후에는 다시 요청하지 않는다.
+async function loadNursingRooms() {
+  if (nursingLoaded) return;
+  try {
+    const res = await fetch("/api/nursing-rooms");
+    const data = await res.json();
+    nursingRooms = data.rooms || [];
+    nursingLoaded = true;
+  } catch (err) {
+    console.error(err);
+    showToast("수유실 정보를 불러오지 못했어요.");
+  }
+}
+
+async function toggleNursingLayer() {
+  const btn = document.getElementById("nursing-layer-btn");
+  nursingVisible = !nursingVisible;
+  btn.classList.toggle("is-active", nursingVisible);
+
+  if (!nursingVisible) {
+    clearNursingMarkers();
+    return;
+  }
+  if (!nursingLoaded) await loadNursingRooms();
+  renderNursingMarkers();
+}
+
+function initNursingLayerButton() {
+  document.getElementById("nursing-layer-btn").addEventListener("click", toggleNursingLayer);
 }
 
 function renderRegionChips() {
@@ -298,6 +387,7 @@ function init() {
 
   renderRegionChips();
   initLocateButton();
+  initNursingLayerButton();
   initSheetDrag();
   loadPlaces();
   locateMe();

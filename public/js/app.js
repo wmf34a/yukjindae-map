@@ -28,7 +28,7 @@ const REGION_MAP_PATHS = {
 };
 
 const REGIONS = Object.keys(REGION_GROUPS);
-const CATEGORIES = ["자연·공원", "실내놀이", "맛집", "카페", "체험·문화", "스포츠", "무료", "영유아 무료입장"];
+const CATEGORIES = ["무료", "영유아 무료입장", "자연·공원", "실내놀이", "맛집", "카페", "체험·문화", "스포츠"];
 // "영유아 무료입장"은 노션 카테고리 태그가 아니라 freeAgePolicy(무료입장연령) 값이
 // 채워진 장소를 가리키는 가상 카테고리 — 입장료가 있는 곳이라도 어린 아이는
 // 무료로 들어갈 수 있는 곳을 따로 찾을 수 있게 한다.
@@ -193,14 +193,25 @@ function matchesFilters(place) {
   return true;
 }
 
+// 완전 무료(카테고리 "무료")가 영유아만 무료보다 우선 표시된다 — 둘 다 해당하면
+// 더 넓은 혜택(완전 무료)을 먼저 알려주는 게 유용하기 때문.
+function freeBadgeText(place) {
+  if (place.categories && place.categories.includes("무료")) return "무료입장";
+  if (place.freeAgePolicy) return "영유아 무료";
+  return "";
+}
+
 function placeCard(place) {
   const thumb = place.image
     ? `<img class="place-grid__thumb" src="${place.image}" alt="${place.name}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
+  const freeBadge = freeBadgeText(place);
+  const badge = freeBadge ? `<span class="place-grid__free-badge">${freeBadge}</span>` : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
+        ${badge}
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
       <div class="place-grid__body">

@@ -231,7 +231,7 @@ const NURSING_ICON = {
 let nursingMarkers = [];
 let nursingRooms = [];
 let nursingLoaded = false;
-let nursingVisible = false;
+let nursingVisible = true;
 
 function clearNursingMarkers() {
   nursingMarkers.forEach((m) => m.setMap(null));
@@ -283,6 +283,14 @@ async function toggleNursingLayer() {
 
 function initNursingLayerButton() {
   document.getElementById("nursing-layer-btn").addEventListener("click", toggleNursingLayer);
+}
+
+// 기본값으로 켜둔다 — 처음 켤 때만 API를 부르고, 이후 토글은 켜고 끄는
+// 역할만 한다(toggleNursingLayer와 동일한 지연 로딩 방식).
+async function showNursingLayerByDefault() {
+  document.getElementById("nursing-layer-btn").classList.add("is-active");
+  await loadNursingRooms();
+  renderNursingMarkers();
 }
 
 function renderRegionChips() {
@@ -391,6 +399,7 @@ function init() {
   initSheetDrag();
   loadPlaces();
   locateMe();
+  showNursingLayerByDefault();
 }
 
 if (window.naver && window.naver.maps) {

@@ -991,16 +991,6 @@ export default {
     if (url.pathname === "/api/reports") {
       return handleReport(request, env, ctx);
     }
-    // TEMP: 사용자 기기가 접속하는 엣지 PoP의 캐시를 지우려면 그 기기가 직접
-    // 요청해야 한다(PoP별로 캐시가 분리돼있음) — 링크 탭 한 번으로 되게 GET으로
-    // 만든 일회성 삭제용. 확인 후 바로 삭제 예정.
-    if (url.pathname === "/api/admin/purge-nursing-cache") {
-      if (url.searchParams.get("token") !== "008369bb-d746-452b-8f40-78a91c46dd45") {
-        return new Response("Forbidden", { status: 403 });
-      }
-      const deleted = await caches.default.delete(new Request("https://yukjindae-map.wmf34a.workers.dev/api/nursing-rooms"));
-      return new Response(`purged: ${deleted}`, { status: 200 });
-    }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));
     }

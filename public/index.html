@@ -8,12 +8,16 @@
 <link rel="manifest" href="/manifest.json" />
 <meta name="theme-color" content="#1A2F6B" />
 <link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
 <link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
 </head>
 <body>
-<div class="splash" id="splash">
-  <img class="splash__bg" src="assets/splash/splash-bg.jpg" alt="육진대" />
+<!-- 스플래시를 덮는 핵심 스타일(전체화면 덮기)은 외부 폰트/CSS 로딩 속도와
+     무관하게 항상 즉시 적용되도록 인라인으로도 박아둔다 — 느린 네트워크에서
+     외부 CSS가 늦게 붙으면 그 사이 아래 헤더(작은 로고+검정 텍스트)가 잠깐
+     비쳐 보이던 문제가 있었다. css/style.css의 .splash 규칙과 값을 맞춰둔다. -->
+<div class="splash" id="splash" style="position:fixed;inset:0;z-index:2000;background:#F5F6FA;">
+  <img class="splash__bg" src="assets/splash/splash-bg.jpg" alt="육진대" style="width:100%;height:100%;object-fit:cover;display:block;" />
 </div>
 <script>
   (function () {

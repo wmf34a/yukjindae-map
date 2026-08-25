@@ -57,6 +57,7 @@ async function loadCourses() {
       btn.addEventListener("click", () => {
         const stopsEl = btn.nextElementSibling;
         stopsEl.hidden = !stopsEl.hidden;
+        btn.closest(".course-card").classList.toggle("is-open", !stopsEl.hidden);
       });
     });
 

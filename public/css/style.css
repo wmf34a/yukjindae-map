@@ -841,6 +841,11 @@ body {
   -webkit-box-orient: vertical;
 }
 
+.course-card.is-open .course-card__desc {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
 .course-card__count {
   font-size: 12px;
   font-weight: 600;

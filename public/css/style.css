@@ -495,11 +495,9 @@ body {
 }
 
 .region-map__path {
-  stroke: var(--color-white);
-  stroke-width: 0.5;
   cursor: pointer;
   opacity: 0.88;
-  transition: opacity 0.15s ease, stroke-width 0.15s ease;
+  transition: opacity 0.15s ease, filter 0.15s ease;
 }
 
 .region-map__path:hover {
@@ -508,8 +506,6 @@ body {
 
 .region-map__path.is-active {
   opacity: 1;
-  stroke: #5B6B95;
-  stroke-width: 1.4;
 }
 
 .region-map.has-selection .region-map__path:not(.is-active) {

@@ -38,10 +38,22 @@ const VIRTUAL_CATEGORY_FREE_AGE = "영유아 무료입장";
 // 찍는 위치. 서울강북/서울강남은 실제 중심점이 거의 붙어있어(약 1.6 단위 차이) 핀이
 // 겹치므로, 핀 표시 위치만 남/북으로 좀 더 벌려서 손으로 조정했다(면 색칠 자체는
 // 실제 경계를 그대로 씀 — 핀 위치만 보정).
-function regionColor(region, alpha = 1) {
+function regionColor(region, alpha = 1, lightness = 60) {
   const i = REGIONS.indexOf(region);
   const hue = (i * 36) % 360;
-  return `hsl(${hue} 55% 60% / ${alpha})`;
+  return `hsl(${hue} 55% ${lightness}% / ${alpha})`;
+}
+
+// 지역 지도는 시군구 단위 폴리곤을 이어붙인 데이터라, 흰색 테두리를 그으면
+// 같은 지역 내부의 폴리곤 경계마다 잔선이 잔뜩 생겨 지저분해 보였다.
+// 채우기와 같은 색으로 두껍게 테두리를 그어 내부 잔선을 지우고,
+// drop-shadow로 지역 바깥쪽 경계(다른 지역과 맞닿는 부분)만 은은하게 구분한다.
+function regionPathStyle(region, active) {
+  const color = regionColor(region);
+  const shadow = active
+    ? "drop-shadow(0 0 1px rgba(45,55,90,0.9))"
+    : "drop-shadow(0 0 0.35px rgba(40,40,60,0.55))";
+  return `fill:${color};stroke:${color};stroke-width:1.6;stroke-linejoin:round;filter:${shadow}`;
 }
 
 const state = {
@@ -99,8 +111,8 @@ function renderRegionMap() {
   const mapEl = document.getElementById("region-map");
   mapEl.classList.toggle("has-selection", Boolean(state.region));
   const paths = REGIONS.map((region) => {
-    const active = state.region === region ? " is-active" : "";
-    return `<path class="region-map__path${active}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" style="fill:${regionColor(region)}"><title>${region}</title></path>`;
+    const active = state.region === region;
+    return `<path class="region-map__path${active ? " is-active" : ""}" data-region="${region}" d="${REGION_MAP_PATHS[region]}" style="${regionPathStyle(region, active)}"><title>${region}</title></path>`;
   }).join("");
   // 실제 컨텐츠(지역 폴리곤)가 원래 좌표계(0 0 100 130)의 왼쪽 절반/아래쪽에
   // 치우쳐 있어서 여백이 컸다 — 실제 쓰이는 영역(-3 15 93 104)으로 뷰박스를

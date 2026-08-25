@@ -18,6 +18,12 @@ function verifiedBadgeHtml(place) {
   return `<span class="place-detail__status-badge place-detail__status-badge--${tone}">${escapeHtml(label)}</span>`;
 }
 
+// 응애여지도처럼 이모지+텍스트를 그냥 나열하던 것에서, 아이콘을 원형 배지로
+// 분리해 한눈에 훑어보기 쉽게 바꾼다.
+function amenityChipHtml(icon, label) {
+  return `<span class="place-detail__amenity"><span class="place-detail__amenity-icon">${icon}</span>${escapeHtml(label)}</span>`;
+}
+
 function sourceLinkHtml(place) {
   const href = safeHref(place.sourceUrl);
   if (!href) return "";
@@ -89,14 +95,13 @@ function render(place) {
     .join("");
 
   const amenities = [];
-  if (place.strollerAccess) amenities.push(`🍼 유모차 동선 ${escapeHtml(place.strollerAccess)}`);
-  if (place.diaperChange) amenities.push("🍼 기저귀교환대 O");
-  if (place.nursingRoom) amenities.push("🍼 수유실 O");
-  if (place.kidsChair) amenities.push("🪑 유아의자 O");
+  if (place.diaperChange) amenities.push(amenityChipHtml("🚼", "기저귀교환대"));
+  if (place.nursingRoom) amenities.push(amenityChipHtml("🤱", "수유실"));
+  if (place.kidsChair) amenities.push(amenityChipHtml("🪑", "유아의자"));
   const amenitiesHtml = amenities.length
     ? `<div class="place-detail__section">
         <p class="place-detail__label">유아 편의시설 ${verifiedBadgeHtml(place)}</p>
-        <div class="place-detail__amenities">${amenities.map((a) => `<span class="place-detail__amenity">${a}</span>`).join("")}</div>
+        <div class="place-detail__amenities">${amenities.join("")}</div>
         ${sourceLinkHtml(place)}
       </div>`
     : "";

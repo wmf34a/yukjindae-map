@@ -60,7 +60,6 @@ export function toPlace(page) {
     reason: text(p["추천이유"]),
     parkingAvailable: selectName(p["주차가능여부"]),
     parkingDetail: text(p["주차상세"]),
-    strollerAccess: selectName(p["유모차동선"]),
     diaperChange: p["기저귀교환대"] && p["기저귀교환대"].checkbox,
     nursingRoom: p["수유실"] && p["수유실"].checkbox,
     kidsChair: p["유아의자"] && p["유아의자"].checkbox,

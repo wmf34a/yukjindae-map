@@ -49,8 +49,10 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // 항상 최신이어야 하는 API/설정 응답은 캐시하지 않고 네트워크로 그대로 흘려보냄
-  if (url.pathname === "/api/places" || url.pathname === "/api/banners" || url.pathname === "/naver-config") {
+  // 항상 최신이어야 하는 API/설정 응답은 캐시하지 않고 네트워크로 그대로 흘려보냄.
+  // /api/courses만 빠뜨렸다가 노션에서 공개여부를 켜도 옛날 빈 응답이 계속 보이는
+  // 문제가 있었음 — 개별 경로를 나열하는 대신 /api/ 전체를 예외로 둔다.
+  if (url.pathname.startsWith("/api/") || url.pathname === "/naver-config") {
     return;
   }
   if (event.request.method !== "GET") return;

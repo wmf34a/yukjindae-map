@@ -253,11 +253,34 @@ function showMyLocation(latitude, longitude, { recenter = true, zoom = 13 } = {}
   renderNearbyList();
 }
 
+let toastTimer = null;
+
+function showToast(message) {
+  const toast = document.getElementById("map-toast");
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("is-visible"), 3000);
+}
+
+// getCurrentPosition 실패 시(권한 거부/타임아웃 등) 예전에는 아무 반응이 없어서
+// "내 위치" 관련 기능이 통째로 사라진 것처럼 보였다 — 이유를 토스트로 알려준다.
+function geolocationErrorMessage(err) {
+  if (err.code === err.PERMISSION_DENIED) return "위치 권한이 꺼져있어요. 브라우저 설정에서 허용해주세요.";
+  if (err.code === err.POSITION_UNAVAILABLE) return "현재 위치를 확인할 수 없어요.";
+  if (err.code === err.TIMEOUT) return "위치 확인이 너무 오래 걸려요. 다시 시도해주세요.";
+  return "위치를 가져오지 못했어요.";
+}
+
 function locateMe(options) {
-  if (!navigator.geolocation) return;
+  if (!navigator.geolocation) {
+    showToast("이 브라우저는 위치 확인을 지원하지 않아요.");
+    return;
+  }
   navigator.geolocation.getCurrentPosition(
     (pos) => showMyLocation(pos.coords.latitude, pos.coords.longitude, options),
-    () => {},
+    (err) => showToast(geolocationErrorMessage(err)),
   );
 }
 

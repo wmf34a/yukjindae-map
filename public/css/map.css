@@ -6,6 +6,36 @@
   overflow: hidden;
 }
 
+/* 위치 권한 거부/실패처럼 조용히 실패하던 상황을 알려주는 토스트.
+   #map 안쪽에 position:relative 컨테이너가 따로 없어서 뷰포트 기준
+   fixed로 두고, 내 위치 버튼(우측 하단) 바로 위에 겹치지 않게 띄운다. */
+.map-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar-height) + 76px);
+  transform: translateX(-50%);
+  z-index: 30;
+  background: rgba(58, 67, 99, 0.92);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s;
+  white-space: nowrap;
+  pointer-events: none;
+  max-width: calc(100% - 32px);
+  text-align: center;
+}
+
+.map-toast.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
 .map-toolbar {
   padding: 10px 0;
   border-bottom: 1px solid var(--color-border);

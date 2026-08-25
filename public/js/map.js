@@ -381,14 +381,11 @@ function locateMe(options) {
   );
 }
 
-function initLocateButton() {
-  document.getElementById("locate-btn").addEventListener("click", () => locateMe());
-}
-
 let trackingWatchId = null;
 
-// 한번만 위치를 잡아오는 locate-btn과 달리, 켜두면 이동할 때마다 계속
-// 내 위치 마커+지도 중심을 갱신한다(네이버지도의 실시간 추적 모드 참고).
+// track-btn 하나로 "현재 위치로 이동"과 "실시간 추적"을 겸한다 — 켜면 즉시
+// 한 번 이동하고, 이후 이동할 때마다 계속 내 위치 마커+지도 중심을 갱신한다
+// (네이버지도의 실시간 추적 모드 참고).
 function stopTracking() {
   if (trackingWatchId === null) return;
   navigator.geolocation.clearWatch(trackingWatchId);
@@ -429,7 +426,6 @@ function init() {
   naver.maps.Event.addListener(map, "click", closeSheet);
 
   renderRegionChips();
-  initLocateButton();
   initTrackButton();
   initNursingLayerButton();
   initSheetDrag();

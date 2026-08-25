@@ -991,6 +991,15 @@ export default {
     if (url.pathname === "/api/reports") {
       return handleReport(request, env, ctx);
     }
+    // TEMP: 캐시 헤더 수정(s-maxage 분리) 반영을 위해 기존 캐시 항목 삭제용.
+    // 확인 후 바로 삭제 예정.
+    if (url.pathname === "/api/admin/purge-nursing-cache" && request.method === "POST") {
+      if (request.headers.get("x-admin-token") !== "a4bb20e1-46fe-471b-b33b-6fc04fa2ee10") {
+        return new Response("Forbidden", { status: 403 });
+      }
+      const deleted = await caches.default.delete(new Request("https://yukjindae-map.wmf34a.workers.dev/api/nursing-rooms"));
+      return new Response(JSON.stringify({ deleted }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));
     }

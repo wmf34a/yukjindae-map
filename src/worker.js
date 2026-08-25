@@ -19,7 +19,11 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
   const response = await handler();
   if (response.status === 200) {
     const toCache = new Response(response.body, response);
-    toCache.headers.set("cache-control", `public, max-age=${ttlSeconds}`);
+    // max-age는 브라우저 자체 캐시용으로 짧게(1분), s-maxage는 Cloudflare 엣지용으로
+    // 원래 ttlSeconds를 그대로 준다 — 이 둘을 분리 안 하면 모바일 브라우저가 엣지
+    // 캐시(1시간)와 똑같이 새로고침해도 재요청을 안 해서, 서버를 고쳐도 한동안 옛날
+    // 응답이 계속 보이는 문제가 있었다(실제로 겪음).
+    toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${ttlSeconds}`);
     const forCache = toCache.clone();
     if (ctx) ctx.waitUntil(cache.put(cacheKey, forCache));
     else await cache.put(cacheKey, forCache);

@@ -385,6 +385,41 @@ function initLocateButton() {
   document.getElementById("locate-btn").addEventListener("click", () => locateMe());
 }
 
+let trackingWatchId = null;
+
+// 한번만 위치를 잡아오는 locate-btn과 달리, 켜두면 이동할 때마다 계속
+// 내 위치 마커+지도 중심을 갱신한다(네이버지도의 실시간 추적 모드 참고).
+function stopTracking() {
+  if (trackingWatchId === null) return;
+  navigator.geolocation.clearWatch(trackingWatchId);
+  trackingWatchId = null;
+  document.getElementById("track-btn").classList.remove("is-active");
+}
+
+function startTracking() {
+  if (!navigator.geolocation) {
+    showToast("이 브라우저는 위치 확인을 지원하지 않아요.");
+    return;
+  }
+  trackingWatchId = navigator.geolocation.watchPosition(
+    (pos) => showMyLocation(pos.coords.latitude, pos.coords.longitude, { recenter: true, zoom: map.getZoom() }),
+    (err) => {
+      showToast(geolocationErrorMessage(err));
+      stopTracking();
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+  );
+  document.getElementById("track-btn").classList.add("is-active");
+  showToast("실시간 위치 추적을 켰어요.");
+}
+
+function initTrackButton() {
+  document.getElementById("track-btn").addEventListener("click", () => {
+    if (trackingWatchId === null) startTracking();
+    else stopTracking();
+  });
+}
+
 function init() {
   map = new naver.maps.Map("map", {
     center: new naver.maps.LatLng(DEFAULT_VIEW.lat, DEFAULT_VIEW.lng),
@@ -395,6 +430,7 @@ function init() {
 
   renderRegionChips();
   initLocateButton();
+  initTrackButton();
   initNursingLayerButton();
   initSheetDrag();
   loadPlaces();

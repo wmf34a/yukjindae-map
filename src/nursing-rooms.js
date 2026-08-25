@@ -1,15 +1,24 @@
 // 공공데이터포털의 지역별 수유실 API를 모아 지도 레이어용으로 정규화한다.
 // - 부산광역시: 좌표를 직접 주는 API라 요청마다 바로 불러온다.
 // - 한국철도공사/서울교통공사: 역명만 주고 좌표가 없어서, 주간 크론이 미리 네이버
-//   지오코딩으로 좌표를 붙여 KV에 캐싱해두고 /api/nursing-rooms는 그 결과만 읽는다
-//   (요청마다 역 100여 개를 라이브로 지오코딩하면 느리고 Workers 서브리퀘스트
-//   한도에 걸릴 수 있음).
+//   지오코딩으로 좌표를 붙여 KV에 캐싱해두고 /api/nursing-rooms는 그 결과만 읽는다.
+//   역 좌표는 한 번 구하면 거의 안 바뀌므로 station-coords 캐시에 누적 저장하고,
+//   매주 새로 필요한 역만(최대 MAX_NEW_GEOCODES_PER_RUN개) 지오코딩한다 — 한 번의
+//   실행에서 200개 넘게 순차 fetch하면 Workers 서브리퀘스트 한도에 걸려 뒷부분이
+//   조용히 비어버리는 것을 실측으로 확인했다.
 const BUSAN_BASE = "https://apis.data.go.kr/6260000/BusanNursingroomInfoService/getNursingroomInfo";
 const KORAIL_BASE = "https://apis.data.go.kr/B551457/convenience";
 const SEOUL_METRO_BASE = "https://apis.data.go.kr/B553766/facility";
 const KORAIL_KV_KEY = "nursing-rooms:korail";
 const SEOUL_METRO_KV_KEY = "nursing-rooms:seoul-metro";
+const STATION_COORDS_KV_KEY = "nursing-rooms:station-coords";
 const STATION_KV_TTL_SECONDS = 60 * 60 * 24 * 14; // 크론은 매주 도니까 2주치 여유
+const STATION_COORDS_KV_TTL_SECONDS = 60 * 60 * 24 * 90; // 역 좌표는 거의 안 바뀌어서 길게
+// 실측 결과 한 번의 Worker 실행(크론 1틱)에서 순차 fetch를 200개 넘게 하면
+// "Too many subrequests by single Worker invocation" 오류로 조용히 끊긴다 —
+// 그래서 이미 좌표를 구한 역은 캐시에서 재사용하고, 새로 필요한 역만 이
+// 한도 안에서 매주 조금씩 채운다(첫 백필은 몇 주에 걸쳐 완성됨).
+const MAX_NEW_GEOCODES_PER_RUN = 40;
 
 // 장소 자동 보강 시 "정보출처"에 넣을 원본 데이터셋 링크 — 사람이 검토할 때
 // 근거를 바로 확인할 수 있게 한다.
@@ -168,62 +177,73 @@ export async function fetchSeoulMetroNursingRooms(env) {
   }
 }
 
-// 정류장명이 겹치는 환승역(예: 종로3가 1/3/5호선)까지 매번 다시 지오코딩할
-// 이유가 없어 역명 기준으로 한 번만 좌표를 구하고 나머지 항목에 재사용한다.
-async function geocodeUniqueStations(env, stationNames) {
-  const coordByName = new Map();
-  // 네이버 지역검색 API는 초당 호출 제한이 있어 순차 호출이 필요하다.
-  /* oxlint-disable no-await-in-loop */
-  for (const name of stationNames) {
-    const coord = await geocodeStation(env, name);
-    if (coord) coordByName.set(name, coord);
+async function readStationCoords(env) {
+  if (!env.RATE_LIMIT) return {};
+  const raw = await env.RATE_LIMIT.get(STATION_COORDS_KV_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
   }
-  /* oxlint-enable no-await-in-loop */
-  return coordByName;
 }
 
-// 주간 크론에서만 호출된다 — 코레일/서울교통공사 역명 100여 개를 순차
-// 지오코딩해 KV에 통째로 저장한다.
+// 주간 크론에서만 호출된다. 정류장명이 겹치는 환승역(예: 종로3가 1/3/5호선)도
+// 역명 기준으로 좌표 캐시를 공유하고, 이미 캐시에 있는 역은 다시 지오코딩하지
+// 않는다 — 새로 필요한 역만(최대 MAX_NEW_GEOCODES_PER_RUN개) 이번 실행에서
+// 채운다.
 export async function runStationNursingGeocodeRefresh(env) {
   if (!env.RATE_LIMIT) return;
 
-  const [korailStations, seoulMetroItems] = await Promise.all([
+  const [korailStations, seoulMetroItems, coords] = await Promise.all([
     fetchKorailNursingStations(env),
     fetchSeoulMetroNursingRooms(env),
+    readStationCoords(env),
   ]);
 
-  const korailCoords = await geocodeUniqueStations(env, korailStations.map((s) => s.name));
+  const neededNames = new Set([...korailStations.map((s) => s.name), ...seoulMetroItems.map((i) => i.stnNm)]);
+  const newNames = [...neededNames].filter((name) => !coords[name]).slice(0, MAX_NEW_GEOCODES_PER_RUN);
+
+  // 네이버 지역검색 API는 초당 호출 제한이 있어 순차 호출이 필요하다.
+  /* oxlint-disable no-await-in-loop */
+  for (const name of newNames) {
+    const coord = await geocodeStation(env, name);
+    if (coord) coords[name] = coord;
+  }
+  /* oxlint-enable no-await-in-loop */
+
   const korailRooms = korailStations
-    .filter((s) => korailCoords.has(s.name))
+    .filter((s) => coords[s.name])
     .map((s) => ({
       name: `${s.name}역`,
       address: "",
       place: "",
       tel: "",
-      lat: korailCoords.get(s.name).lat,
-      lng: korailCoords.get(s.name).lng,
+      lat: coords[s.name].lat,
+      lng: coords[s.name].lng,
       fatherAllowed: false,
       source: "한국철도공사",
       sourceUrl: NURSING_SOURCE_URLS["한국철도공사"],
     }));
 
-  const seoulMetroStationNames = [...new Set(seoulMetroItems.map((i) => i.stnNm))];
-  const seoulMetroCoords = await geocodeUniqueStations(env, seoulMetroStationNames);
   const seoulMetroRooms = seoulMetroItems
-    .filter((i) => seoulMetroCoords.has(i.stnNm))
+    .filter((i) => coords[i.stnNm])
     .map((i) => ({
       name: `${i.stnNm}역 (${i.lineNm})`,
       address: "",
       place: [i.stnFlr, i.exitNo ? `${i.exitNo}번 출구` : "", i.dtlPstn].filter(Boolean).join(" · "),
       tel: i.tel,
-      lat: seoulMetroCoords.get(i.stnNm).lat,
-      lng: seoulMetroCoords.get(i.stnNm).lng,
+      lat: coords[i.stnNm].lat,
+      lng: coords[i.stnNm].lng,
       fatherAllowed: false,
       source: "서울교통공사",
       sourceUrl: NURSING_SOURCE_URLS["서울교통공사"],
     }));
 
   await Promise.all([
+    env.RATE_LIMIT.put(STATION_COORDS_KV_KEY, JSON.stringify(coords), {
+      expirationTtl: STATION_COORDS_KV_TTL_SECONDS,
+    }),
     env.RATE_LIMIT.put(KORAIL_KV_KEY, JSON.stringify(korailRooms), { expirationTtl: STATION_KV_TTL_SECONDS }),
     env.RATE_LIMIT.put(SEOUL_METRO_KV_KEY, JSON.stringify(seoulMetroRooms), {
       expirationTtl: STATION_KV_TTL_SECONDS,

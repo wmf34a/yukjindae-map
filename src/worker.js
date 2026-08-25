@@ -985,18 +985,6 @@ export default {
     if (url.pathname === "/api/reports") {
       return handleReport(request, env, ctx);
     }
-    // TEMP: 2026-08-25에 새로 배포된 역명 지오코딩/장소 매칭 크론을 다음 월요일
-    // 크론까지 기다리지 않고 지금 한 번 수동 실행하려고 잠깐 추가한 관리자
-    // 트리거. 실행 확인 후 바로 삭제 예정 — 이 커밋을 지나서 남아있으면 안 됨.
-    if (url.pathname === "/api/admin/run-nursing-cron" && request.method === "POST") {
-      if (request.headers.get("x-admin-token") !== "a4bb20e1-46fe-471b-b33b-6fc04fa2ee10") {
-        return new Response("Forbidden", { status: 403 });
-      }
-      ctx.waitUntil(
-        runStationNursingGeocodeRefresh(env).then(() => runPublicDataPlaceMatch(env))
-      );
-      return new Response("started", { status: 202 });
-    }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));
     }

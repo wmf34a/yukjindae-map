@@ -28,7 +28,11 @@ const REGION_MAP_PATHS = {
 };
 
 const REGIONS = Object.keys(REGION_GROUPS);
-const CATEGORIES = ["자연·공원", "실내놀이", "맛집", "카페", "체험·문화", "스포츠", "무료"];
+const CATEGORIES = ["자연·공원", "실내놀이", "맛집", "카페", "체험·문화", "스포츠", "무료", "영유아 무료입장"];
+// "영유아 무료입장"은 노션 카테고리 태그가 아니라 freeAgePolicy(무료입장연령) 값이
+// 채워진 장소를 가리키는 가상 카테고리 — 입장료가 있는 곳이라도 어린 아이는
+// 무료로 들어갈 수 있는 곳을 따로 찾을 수 있게 한다.
+const VIRTUAL_CATEGORY_FREE_AGE = "영유아 무료입장";
 
 // 지역별 지도상 중심 좌표(REGION_MAP_PATHS와 같은 0 0 100 130 좌표계) — 번호 핀을
 // 찍는 위치. 서울강북/서울강남은 실제 중심점이 거의 붙어있어(약 1.6 단위 차이) 핀이
@@ -174,7 +178,13 @@ function renderCategoryFilter() {
 
 function matchesFilters(place) {
   if (state.region && !REGION_GROUPS[state.region].includes(place.region)) return false;
-  if (state.category && !place.categories.includes(state.category)) return false;
+  if (state.category === VIRTUAL_CATEGORY_FREE_AGE && !place.freeAgePolicy) return false;
+  if (
+    state.category &&
+    state.category !== VIRTUAL_CATEGORY_FREE_AGE &&
+    !place.categories.includes(state.category)
+  )
+    return false;
   if (state.query) {
     const needle = state.query.toLowerCase();
     const haystack = `${place.name} ${place.address} ${place.region}`.toLowerCase();

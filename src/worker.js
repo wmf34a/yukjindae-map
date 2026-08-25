@@ -987,16 +987,6 @@ export default {
     if (url.pathname === "/api/reports") {
       return handleReport(request, env, ctx);
     }
-    // TEMP: /api/nursing-rooms 엣지 캐시가 코레일/서울교통공사 데이터 채우기
-    // 전 시점(부산만 있던 상태)으로 24시간 캐싱돼있어 지금 지워야 함. 확인 후
-    // 바로 삭제 예정 — 이 커밋을 지나서 남아있으면 안 됨.
-    if (url.pathname === "/api/admin/purge-nursing-cache" && request.method === "POST") {
-      if (request.headers.get("x-admin-token") !== "a4bb20e1-46fe-471b-b33b-6fc04fa2ee10") {
-        return new Response("Forbidden", { status: 403 });
-      }
-      const deleted = await caches.default.delete(new Request("https://yukjindae-map.wmf34a.workers.dev/api/nursing-rooms"));
-      return new Response(JSON.stringify({ deleted }), { status: 200, headers: { "content-type": "application/json" } });
-    }
     if (url.pathname.startsWith("/images/")) {
       return handleImage(env, url.pathname.slice("/images/".length));
     }

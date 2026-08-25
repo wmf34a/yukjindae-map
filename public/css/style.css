@@ -865,6 +865,14 @@ body {
   font-weight: 600;
 }
 
+.course-card__stops .course-directions-btn {
+  width: auto;
+  margin: 4px 16px 14px;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
 .course-card__stop-num {
   width: 20px;
   height: 20px;

@@ -30,6 +30,24 @@
     </div>
   </section>
 
+  <div class="course-modal-overlay" id="course-modal-overlay">
+    <div class="course-modal" role="dialog" aria-modal="true" aria-label="코스 경로">
+      <div class="course-modal__header">
+        <p class="course-modal__title" id="course-modal-title">코스 경로</p>
+        <button type="button" class="course-modal__close" aria-label="닫기">✕</button>
+      </div>
+      <div class="course-modal__body" id="course-map-body">
+        <p class="course-modal__loading">코스를 준비하는 중...</p>
+      </div>
+      <div class="course-modal__footer">
+        <div class="course-order" id="course-order"></div>
+        <p class="course-meta" id="course-meta"></p>
+        <div class="course-segments" id="course-segments"></div>
+        <a class="course-directions-btn" id="course-directions-btn" target="_blank" rel="noopener" hidden>네이버 지도로 길찾기</a>
+      </div>
+    </div>
+  </div>
+
   <nav class="tabbar">
     <a class="tabbar__item" href="index.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5"/></svg></span>홈</a>
     <a class="tabbar__item" href="map.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.6 7-11.5A7 7 0 0 0 5 9.5C5 14.4 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>주변</a>
@@ -39,6 +57,11 @@
 
 </div>
 
+<script src="/naver-config"></script>
+<script>
+  document.write('<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=' + window.__ENV__.NAVER_MAP_CLIENT_ID + '"><\/script>');
+</script>
+<script src="js/course.js"></script>
 <script src="js/courses.js"></script>
 <script src="js/pwa.js"></script>
 </body>

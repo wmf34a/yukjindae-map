@@ -1,4 +1,4 @@
-const CACHE_NAME = "yukjindae-map-v49";
+const CACHE_NAME = "yukjindae-map-v50";
 const PRECACHE_URLS = [
   "/",
   "/index.html",
@@ -24,6 +24,7 @@ const PRECACHE_URLS = [
   "/js/festival.js",
   "/js/festival-detail.js",
   "/js/courses.js",
+  "/js/course.js",
   "/assets/logo/character-logo.svg",
   "/assets/logo/main-logo.svg",
   "/assets/splash/splash-bg.jpg",

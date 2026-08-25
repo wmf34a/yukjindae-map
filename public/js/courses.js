@@ -17,6 +17,11 @@ function courseCardHtml(course, places) {
     )
     .join("");
 
+  const routeBtn =
+    stops.length >= 2
+      ? `<button type="button" class="course-directions-btn" data-course-route="${course.id}">거리·시간 보기</button>`
+      : "";
+
   return `
     <div class="course-card">
       <button type="button" class="course-card__header" data-course-toggle>
@@ -27,7 +32,7 @@ function courseCardHtml(course, places) {
           <p class="course-card__count">${stops.length}곳</p>
         </div>
       </button>
-      <div class="course-card__stops" hidden>${stopsHtml}</div>
+      <div class="course-card__stops" hidden>${stopsHtml}${routeBtn}</div>
     </div>
   `;
 }
@@ -52,6 +57,14 @@ async function loadCourses() {
       btn.addEventListener("click", () => {
         const stopsEl = btn.nextElementSibling;
         stopsEl.hidden = !stopsEl.hidden;
+      });
+    });
+
+    list.querySelectorAll("[data-course-route]").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const course = courses.find((c) => c.id === btn.dataset.courseRoute);
+        if (course) window.openThemeCourseModal(course, places);
       });
     });
   } catch {

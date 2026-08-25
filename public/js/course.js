@@ -458,11 +458,16 @@ window.addEventListener("popstate", () => {
   destroyCourseMap();
 });
 
-async function openCourseModal(place) {
+// place.html의 "코스보기"(장소+근처맛집+근처카페 자동 추천)와 테마 코스 모음의
+// "경로 보기"(이미 좌표를 아는 정류장 목록)가 정류장을 구하는 방식만 다르고
+// 그 이후(거리 계산/지도 렌더링/길찾기 버튼)는 완전히 같아서 공통 함수로 뺐다.
+async function runCourseModal(title, stopsPromise) {
   if (!window.naver || !window.naver.maps) return;
 
   const overlay = document.getElementById("course-modal-overlay");
   const body = document.getElementById("course-map-body");
+  const titleEl = document.getElementById("course-modal-title");
+  if (titleEl) titleEl.textContent = title;
   overlay.classList.add("is-open");
   history.pushState({ courseModal: true }, "");
   courseHistoryPushed = true;
@@ -473,7 +478,7 @@ async function openCourseModal(place) {
   document.getElementById("course-segments").innerHTML = "";
   document.getElementById("course-directions-btn").hidden = true;
 
-  const stops = await resolveCourseStops(place);
+  const stops = await stopsPromise;
 
   if (!overlay.classList.contains("is-open")) return;
 
@@ -491,6 +496,25 @@ async function openCourseModal(place) {
   renderCourseFooter(stops, segments);
 }
 
+async function openCourseModal(place) {
+  await runCourseModal("추천 코스", resolveCourseStops(place));
+}
+
+const THEME_COURSE_PIN_COLORS = ["#5B6B95", "#E08E45", "#4E9F6E", "#B5548E", "#3C4972"];
+
+// 테마 코스는 정류장이 전부 우리 장소 DB에 연결돼 있어 좌표를 이미 알고 있으므로,
+// resolveCourseStops처럼 지오코딩할 필요 없이 바로 stops를 만들 수 있다.
+function openThemeCourseModal(course, places) {
+  const stops = course.placeIds
+    .map((id, i) => {
+      const place = places.find((p) => p.id === id);
+      if (!place || typeof place.lat !== "number" || typeof place.lng !== "number") return null;
+      return { name: place.name, lat: place.lat, lng: place.lng, color: THEME_COURSE_PIN_COLORS[i % THEME_COURSE_PIN_COLORS.length] };
+    })
+    .filter(Boolean);
+  runCourseModal(course.name, Promise.resolve(stops));
+}
+
 function initCourseModal() {
   const overlay = document.getElementById("course-modal-overlay");
   overlay.querySelector(".course-modal__close").addEventListener("click", closeCourseModal);
@@ -502,3 +526,4 @@ function initCourseModal() {
 document.addEventListener("DOMContentLoaded", initCourseModal);
 
 window.openCourseModal = openCourseModal;
+window.openThemeCourseModal = openThemeCourseModal;

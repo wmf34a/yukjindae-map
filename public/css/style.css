@@ -374,7 +374,6 @@ body {
 }
 
 .banner__tagline {
-  font-family: "Gowun Batang", "Noto Serif KR", serif;
   font-size: 14px;
   font-weight: 500;
   opacity: 0.92;
@@ -408,7 +407,6 @@ body {
 
 .banner__caption-title {
   margin: 0 0 2px;
-  font-family: "Gowun Batang", "Noto Serif KR", serif;
   font-size: 16px;
   font-weight: 700;
   color: var(--color-white);
@@ -476,9 +474,8 @@ body {
   margin: 0 0 14px;
 }
 
-/* "추천장소" 섹션만 다이어리 느낌의 세리프 제목 — 지역별 Top 10은 그대로 둔다 */
+/* "추천장소" 섹션만 살짝 큰 제목 — 지역별 Top 10은 그대로 둔다 */
 .section__title--diary {
-  font-family: "Gowun Batang", "Noto Serif KR", serif;
   font-size: 18px;
 }
 
@@ -752,7 +749,6 @@ body {
 }
 
 .place-grid__name {
-  font-family: "Gowun Batang", "Noto Serif KR", serif;
   font-size: 14.5px;
   font-weight: 700;
   overflow: hidden;

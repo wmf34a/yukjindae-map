@@ -191,7 +191,69 @@ function initSheetDrag() {
   }, { passive: true });
 }
 
+// 전국을 한 화면에 놓고 보면 핀이 서로 겹쳐 덩어리로 뭉개져서, 어디에 몇 곳이
+// 있는지 전혀 안 보였다(수유실 레이어를 켜면 특히 심함). 네이버 지도 공식
+// MarkerClustering으로 묶어서, 축소하면 숫자 원으로 합치고 확대하면 개별 핀으로
+// 풀리게 한다. 라이브러리는 CSP상 외부 CDN 스크립트를 막아둬서 js/vendor에
+// 직접 넣어 'self'로 로드한다.
+//
+// 클러스터 아이콘: 개수 구간별로 크기/색을 다르게 준다. 장소(남색)와 수유실
+// (파랑)은 성격이 달라 각각 별도 클러스터러로 운영한다 — 섞어서 묶으면
+// "이 동네에 5곳"이 장소인지 수유실인지 알 수 없어진다.
+function clusterIcon(size, background, ring) {
+  return {
+    content:
+      `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${background};` +
+      `border:3px solid ${ring};box-shadow:0 3px 10px rgba(13,27,62,0.35);color:#fff;` +
+      `font-size:${size >= 52 ? 15 : 13}px;font-weight:700;line-height:${size - 6}px;` +
+      `text-align:center;font-family:inherit;"></div>`,
+    size: new naver.maps.Size(size, size),
+    anchor: new naver.maps.Point(size / 2, size / 2),
+  };
+}
+
+// 클러스터 원 안에 실제 개수를 써넣는다(라이브러리가 내용은 안 채워줌).
+function clusterCountRenderer(clusterMarker, count) {
+  const el = clusterMarker.getElement().querySelector("div");
+  if (el) el.textContent = String(count);
+}
+
+function createClusterer(markerList, palette) {
+  if (typeof MarkerClustering === "undefined") return null;
+  return new MarkerClustering({
+    map,
+    markers: markerList,
+    minClusterSize: 2,
+    // 이 줌 이상으로 확대하면 클러스터를 풀고 개별 핀을 보여준다.
+    maxZoom: 12,
+    gridSize: 110,
+    averageCenter: true,
+    disableClickZoom: false,
+    indexGenerator: [5, 20, 60],
+    icons: palette,
+    stylingFunction: clusterCountRenderer,
+  });
+}
+
+const PLACE_CLUSTER_ICONS = [
+  clusterIcon(38, "linear-gradient(135deg,#5B6B95,#3C4972)", "#fff"),
+  clusterIcon(46, "linear-gradient(135deg,#48588A,#2E3A61)", "#fff"),
+  clusterIcon(54, "linear-gradient(135deg,#3A4A7C,#232D4F)", "#fff"),
+];
+const NURSING_CLUSTER_ICONS = [
+  clusterIcon(38, "linear-gradient(135deg,#4D9AFF,#2563EB)", "#fff"),
+  clusterIcon(46, "linear-gradient(135deg,#3B86F0,#1D4FD8)", "#fff"),
+  clusterIcon(54, "linear-gradient(135deg,#2A73E0,#1740B8)", "#fff"),
+];
+
+let placeClusterer = null;
+let nursingClusterer = null;
+
 function clearMarkers() {
+  if (placeClusterer) {
+    placeClusterer.setMap(null);
+    placeClusterer = null;
+  }
   markers.forEach((m) => m.setMap(null));
   markers = [];
 }
@@ -220,15 +282,18 @@ function renderMarkers(list) {
   clearMarkers();
   list.forEach((place) => {
     if (typeof place.lat !== "number" || typeof place.lng !== "number") return;
+    // map은 넘기지 않는다 — 클러스터러가 줌 레벨에 따라 직접 붙였다 뗐다 한다.
     const marker = new naver.maps.Marker({
       position: new naver.maps.LatLng(place.lat, place.lng),
-      map,
       title: place.name,
       icon: FLAG_ICON,
     });
     naver.maps.Event.addListener(marker, "click", () => openSheet(place));
     markers.push(marker);
   });
+  placeClusterer = createClusterer(markers, PLACE_CLUSTER_ICONS);
+  // 라이브러리 로딩이 실패해도 지도가 비어버리진 않게, 클러스터 없이 그대로 띄운다.
+  if (!placeClusterer) markers.forEach((m) => m.setMap(map));
 }
 
 const NURSING_ICON = {
@@ -242,6 +307,10 @@ let nursingLoaded = false;
 let nursingVisible = false;
 
 function clearNursingMarkers() {
+  if (nursingClusterer) {
+    nursingClusterer.setMap(null);
+    nursingClusterer = null;
+  }
   nursingMarkers.forEach((m) => m.setMap(null));
   nursingMarkers = [];
 }
@@ -251,7 +320,6 @@ function renderNursingMarkers() {
   nursingRooms.forEach((room) => {
     const marker = new naver.maps.Marker({
       position: new naver.maps.LatLng(room.lat, room.lng),
-      map,
       title: room.name,
       icon: NURSING_ICON,
       zIndex: 50,
@@ -259,6 +327,8 @@ function renderNursingMarkers() {
     naver.maps.Event.addListener(marker, "click", () => openNursingSheet(room));
     nursingMarkers.push(marker);
   });
+  nursingClusterer = createClusterer(nursingMarkers, NURSING_CLUSTER_ICONS);
+  if (!nursingClusterer) nursingMarkers.forEach((m) => m.setMap(map));
 }
 
 // 큐레이션된 장소 목록과 달리 자주 안 바뀌는 공공데이터라, 토글을 처음 켤 때만

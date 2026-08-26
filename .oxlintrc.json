@@ -12,7 +12,15 @@
     "es2024": true
   },
   "globals": {
-    "naver": "readonly"
+    "naver": "readonly",
+    "MarkerClustering": "readonly"
   },
-  "ignorePatterns": ["node_modules", ".wrangler", "*.pdf"]
+  "ignorePatterns": [
+    "node_modules",
+    ".wrangler",
+    "*.pdf",
+    // 네이버가 배포한 원본 그대로 넣어둔 서드파티 파일 — 우리 규칙에 맞춰
+    // 고치면 업스트림 갱신 시 diff가 지저분해지므로 린트 대상에서 제외한다.
+    "public/js/vendor"
+  ]
 }

@@ -1,6 +1,6 @@
 function courseCardHtml(course, places) {
   const thumb = course.image
-    ? `<img class="course-card__thumb" src="${course.image}" alt="${course.name}" loading="lazy" />`
+    ? `<img class="course-card__thumb" src="${escapeHtml(safeImageSrc(course.image))}" alt="${escapeHtml(course.name)}" loading="lazy" />`
     : `<div class="course-card__thumb"></div>`;
 
   const stops = course.placeIds
@@ -10,9 +10,9 @@ function courseCardHtml(course, places) {
   const stopsHtml = stops
     .map(
       (place, i) => `
-      <a class="course-card__stop" href="place.html?id=${place.id}">
+      <a class="course-card__stop" href="place.html?id=${encodeURIComponent(place.id)}">
         <span class="course-card__stop-num">${i + 1}</span>
-        <span class="course-card__stop-name">${place.name}</span>
+        <span class="course-card__stop-name">${escapeHtml(place.name)}</span>
       </a>`
     )
     .join("");
@@ -27,8 +27,8 @@ function courseCardHtml(course, places) {
       <button type="button" class="course-card__header" data-course-toggle>
         ${thumb}
         <div class="course-card__body">
-          <p class="course-card__name">${course.name}</p>
-          ${course.description ? `<p class="course-card__desc">${course.description}</p>` : ""}
+          <p class="course-card__name">${escapeHtml(course.name)}</p>
+          ${course.description ? `<p class="course-card__desc">${escapeHtml(course.description)}</p>` : ""}
           <p class="course-card__count">${stops.length}곳</p>
         </div>
       </button>
@@ -40,12 +40,10 @@ function courseCardHtml(course, places) {
 async function loadCourses() {
   const list = document.getElementById("course-list");
   try {
-    const [coursesRes, placesRes] = await Promise.all([
-      fetch("/api/courses"),
-      fetch("/api/places"),
+    const [coursesData, placesData] = await Promise.all([
+      fetchJson("/api/courses"),
+      fetchJson("/api/places"),
     ]);
-    const coursesData = await coursesRes.json();
-    const placesData = await placesRes.json();
     const courses = coursesData.courses || [];
     const places = placesData.places || [];
 

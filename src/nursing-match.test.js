@@ -46,10 +46,16 @@ describe("needsPublicDataMatch", () => {
     expect(needsPublicDataMatch({ ...base, nursingRoom: true })).toBe(false);
   });
 
-  it("확인됨/블로그힌트/공공데이터는 대상이 아니다", () => {
+  it("사람이 확정한 확인됨과 이미 붙인 공공데이터는 대상이 아니다", () => {
     expect(needsPublicDataMatch({ ...base, verifiedStatus: "확인됨" })).toBe(false);
-    expect(needsPublicDataMatch({ ...base, verifiedStatus: "블로그힌트" })).toBe(false);
     expect(needsPublicDataMatch({ ...base, verifiedStatus: "공공데이터" })).toBe(false);
+  });
+
+  // 매일 도는 블로그 enrichment가 먼저 대부분을 "블로그힌트"로 바꿔버려서, 이걸
+  // 제외하면 주간 매칭 크론이 검사할 대상이 거의 남지 않는다(실측 108곳 중 3곳).
+  // 블로그 글 추측보다 공공데이터 좌표가 근거가 확실하므로 덮어쓸 수 있어야 한다.
+  it("블로그힌트는 공공데이터로 덮어쓸 수 있어야 한다", () => {
+    expect(needsPublicDataMatch({ ...base, verifiedStatus: "블로그힌트" })).toBe(true);
   });
 
   it("좌표가 없으면 대상이 아니다", () => {

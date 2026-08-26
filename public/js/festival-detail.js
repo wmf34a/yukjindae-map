@@ -62,12 +62,7 @@ async function init() {
     return;
   }
   try {
-    const res = await fetch(`/api/festivals/${encodeURIComponent(id)}`);
-    if (!res.ok) {
-      el.innerHTML = `<p class="place-list__empty">축제 정보를 찾을 수 없어요.</p>`;
-      return;
-    }
-    const data = await res.json();
+    const data = await fetchJson(`/api/festivals/${encodeURIComponent(id)}`);
     render(data.festival);
   } catch (err) {
     console.error(err);

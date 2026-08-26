@@ -26,8 +26,7 @@ function festivalCardHtml(festival) {
 async function loadFestivals() {
   const list = document.getElementById("festival-list");
   try {
-    const res = await fetch("/api/festivals");
-    const data = await res.json();
+    const data = await fetchJson("/api/festivals");
     const festivals = data.festivals || [];
 
     list.innerHTML = festivals.length

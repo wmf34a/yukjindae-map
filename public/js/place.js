@@ -67,8 +67,7 @@ function nearbyRow(label, value) {
 async function loadNearbyNav(slot) {
   const q = decodeURIComponent(slot.dataset.bizQuery);
   try {
-    const res = await fetch(`/api/nearby-place?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
+    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(q)}`);
     if (!data.found) {
       slot.remove();
       return;
@@ -160,8 +159,7 @@ async function init() {
     return;
   }
   try {
-    const res = await fetch("/api/places");
-    const data = await res.json();
+    const data = await fetchJson("/api/places");
     const place = (data.places || []).find((p) => p.id === id);
     if (!place) {
       el.innerHTML = `<p class="place-list__empty">장소 정보를 찾을 수 없어요.</p>`;

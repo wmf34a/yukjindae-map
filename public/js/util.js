@@ -28,6 +28,17 @@ function safeHref(url) {
   }
 }
 
+// img src 전용. 우리 이미지는 R2 미러링 결과라 "/images/..." 상대경로로 오고,
+// 장소 사진은 외부 https URL로 오는 경우도 있어서 safeHref(http(s) 전용)로는
+// 상대경로가 전부 걸러진다. 같은 출처 절대경로와 http(s)만 허용하고 javascript:,
+// data: 등 나머지 스킴은 빈 문자열로 떨군다.
+function safeImageSrc(url) {
+  const value = String(url ?? "").trim();
+  if (!value) return "";
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  return safeHref(value);
+}
+
 // 축제 카드/상세에 붙이는 디데이 딱지. 시작 전이면 "D-n", 기간 중이면 "진행중",
 // periodStart가 없으면 빈 문자열(딱지 없음).
 function festivalDday(festival) {
@@ -44,6 +55,22 @@ function festivalDday(festival) {
   return "";
 }
 
+// 브라우저 fetch도 기본 타임아웃이 없다 — 네트워크가 불안정한 이동 중(주 사용
+// 상황)에 응답이 안 오면 "불러오는 중..."에서 영영 멈춘다. 공통 래퍼로 10초에
+// 끊어서 각 화면의 catch가 에러 문구를 띄우게 한다.
+const FETCH_TIMEOUT_MS = 10000;
+
+function fetchJson(url, options = {}) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(options.timeoutMs || FETCH_TIMEOUT_MS) }).then(
+    (res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+  );
+}
+
 window.escapeHtml = escapeHtml;
 window.safeHref = safeHref;
+window.safeImageSrc = safeImageSrc;
 window.festivalDday = festivalDday;
+window.fetchJson = fetchJson;

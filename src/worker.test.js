@@ -35,7 +35,13 @@ describe("matchesQuery", () => {
 });
 
 describe("validateReportPayload", () => {
-  const valid = { placeId: "page-1", field: "기저귀교환대", value: "있음", turnstileToken: "token" };
+  // 실제 노션 페이지 ID 형식(하이픈 포함 32자리 16진수)
+  const valid = {
+    placeId: "3afa4eba-1ccb-8119-9a6b-c82398028807",
+    field: "기저귀교환대",
+    value: "있음",
+    turnstileToken: "token",
+  };
 
   it("정상 요청은 통과한다(불리언 필드)", () => {
     expect(validateReportPayload(valid)).toBeNull();

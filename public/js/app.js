@@ -211,10 +211,10 @@ function freeBadgeText(place) {
 
 function placeCard(place) {
   const thumb = place.image
-    ? `<img class="place-grid__thumb" src="${place.image}" alt="${place.name}" loading="lazy" />`
+    ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
   const freeBadge = freeBadgeText(place);
-  const badge = freeBadge ? `<span class="place-grid__free-badge">${freeBadge}</span>` : "";
+  const badge = freeBadge ? `<span class="place-grid__free-badge">${escapeHtml(freeBadge)}</span>` : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
@@ -223,8 +223,8 @@ function placeCard(place) {
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
       <div class="place-grid__body">
-        <div class="place-grid__name">${place.name}</div>
-        <div class="place-grid__region">${place.region}</div>
+        <div class="place-grid__name">${escapeHtml(place.name)}</div>
+        <div class="place-grid__region">${escapeHtml(place.region)}</div>
       </div>
     </a>
   `;
@@ -302,22 +302,23 @@ function bannerSlide(banner) {
   const caption =
     banner.title || banner.tagline
       ? `<div class="banner__caption">
-          ${banner.title ? `<p class="banner__caption-title">${banner.title}</p>` : ""}
-          ${banner.tagline ? `<p class="banner__caption-tagline">${banner.tagline}</p>` : ""}
+          ${banner.title ? `<p class="banner__caption-title">${escapeHtml(banner.title)}</p>` : ""}
+          ${banner.tagline ? `<p class="banner__caption-tagline">${escapeHtml(banner.tagline)}</p>` : ""}
         </div>`
       : "";
-  const img = `<img class="banner__photo" src="${banner.image}" alt="${banner.title || "배너"}" />`;
+  const img = `<img class="banner__photo" src="${escapeHtml(safeImageSrc(banner.image))}" alt="${escapeHtml(banner.title || "배너")}" />`;
   const inner = `${img}${caption}`;
 
-  return banner.link
-    ? `<a class="banner__slide banner__slide--photo" href="${banner.link}" target="_blank" rel="noopener">${inner}</a>`
+  // 배너 링크는 노션에서 수동 입력되는 값이라 safeHref로 스킴을 한 번 거른다.
+  const href = safeHref(banner.link);
+  return href
+    ? `<a class="banner__slide banner__slide--photo" href="${escapeHtml(href)}" target="_blank" rel="noopener">${inner}</a>`
     : `<div class="banner__slide banner__slide--photo">${inner}</div>`;
 }
 
 async function loadBanners() {
   try {
-    const res = await fetch("/api/banners");
-    const data = await res.json();
+    const data = await fetchJson("/api/banners");
     const banners = data.banners || [];
     state.banners = banners;
     if (banners.length) {
@@ -375,12 +376,15 @@ function renderBellBadge() {
 
 function noticeItemHtml(notice) {
   const inner = `
-    <p class="notices-panel__item-title">${notice.title}</p>
-    ${notice.subtitle ? `<p class="notices-panel__item-sub">${notice.subtitle}</p>` : ""}
+    <p class="notices-panel__item-title">${escapeHtml(notice.title)}</p>
+    ${notice.subtitle ? `<p class="notices-panel__item-sub">${escapeHtml(notice.subtitle)}</p>` : ""}
   `;
-  if (!notice.link) return `<div class="notices-panel__item">${inner}</div>`;
+  // 이벤트 소식의 링크는 노션 배너에서 온 외부 URL이라 스킴 검사가 필요하고,
+  // 신규 장소 소식은 우리가 만든 내부 상대경로(place.html?id=...)라 그대로 쓴다.
+  const href = notice.type === "event" ? safeHref(notice.link) : notice.link;
+  if (!href) return `<div class="notices-panel__item">${inner}</div>`;
   const externalAttrs = notice.type === "event" ? ` target="_blank" rel="noopener"` : "";
-  return `<a class="notices-panel__item" href="${notice.link}"${externalAttrs}>${inner}</a>`;
+  return `<a class="notices-panel__item" href="${escapeHtml(href)}"${externalAttrs}>${inner}</a>`;
 }
 
 function renderNoticesPanel() {
@@ -423,9 +427,7 @@ function initNoticesBell() {
 
 async function loadPlaces() {
   try {
-    const res = await fetch("/api/places");
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "places fetch failed");
+    const data = await fetchJson("/api/places");
     state.places = data.places || [];
   } catch (err) {
     console.error(err);

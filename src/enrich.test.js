@@ -7,6 +7,8 @@ import {
   extractFreeAgeHint,
   buildPatchProperties,
   runEnrichment,
+  isRelevantToPlace,
+  filterRelevantItems,
 } from "./enrich.js";
 
 const basePlace = {
@@ -111,8 +113,12 @@ describe("runEnrichment", () => {
     const result = await runEnrichment({
       places,
       today: "2026-08-24",
+      // 실제 블로그 글이라면 장소명이 제목/본문에 들어 있다 — 관련성 필터를
+      // 통과하려면 픽스처도 같은 조건이어야 한다.
       searchBlog: async (query) =>
-        query.includes("기저귀") ? [{ title: "", description: "기저귀 교환대 있어요", link: "https://blog/x" }] : [],
+        query.includes("기저귀")
+          ? [{ title: "전쟁기념관 후기", description: "기저귀 교환대 있어요", link: "https://blog/x" }]
+          : [],
       patchPlace: async (id, properties) => patched.push({ id, properties }),
     });
 
@@ -145,5 +151,72 @@ describe("runEnrichment", () => {
       maxPlaces: 3,
     });
     expect(result.checked).toBe(3);
+  });
+});
+
+const item = (title, description = "") => ({ title, description, link: "https://x" });
+
+describe("isRelevantToPlace", () => {
+
+  it("제목에 장소명이 있으면 관련 글로 본다", () => {
+    expect(isRelevantToPlace(item("국립항공박물관 아기랑 후기"), "국립항공박물관")).toBe(true);
+  });
+
+  it("본문에 장소명이 있어도 관련 글로 본다", () => {
+    expect(isRelevantToPlace(item("주말 나들이", "국립항공박물관 다녀왔어요"), "국립항공박물관")).toBe(true);
+  });
+
+  it("띄어쓰기가 달라도 매칭한다", () => {
+    expect(isRelevantToPlace(item("서울 어린이 대공원 후기"), "서울어린이대공원")).toBe(true);
+  });
+
+  // 실제로 "서울어린이대공원 수유실" 검색에 섞여 나온 광고성 글 사례.
+  it("장소와 무관한 글은 걸러낸다", () => {
+    expect(isRelevantToPlace(item("CJ기프트카드 사용처 및 잔액 환불"), "서울어린이대공원")).toBe(false);
+  });
+
+  it("장소명이 너무 짧으면 매칭하지 않는다", () => {
+    expect(isRelevantToPlace(item("아무 글"), "숲")).toBe(false);
+  });
+});
+
+describe("filterRelevantItems", () => {
+  it("관련 글만 남긴다", () => {
+    const items = [
+      { title: "국립항공박물관 수유실 있어요", description: "", link: "a" },
+      { title: "전혀 다른 광고 글", description: "수유실 완비", link: "b" },
+    ];
+    const filtered = filterRelevantItems(items, "국립항공박물관");
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0].link).toBe("a");
+  });
+});
+
+describe("runEnrichment 관련성 필터 연동", () => {
+  it("무관한 글만 검색되면 노션에 쓰지 않는다", async () => {
+    const patched = [];
+    const result = await runEnrichment({
+      places: [{ id: "p1", name: "국립항공박물관", verifiedStatus: "" }],
+      today: "2026-08-26",
+      // 키워드는 들어있지만 장소와 무관한 글만 돌려주는 상황
+      searchBlog: async () => [{ title: "CJ기프트카드 사용처", description: "수유실 기저귀 교환대", link: "z" }],
+      patchPlace: async (id, props) => patched.push([id, props]),
+    });
+    expect(patched).toEqual([]);
+    expect(result.patched).toBe(0);
+  });
+
+  it("관련 글이면 정상적으로 힌트를 반영한다", async () => {
+    const patched = [];
+    await runEnrichment({
+      places: [{ id: "p1", name: "국립항공박물관", verifiedStatus: "" }],
+      today: "2026-08-26",
+      searchBlog: async () => [
+        { title: "국립항공박물관 후기", description: "수유실 기저귀 교환대 잘 되어있어요", link: "z" },
+      ],
+      patchPlace: async (id, props) => patched.push([id, props]),
+    });
+    expect(patched).toHaveLength(1);
+    expect(patched[0][1]["확인상태"]).toEqual({ select: { name: "블로그힌트" } });
   });
 });

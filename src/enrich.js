@@ -37,6 +37,22 @@ export function buildSearchQuery(place, target) {
   return `${place.name} ${keyword}`;
 }
 
+// 검색어에 장소명을 넣어도 네이버 검색은 전혀 무관한 글(광고·스팸 포함)을 함께
+// 돌려준다 — 실제로 "서울어린이대공원 수유실"에 "CJ기프트카드 사용처" 글이 섞여
+// 나왔다. 그런 글에 우연히 "수유실"이 들어 있으면 엉뚱한 장소의 정보를 힌트로
+// 채택하게 되므로, 글 제목/본문에 장소명 조각이 실제로 등장하는 것만 남긴다.
+export function isRelevantToPlace(item, placeName) {
+  const token = String(placeName || "").replace(/\s/g, "");
+  if (token.length < 2) return false;
+  const haystack = `${item.title} ${item.description}`.replace(/\s/g, "");
+  // 긴 이름은 앞 4자만 맞아도 같은 장소로 본다("국립항공박물관" ↔ "국립항공박물관 후기").
+  return haystack.includes(token) || (token.length > 4 && haystack.includes(token.slice(0, 4)));
+}
+
+export function filterRelevantItems(items, placeName) {
+  return items.filter((item) => isRelevantToPlace(item, placeName));
+}
+
 // 키워드가 나오더라도 바로 뒤/앞에 "없어요" 류 부정어가 붙어있으면 힌트로 채택하지
 // 않는다 — "기저귀 교환대는 없어요" 같은 문장을 있음으로 오판하지 않기 위함.
 export function extractBooleanHint(items, target) {
@@ -93,7 +109,8 @@ export async function runEnrichment({ places, searchBlog, patchPlace, today, max
   for (const place of batch) {
     const hints = [];
     for (const target of pendingFields(place)) {
-      const items = await searchBlog(buildSearchQuery(place, target));
+      const rawItems = await searchBlog(buildSearchQuery(place, target));
+      const items = filterRelevantItems(rawItems, place.name);
       const found = target.type === "boolean" ? extractBooleanHint(items, target) : extractFreeAgeHint(items);
       if (!found) continue;
       if (target.type === "boolean") {

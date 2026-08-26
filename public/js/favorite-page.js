@@ -5,7 +5,7 @@ const favoriteState = {
 
 function favoriteCard(place) {
   const thumb = place.image
-    ? `<img class="place-grid__thumb" src="${place.image}" alt="${place.name}" loading="lazy" />`
+    ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
@@ -14,8 +14,8 @@ function favoriteCard(place) {
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
       <div class="place-grid__body">
-        <div class="place-grid__name">${place.name}</div>
-        <div class="place-grid__region">${place.region}</div>
+        <div class="place-grid__name">${escapeHtml(place.name)}</div>
+        <div class="place-grid__region">${escapeHtml(place.region)}</div>
       </div>
     </a>
   `;
@@ -44,7 +44,7 @@ function renderRegionFilter(favorited) {
   wrap.innerHTML = items
     .map((region) => {
       const active = region === "전체" ? !favoriteState.region : favoriteState.region === region;
-      return `<button class="tag-filter__item${active ? " is-active" : ""}" data-region="${region}">${region}</button>`;
+      return `<button class="tag-filter__item${active ? " is-active" : ""}" data-region="${escapeHtml(region)}">${escapeHtml(region)}</button>`;
     })
     .join("");
 
@@ -86,9 +86,7 @@ function renderFavorites() {
 
 async function init() {
   try {
-    const res = await fetch("/api/places");
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "places fetch failed");
+    const data = await fetchJson("/api/places");
     favoriteState.places = data.places || [];
   } catch (err) {
     console.error(err);

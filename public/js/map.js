@@ -57,8 +57,8 @@ function renderNearbyList() {
         .map(
           (p) => `
         <button class="map-nearby__card" data-id="${p.id}">
-          <img class="map-nearby__thumb" src="${p.image || ""}" alt="" />
-          <span class="map-nearby__name">${p.name}</span>
+          <img class="map-nearby__thumb" src="${escapeHtml(safeImageSrc(p.image))}" alt="" />
+          <span class="map-nearby__name">${escapeHtml(p.name)}</span>
           <span class="map-nearby__dist">${formatDistance(p.distanceKm)}</span>
         </button>`
         )
@@ -97,7 +97,7 @@ function presentSheet(contentHtml) {
 function openSheet(place) {
   const thumb = place.image
     ? `<div class="map-sheet__thumb-wrap">
-        <img class="map-sheet__img" src="${place.image}" alt="${place.name}" />
+        <img class="map-sheet__img" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" />
         ${favoriteButtonHtml(place.id, "map-sheet__favorite-btn")}
       </div>`
     : "";
@@ -106,14 +106,14 @@ function openSheet(place) {
     <div class="map-sheet__card">
       ${thumb}
       <div class="map-sheet__name-row">
-        <p class="map-sheet__name">${place.name}</p>
+        <p class="map-sheet__name">${escapeHtml(place.name)}</p>
         ${place.image ? "" : favoriteButtonHtml(place.id, "map-sheet__favorite-btn map-sheet__favorite-btn--inline")}
       </div>
-      <p class="map-sheet__meta">${[place.region, ...(place.categories || [])].filter(Boolean).join(" · ")}</p>
-      ${place.address ? `<p class="map-sheet__row">📍 ${place.address}</p>` : ""}
-      ${place.hours ? `<p class="map-sheet__row">⏰ ${place.hours}</p>` : ""}
-      ${place.fee ? `<p class="map-sheet__row">💰 ${place.fee}</p>` : ""}
-      ${place.reason ? `<p class="map-sheet__row">✏️ ${place.reason}</p>` : ""}
+      <p class="map-sheet__meta">${escapeHtml([place.region, ...(place.categories || [])].filter(Boolean).join(" · "))}</p>
+      ${place.address ? `<p class="map-sheet__row">📍 ${escapeHtml(place.address)}</p>` : ""}
+      ${place.hours ? `<p class="map-sheet__row">⏰ ${escapeHtml(place.hours)}</p>` : ""}
+      ${place.fee ? `<p class="map-sheet__row">💰 ${escapeHtml(place.fee)}</p>` : ""}
+      ${place.reason ? `<p class="map-sheet__row">✏️ ${escapeHtml(place.reason)}</p>` : ""}
       <div class="map-sheet__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
@@ -266,8 +266,7 @@ function renderNursingMarkers() {
 async function loadNursingRooms() {
   if (nursingLoaded) return;
   try {
-    const res = await fetch("/api/nursing-rooms");
-    const data = await res.json();
+    const data = await fetchJson("/api/nursing-rooms");
     nursingRooms = data.rooms || [];
     nursingLoaded = true;
   } catch (err) {
@@ -322,8 +321,7 @@ function renderRegionChips() {
 }
 
 async function loadPlaces() {
-  const res = await fetch("/api/places");
-  const data = await res.json();
+  const data = await fetchJson("/api/places");
   places = (data.places || []).filter((p) => typeof p.lat === "number" && typeof p.lng === "number");
   renderMarkers(places);
   renderNearbyList();

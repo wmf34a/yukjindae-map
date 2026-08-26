@@ -130,8 +130,7 @@ async function fetchRoadDistance(from, to) {
   try {
     const start = `${from.lng},${from.lat}`;
     const goal = `${to.lng},${to.lat}`;
-    const res = await fetch(`/api/directions?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}`);
-    const data = await res.json();
+    const data = await fetchJson(`/api/directions?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}`);
     return data.found ? data.distance : null;
   } catch (err) {
     console.error(err);
@@ -158,8 +157,7 @@ async function resolveSegments(stops) {
 async function geocodeAddress(address) {
   if (!address) return null;
   try {
-    const res = await fetch(`/api/geocode?query=${encodeURIComponent(address)}`);
-    const data = await res.json();
+    const data = await fetchJson(`/api/geocode?query=${encodeURIComponent(address)}`);
     return data.found ? { lat: data.lat, lng: data.lng } : null;
   } catch (err) {
     console.error(err);
@@ -181,8 +179,7 @@ async function resolveNearbyStop(rawValue) {
   if (!rawValue || !window.isSingleBusinessName(rawValue)) return null;
   const query = window.stripParenthetical(rawValue) || rawValue;
   try {
-    const res = await fetch(`/api/nearby-place?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
+    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(query)}`);
     if (!data.found) return null;
     const coords = await geocodeAddress(data.address);
     return coords ? { name: data.name || query, ...coords } : null;
@@ -394,7 +391,7 @@ function renderCourseFooter(stops, segments) {
   document.getElementById("course-order").innerHTML = stops
     .map(
       (s, i) =>
-        `<span class="course-order__stop"><span class="course-order__badge" style="background:${s.color}">${i + 1}</span>${s.name}</span>`
+        `<span class="course-order__stop"><span class="course-order__badge" style="background:${s.color}">${i + 1}</span>${escapeHtml(s.name)}</span>`
     )
     .join(`<span class="course-order__arrow">→</span>`);
 
@@ -421,7 +418,7 @@ function renderCourseFooter(stops, segments) {
     `총 거리 ${formatDistance(totalM)} · 이동 약 ${formatMinutes(totalMinutes)}${modeNote}${estimatedNote}`;
 
   segmentsEl.innerHTML = segments
-    .map((segment, i) => `<p class="course-segment">${stops[i].name} → ${stops[i + 1].name} · ${formatSegmentLabel(segment)}</p>`)
+    .map((segment, i) => `<p class="course-segment">${escapeHtml(stops[i].name)} → ${escapeHtml(stops[i + 1].name)} · ${escapeHtml(formatSegmentLabel(segment))}</p>`)
     .join("");
 
   bindDirectionsButton(stops);

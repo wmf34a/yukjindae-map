@@ -1,0 +1,20 @@
+# Workers Static Assets용 응답 헤더 규칙.
+#
+# public/의 HTML/JS/CSS는 Worker 코드를 거치지 않고 자산 서버가 바로 내려주기
+# 때문에(자산 경로에 매칭되면 fetch 핸들러가 아예 호출되지 않음), worker.js에서
+# 헤더를 붙이는 방식으로는 페이지에 보안 헤더를 적용할 수 없다 — 이 파일이
+# Cloudflare가 제공하는 공식 경로다.
+#
+# CSP는 실제로 쓰고 있는 외부 출처만 허용한다:
+#   - 네이버 지도 SDK(oapi.map.naver.com) + 타일/이미지(*.pstatic.net, *.map.naver.net)
+#   - Turnstile(challenges.cloudflare.com) — 제보 폼 봇 차단
+#   - Pretendard 폰트(cdn.jsdelivr.net)
+# 인라인 <script>(스플래시 제어)와 인라인 style 속성을 쓰고 있어서 'unsafe-inline'이
+# 필요하다. 이걸 떼려면 먼저 인라인 코드를 외부 파일로 옮겨야 한다.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://oapi.map.naver.com https://*.pstatic.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https:; connect-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.map.naver.net; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'

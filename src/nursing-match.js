@@ -30,14 +30,20 @@ export function findNearestRoom(place, rooms, maxDistanceMeters = DEFAULT_MAX_DI
   return nearest && nearestDistance <= maxDistanceMeters ? nearest : null;
 }
 
-// 확인됨/블로그힌트/공공데이터로 이미 표시된 장소는 재검사하지 않는다 — 사람이
-// 검증했거나 이미 다른 힌트가 붙어 대기 중인 항목을 덮어쓸 이유가 없기 때문.
+// 사람이 직접 검증한 "확인됨"만 건드리지 않는다.
+//
+// 원래는 "블로그힌트"도 제외했는데, 매일 도는 블로그 enrichment 크론이 먼저
+// 대부분의 장소를 "블로그힌트"로 바꿔버려서 이 주간 크론이 검사할 대상이 108곳
+// 중 3곳까지 줄어들었다(실측). 결과적으로 매주 아무것도 하지 않는 크론이 돼
+// 있었다. 블로그 글에서 뽑은 추측보다 정부기관 공공데이터 좌표 매칭이 근거가
+// 더 확실하므로, "블로그힌트" 상태는 공공데이터로 덮어쓸 수 있게 한다.
 export function needsPublicDataMatch(place) {
   return (
     !place.nursingRoom &&
     typeof place.lat === "number" &&
     typeof place.lng === "number" &&
-    (!place.verifiedStatus || place.verifiedStatus === "미확인")
+    place.verifiedStatus !== "확인됨" &&
+    place.verifiedStatus !== "공공데이터"
   );
 }
 
@@ -46,6 +52,7 @@ export function buildPublicDataPatchProperties(room, today) {
     "수유실": { checkbox: true },
     "확인상태": { select: { name: "공공데이터" } },
     "정보확인일": { date: { start: today } },
-    "정보출처": { url: room.sourceUrl || "" },
+    // 노션 url 속성에 빈 문자열을 넣으면 거부당한다 — 값이 없으면 null로 비운다.
+    "정보출처": { url: room.sourceUrl || null },
   };
 }

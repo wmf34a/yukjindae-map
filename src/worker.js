@@ -5,6 +5,14 @@ import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
+import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
+import {
+  consumeRateLimit,
+  hashIp,
+  tooManyRequestsResponse,
+  PROXY_RATE_LIMIT_PER_MINUTE,
+  REPORT_RATE_LIMIT_PER_HOUR,
+} from "./rate-limit.js";
 
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
 // 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
@@ -43,13 +51,14 @@ const REPORTABLE_FIELDS = new Set(["기저귀교환대", "수유실", "유아의
 const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
 const BOOLEAN_VALUES = new Set(["있음", "없음"]);
 const REPORT_VALUE_MAX_LENGTH = 200;
-const REPORT_RATE_LIMIT_PER_HOUR = 5;
 
 // placeId/field는 화이트리스트로, 텍스트값은 필드 성격(불리언 vs 자유서술)에 맞게
 // 검증한다 — 임의 필드에 임의 값을 쓸 수 없게 해서 승인 큐로 들어오는 데이터의
 // 신뢰도를 최소한으로 보장한다(Broken Access Control / 입력 검증 방지).
 export function validateReportPayload({ placeId, field, value, turnstileToken }) {
   if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
+  // 노션 페이지 ID 형식이 아닌 값이 그대로 API 경로에 들어가지 않도록 막는다.
+  if (!isNotionId(placeId)) return "잘못된 장소 ID입니다.";
   if (typeof field !== "string" || !REPORTABLE_FIELDS.has(field)) return "지원하지 않는 필드입니다.";
   if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
   if (typeof value !== "string" || !value.trim()) return "제안값이 필요합니다.";
@@ -93,7 +102,7 @@ async function fetchAllPlaces(env) {
     };
     if (cursor) body.start_cursor = cursor;
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
       { method: "POST", headers: notionHeaders, body: JSON.stringify(body) }
     );
@@ -155,10 +164,7 @@ async function handlePlaces(env, url) {
       }
     );
   } catch (err) {
-    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
+    return serverErrorResponse(err, "장소 정보를 불러오지 못했습니다.");
   }
 }
 
@@ -189,7 +195,7 @@ async function ensureMirroredImage(env, prefix, pageId, source) {
   if (existing) return `/images/${key}`;
 
   try {
-    const res = await fetch(source.url, {
+    const res = await fetchWithTimeout(source.url, {
       headers: { "User-Agent": "yukjindae-map-bot/1.0 (+https://yukjindae-map.wmf34a.workers.dev)" },
     });
     if (!res.ok) return "";
@@ -216,7 +222,7 @@ async function handleBanners(env) {
   };
 
   try {
-    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_BANNER_DATABASE_ID}/query`, {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_BANNER_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -226,8 +232,7 @@ async function handleBanners(env) {
     });
 
     if (!res.ok) {
-      const detail = await res.text();
-      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+      return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
     }
 
     const data = await res.json();
@@ -248,7 +253,7 @@ async function handleBanners(env) {
 
     return new Response(JSON.stringify({ banners: banners.filter((b) => b.image) }), { status: 200, headers });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+    return serverErrorResponse(err);
   }
 }
 
@@ -257,7 +262,7 @@ async function handleBanners(env) {
 // toPlace().image를 그대로 쓰면 된다.
 async function fetchFirstStopImage(env, placeId) {
   try {
-    const res = await fetch(`https://api.notion.com/v1/pages/${placeId}`, {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/pages/${placeId}`, {
       headers: {
         Authorization: `Bearer ${env.NOTION_API_KEY}`,
         "Notion-Version": "2022-06-28",
@@ -284,7 +289,7 @@ async function handleCourses(env) {
   };
 
   try {
-    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_COURSE_DATABASE_ID}/query`, {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_COURSE_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -293,8 +298,7 @@ async function handleCourses(env) {
     });
 
     if (!res.ok) {
-      const detail = await res.text();
-      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+      return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
     }
 
     const data = await res.json();
@@ -323,7 +327,7 @@ async function handleCourses(env) {
       headers,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+    return serverErrorResponse(err);
   }
 }
 
@@ -341,7 +345,7 @@ async function handleFestivals(env) {
   };
 
   try {
-    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -351,8 +355,7 @@ async function handleFestivals(env) {
     });
 
     if (!res.ok) {
-      const detail = await res.text();
-      return new Response(JSON.stringify({ error: "Notion API 오류", detail }), { status: 502, headers });
+      return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
     }
 
     const data = await res.json();
@@ -370,7 +373,7 @@ async function handleFestivals(env) {
 
     return new Response(JSON.stringify({ festivals: festivals.filter((f) => f.title) }), { status: 200, headers });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+    return serverErrorResponse(err);
   }
 }
 
@@ -391,7 +394,7 @@ async function fetchAllFestivalPages(env) {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
 
-    const res = await fetch(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify(body),
@@ -412,7 +415,7 @@ function yyyymmdd(date) {
 }
 
 async function createFestivalPage(env, properties) {
-  const res = await fetch("https://api.notion.com/v1/pages", {
+  const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.NOTION_API_KEY}`,
@@ -463,7 +466,7 @@ async function runScheduledFestivalImport(env) {
 async function notifySlack(env, text) {
   if (!env.SLACK_WEBHOOK_URL) return;
   try {
-    await fetch(env.SLACK_WEBHOOK_URL, {
+    await fetchWithTimeout(env.SLACK_WEBHOOK_URL, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text }),
@@ -523,7 +526,7 @@ async function handleFestivalDetail(env, id, ctx) {
   };
 
   try {
-    const pageRes = await fetch(`https://api.notion.com/v1/pages/${id}`, { headers: notionHeaders });
+    const pageRes = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, { headers: notionHeaders });
     if (!pageRes.ok) {
       return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
     }
@@ -559,7 +562,7 @@ async function handleFestivalDetail(env, id, ctx) {
           patchProperties["링크"] = { url: enrichment.link };
         }
         if (Object.keys(patchProperties).length > 0) {
-          const patchPromise = fetch(`https://api.notion.com/v1/pages/${id}`, {
+          const patchPromise = fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
             method: "PATCH",
             headers: notionHeaders,
             body: JSON.stringify({ properties: patchProperties }),
@@ -572,11 +575,18 @@ async function handleFestivalDetail(env, id, ctx) {
 
     return new Response(JSON.stringify({ festival }), { status: 200, headers });
   } catch (err) {
-    return new Response(JSON.stringify({ error: "서버 오류", detail: String(err) }), { status: 500, headers });
+    return serverErrorResponse(err);
   }
 }
 
+// 우리가 실제로 미러링하는 접두어(+ 파일명 문자셋)만 허용한다 — 임의 키로 R2를
+// 훑는 것을 막기 위함.
+const IMAGE_KEY_PATTERN = /^(banners|courses|festivals|places)\/[A-Za-z0-9._-]+$/;
+
 async function handleImage(env, key) {
+  if (!IMAGE_KEY_PATTERN.test(key)) {
+    return new Response("이미지를 찾을 수 없습니다.", { status: 404 });
+  }
   if (!env.IMAGES) {
     return new Response("이미지 저장소가 설정되지 않았습니다.", { status: 500 });
   }
@@ -596,8 +606,15 @@ async function handleImage(env, key) {
 // 보여준다. 데이터가 자주 바뀌지 않아 엣지 캐시를 길게(하루) 잡는다.
 async function handleNursingRooms(env) {
   const headers = { "content-type": "application/json; charset=utf-8" };
-  const rooms = await fetchAllNursingRooms(env);
-  return new Response(JSON.stringify({ rooms }), { status: 200, headers });
+  try {
+    const rooms = await fetchAllNursingRooms(env);
+    return new Response(JSON.stringify({ rooms }), { status: 200, headers });
+  } catch (err) {
+    // 여기서 던지면 요청 전체가 1101로 죽어 지도 탭이 통째로 깨진다 —
+    // 레이어만 비어 보이도록 빈 배열로 응답한다.
+    console.error("[nursing-rooms]", err);
+    return new Response(JSON.stringify({ rooms: [] }), { status: 200, headers });
+  }
 }
 
 async function handleNearbyPlace(env, url) {
@@ -615,7 +632,7 @@ async function handleNearbyPlace(env, url) {
     });
   }
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(q)}&display=1`,
     {
       headers: {
@@ -626,11 +643,7 @@ async function handleNearbyPlace(env, url) {
   );
 
   if (!res.ok) {
-    const detail = await res.text();
-    return new Response(JSON.stringify({ error: "네이버 검색 API 오류", detail }), {
-      status: 502,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
+    return upstreamErrorResponse("장소 검색에 실패했습니다.", await res.text());
   }
 
   const data = await res.json();
@@ -669,7 +682,7 @@ async function handleGeocode(env, url) {
     });
   }
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(query)}`,
     {
       headers: {
@@ -685,8 +698,7 @@ async function handleGeocode(env, url) {
   };
 
   if (!res.ok) {
-    const detail = await res.text();
-    return new Response(JSON.stringify({ error: "네이버 지오코딩 API 오류", detail }), { status: 502, headers });
+    return upstreamErrorResponse("주소를 찾지 못했습니다.", await res.text());
   }
 
   const data = await res.json();
@@ -726,7 +738,7 @@ async function handleDirections(env, url) {
     "cache-control": "public, max-age=86400",
   };
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}&option=trafast`,
     {
       headers: {
@@ -737,8 +749,7 @@ async function handleDirections(env, url) {
   );
 
   if (!res.ok) {
-    const detail = await res.text();
-    return new Response(JSON.stringify({ error: "네이버 길찾기 API 오류", detail }), { status: 502, headers });
+    return upstreamErrorResponse("경로를 계산하지 못했습니다.", await res.text());
   }
 
   const data = await res.json();
@@ -752,7 +763,7 @@ async function handleDirections(env, url) {
 }
 
 async function verifyTurnstile(env, token, ip) {
-  const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+  const res = await fetchWithTimeout("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ secret: env.TURNSTILE_SECRET_KEY, response: token, remoteip: ip || "" }),
@@ -760,16 +771,6 @@ async function verifyTurnstile(env, token, ip) {
   if (!res.ok) return false;
   const data = await res.json();
   return data.success === true;
-}
-
-// IP 자체는 저장하지 않고 해시만 남긴다 — 스팸 패턴 파악용이지 개인 식별용이 아님.
-async function checkRateLimit(env, ip) {
-  const key = `report:${await shortHash(ip)}`;
-  const raw = await env.RATE_LIMIT.get(key);
-  const count = raw ? parseInt(raw, 10) : 0;
-  if (count >= REPORT_RATE_LIMIT_PER_HOUR) return false;
-  await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: 3600 });
-  return true;
 }
 
 async function handleReport(request, env, ctx) {
@@ -797,7 +798,12 @@ async function handleReport(request, env, ctx) {
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
-  const allowed = await checkRateLimit(env, ip);
+  const allowed = await consumeRateLimit(env, {
+    scope: "report",
+    ip,
+    limit: REPORT_RATE_LIMIT_PER_HOUR,
+    windowSeconds: 3600,
+  });
   if (!allowed) {
     return new Response(JSON.stringify({ error: "잠시 후 다시 시도해주세요." }), { status: 429, headers });
   }
@@ -816,7 +822,7 @@ async function handleReport(request, env, ctx) {
   // placeId가 우리 장소 DB에 실제 존재하는 공개 페이지인지 서버에서 직접 확인한다.
   // 클라이언트가 보낸 placeId를 그대로 믿고 관계를 만들면 임의 페이지 ID를 넣어
   // 엉뚱한 노션 페이지에 관계를 거는 것도 가능해지기 때문.
-  const placeRes = await fetch(`https://api.notion.com/v1/pages/${placeId}`, { headers: notionHeaders });
+  const placeRes = await fetchWithTimeout(`https://api.notion.com/v1/pages/${placeId}`, { headers: notionHeaders });
   if (!placeRes.ok) {
     return new Response(JSON.stringify({ error: "존재하지 않는 장소입니다." }), { status: 404, headers });
   }
@@ -830,8 +836,8 @@ async function handleReport(request, env, ctx) {
     return new Response(JSON.stringify({ error: "존재하지 않는 장소입니다." }), { status: 404, headers });
   }
 
-  const ipHash = await shortHash(ip);
-  const createRes = await fetch("https://api.notion.com/v1/pages", {
+  const ipHash = await hashIp(ip);
+  const createRes = await fetchWithTimeout("https://api.notion.com/v1/pages", {
     method: "POST",
     headers: notionHeaders,
     body: JSON.stringify({
@@ -848,8 +854,7 @@ async function handleReport(request, env, ctx) {
   });
 
   if (!createRes.ok) {
-    const detail = await createRes.text();
-    return new Response(JSON.stringify({ error: "제보 저장에 실패했습니다.", detail }), { status: 502, headers });
+    return upstreamErrorResponse("제보 저장에 실패했습니다.", await createRes.text());
   }
 
   const reportsDbUrl = `https://www.notion.so/${env.NOTION_REPORTS_DATABASE_ID.replace(/-/g, "")}`;
@@ -874,11 +879,9 @@ function handleNaverConfig(env) {
   });
 }
 
-async function searchNaverBlog(env, query) {
-  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return [];
-
-  const res = await fetch(
-    `https://openapi.naver.com/v1/search/blog.json?query=${encodeURIComponent(query)}&display=5&sort=sim`,
+async function searchNaverEndpoint(env, endpoint, query) {
+  const res = await fetchWithTimeout(
+    `https://openapi.naver.com/v1/search/${endpoint}?query=${encodeURIComponent(query)}&display=5&sort=sim`,
     {
       headers: {
         "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
@@ -896,8 +899,21 @@ async function searchNaverBlog(env, query) {
   }));
 }
 
+// 블로그 + 카페글을 함께 본다. 유아 편의시설 정보는 지역 맘카페 글에 더 자세히
+// 적혀 있는 경우가 많은데, 그동안 blog.json만 호출하고 있어서 그쪽을 통째로
+// 놓치고 있었다. 한쪽이 실패해도 다른 쪽 결과로 계속 진행한다.
+async function searchNaverPosts(env, query) {
+  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return [];
+
+  const [blog, cafe] = await Promise.all([
+    searchNaverEndpoint(env, "blog.json", query).catch(() => []),
+    searchNaverEndpoint(env, "cafearticle.json", query).catch(() => []),
+  ]);
+  return [...blog, ...cafe];
+}
+
 async function patchPlaceProperties(env, placeId, properties) {
-  const res = await fetch(`https://api.notion.com/v1/pages/${placeId}`, {
+  const res = await fetchWithTimeout(`https://api.notion.com/v1/pages/${placeId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${env.NOTION_API_KEY}`,
@@ -922,7 +938,7 @@ async function runScheduledEnrichment(env) {
   await runEnrichment({
     places,
     today,
-    searchBlog: (query) => searchNaverBlog(env, query),
+    searchBlog: (query) => searchNaverPosts(env, query),
     patchPlace: (placeId, properties) => patchPlaceProperties(env, placeId, properties),
   });
 }
@@ -948,6 +964,48 @@ async function runPublicDataPlaceMatch(env) {
   /* oxlint-enable no-await-in-loop */
 }
 
+// geocode/nearby-place/directions는 우리 네이버 키로 외부 유료 API를 대신 호출해주는
+// 프록시라 인증 없이 열려 있으면 제3자가 우리 쿼터를 그대로 태울 수 있다. IP당
+// 분당 호출 수를 제한한다 — 정상 사용(코스 한 개 열 때 구간 수만큼)은 넉넉히 통과한다.
+async function withProxyRateLimit(request, env, handler) {
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const allowed = await consumeRateLimit(env, {
+    scope: "proxy",
+    ip,
+    limit: PROXY_RATE_LIMIT_PER_MINUTE,
+    windowSeconds: 60,
+  });
+  if (!allowed) return tooManyRequestsResponse();
+  return handler();
+}
+
+// HTML/정적 자산 응답에 기본 보안 헤더를 얹는다. CSP는 네이버 지도 SDK와
+// Turnstile, Pretendard 폰트 CDN을 실제로 쓰고 있어서 그 출처만 허용한다.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://oapi.map.naver.com https://*.pstatic.net https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  "font-src 'self' https://cdn.jsdelivr.net data:",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.map.naver.net",
+  "frame-src https://challenges.cloudflare.com",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ");
+
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("referrer-policy", "strict-origin-when-cross-origin");
+  headers.set("x-frame-options", "DENY");
+  headers.set("permissions-policy", "geolocation=(self), camera=(), microphone=(), payment=()");
+  if ((headers.get("content-type") || "").includes("text/html")) {
+    headers.set("content-security-policy", CSP);
+  }
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -969,6 +1027,13 @@ export default {
     }
     if (url.pathname.startsWith("/api/festivals/")) {
       const id = url.pathname.slice("/api/festivals/".length);
+      // 클라이언트가 준 값을 그대로 노션 API 경로에 넣기 전에 ID 형식을 확인한다.
+      if (!isNotionId(id)) {
+        return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), {
+          status: 404,
+          headers: { "content-type": "application/json; charset=utf-8" },
+        });
+      }
       return withEdgeCache(request, ctx, 3600, () => handleFestivalDetail(env, id, ctx));
     }
     if (url.pathname === "/api/nursing-rooms") {
@@ -980,13 +1045,13 @@ export default {
       return handleNaverConfig(env);
     }
     if (url.pathname === "/api/nearby-place") {
-      return handleNearbyPlace(env, url);
+      return withProxyRateLimit(request, env, () => handleNearbyPlace(env, url));
     }
     if (url.pathname === "/api/geocode") {
-      return handleGeocode(env, url);
+      return withProxyRateLimit(request, env, () => handleGeocode(env, url));
     }
     if (url.pathname === "/api/directions") {
-      return handleDirections(env, url);
+      return withProxyRateLimit(request, env, () => handleDirections(env, url));
     }
     if (url.pathname === "/api/reports") {
       return handleReport(request, env, ctx);
@@ -995,7 +1060,7 @@ export default {
       return handleImage(env, url.pathname.slice("/images/".length));
     }
 
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 
   async scheduled(event, env, ctx) {

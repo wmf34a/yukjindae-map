@@ -109,6 +109,7 @@ async function submitReport(placeId) {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ placeId, field, value: selectedValue, turnstileToken }),
+      signal: AbortSignal.timeout(10000),
     });
     const data = await res.json().catch(() => ({}));
 

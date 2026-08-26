@@ -374,7 +374,8 @@ body {
 }
 
 .banner__tagline {
-  font-size: 13px;
+  font-family: "Gowun Batang", "Noto Serif KR", serif;
+  font-size: 14px;
   font-weight: 500;
   opacity: 0.92;
   margin: 0;
@@ -407,7 +408,8 @@ body {
 
 .banner__caption-title {
   margin: 0 0 2px;
-  font-size: 15px;
+  font-family: "Gowun Batang", "Noto Serif KR", serif;
+  font-size: 16px;
   font-weight: 700;
   color: var(--color-white);
 }
@@ -472,6 +474,12 @@ body {
   font-weight: 700;
   color: var(--color-primary);
   margin: 0 0 14px;
+}
+
+/* "추천장소" 섹션만 다이어리 느낌의 세리프 제목 — 지역별 Top 10은 그대로 둔다 */
+.section__title--diary {
+  font-family: "Gowun Batang", "Noto Serif KR", serif;
+  font-size: 18px;
 }
 
 /* 대한민국 인터랙티브 지도 */
@@ -641,22 +649,33 @@ body {
 .place-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 18px;
   scroll-margin-top: 72px; /* sticky header 높이만큼 여유를 둬서, 지역 선택 시
     자동 스크롤로 내려왔을 때 카드 상단이 헤더에 가리지 않게 한다 */
 }
 
+/* 폴라로이드 느낌 — 사진 둘레에 흰 여백을 두르고 살짝 기울여서
+   "다녀온 걸 앨범에 정리한" 인상을 준다. 색은 기존 팔레트 그대로. */
 .place-grid__card {
   display: flex;
   flex-direction: column;
   background: var(--color-white);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: 8px;
+  padding: 8px 8px 2px;
   overflow: hidden;
   text-decoration: none;
   color: inherit;
   box-shadow: var(--shadow);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.place-grid__card:nth-child(odd) {
+  transform: rotate(-1.1deg);
+}
+
+.place-grid__card:nth-child(even) {
+  transform: rotate(1deg);
 }
 
 .place-grid__card:active {
@@ -671,7 +690,7 @@ body {
 .place-grid__thumb {
   width: 100%;
   aspect-ratio: 4 / 3;
-  border-radius: 12px 12px 0 0;
+  border-radius: 4px;
   background: var(--color-surface);
   object-fit: cover;
   display: block;
@@ -729,11 +748,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 10px 12px 14px;
+  padding: 8px 4px 10px;
 }
 
 .place-grid__name {
-  font-size: 14px;
+  font-family: "Gowun Batang", "Noto Serif KR", serif;
+  font-size: 14.5px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;

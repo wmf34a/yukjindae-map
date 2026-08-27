@@ -176,8 +176,12 @@ async function resolvePlaceStop(place) {
 // 근처맛집/근처카페는 노션에 주소가 아니라 상호 텍스트로 들어있어서, 우선 네이버
 // 지역검색으로 실제 도로명주소를 찾은 뒤 그 주소를 지오코딩해서 좌표를 얻는다.
 async function resolveNearbyStop(rawValue) {
-  if (!rawValue || !window.isSingleBusinessName(rawValue)) return null;
-  const query = window.stripParenthetical(rawValue) || rawValue;
+  // 여러 곳이 적힌 값은 예전에 통째로 걸러져 핀이 아예 안 찍혔다(전국 44곳 + 제주
+  // 대부분). 맨 앞을 대표로 잡고 괄호 설명을 걷어낸 상호를 검색어로 쓴다 —
+  // 괄호 안에 주소·메모가 들어가는 형식이라 벗기지 않으면 검색이 실패한다.
+  const primary = window.primaryNearby(rawValue);
+  const query = window.stripParenthetical(primary);
+  if (!query) return null;
   try {
     const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(query)}`);
     if (!data.found) return null;

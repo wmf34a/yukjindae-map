@@ -30,36 +30,44 @@ function sourceLinkHtml(place) {
   return `<a class="place-detail__source-link" href="${escapeHtml(href)}" target="_blank" rel="noopener">정보 출처 ↗</a>`;
 }
 
-// 근처맛집/근처카페에 콤마 없이 업체명 하나만 명확히 적힌 경우, 네이버 지역검색
-// API로 주소를 끌어와 작은 "길찾기" 버튼을 붙인다. 괄호 부가설명(예: "(대형키즈룸완비)")은
-// 검색어에서는 제거한다 — 검색 매칭을 방해해서 정상 업체도 못 찾는 경우가 있었다.
-function isSingleBusinessName(value) {
-  return Boolean(value) && !value.includes(",") && !value.includes("·");
-}
-
+// 괄호 부가설명(예: "(대형키즈룸완비)", "(주소, 아기 식사 무료)")은 검색어에서
+// 제거한다 — 검색 매칭을 방해해서 정상 업체도 못 찾는 경우가 있었다.
 function stripParenthetical(value) {
-  return value.replace(/[(（][^)）]*[)）]/g, "").trim();
+  return String(value ?? "").replace(/[(（][^)）]*[)）]/g, "").trim();
 }
 
-// course.js도 근처맛집/근처카페 텍스트에서 코스 핀용 검색어를 뽑아낼 때 이 판별/정리
+// course.js도 근처맛집/근처카페 텍스트에서 코스 핀용 검색어를 뽑아낼 때 이 정리
 // 로직을 그대로 써야 해서 전역으로 노출해둔다.
-window.isSingleBusinessName = isSingleBusinessName;
 window.stripParenthetical = stripParenthetical;
 
+// 여러 곳이 적혀 있으면 맨 앞을 대표로 보여주고 나머지는 접는다. 예전에는 전체를
+// 한 줄에 늘어놨는데, 길어서 읽기 나쁜 데다 길찾기 버튼도 안 붙었다 — 값에 쉼표가
+// 있으면 통째로 검색 불가로 판정했기 때문이다. 이제 대표 한 곳을 정한 뒤 괄호
+// 설명만 걷어내면 그게 곧 검색어라, 별도 판정 없이 항상 길찾기를 붙일 수 있다.
 function nearbyRow(label, value) {
   if (!value) return "";
-  const eligible = isSingleBusinessName(value);
-  const query = stripParenthetical(value) || value;
-  const navSlot = eligible
+  const items = window.splitNearbyList(value);
+  const primary = items[0] || value;
+  const rest = items.slice(1);
+
+  const query = stripParenthetical(primary);
+  const navSlot = query
     ? `<span class="place-detail__nav-slot" data-biz-query="${encodeURIComponent(query)}"></span>`
+    : "";
+  const more = rest.length
+    ? `<details class="place-detail__nearby-more">
+        <summary>다른 ${rest.length}곳 더보기</summary>
+        <ul>${rest.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      </details>`
     : "";
   return `
     <div class="place-detail__section">
       <p class="place-detail__label">${escapeHtml(label)}</p>
       <p class="place-detail__value place-detail__value--row">
-        <span>${escapeHtml(value)}</span>
+        <span>${escapeHtml(primary)}</span>
         ${navSlot}
       </p>
+      ${more}
     </div>
   `;
 }
@@ -130,7 +138,6 @@ function render(place) {
       ${amenitiesHtml}
       ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant)}
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe)}
-      ${row("등록자", place.registeredBy)}
 
       <div class="place-detail__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>

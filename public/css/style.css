@@ -1190,3 +1190,38 @@ body {
   cursor: pointer;
   padding: 4px;
 }
+
+/* 오늘 날씨 한 줄 안내. 날씨를 못 가져오면 아예 렌더하지 않는다(hidden). */
+.today-weather {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.today-weather[hidden] {
+  display: none;
+}
+
+.today-weather__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.today-weather__text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.today-weather__temp {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary);
+}

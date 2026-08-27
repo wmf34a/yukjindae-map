@@ -2,6 +2,7 @@ import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
+import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weather.js";
 import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
@@ -949,6 +950,34 @@ async function runScheduledEnrichment(env) {
   });
 }
 
+// 오늘 날씨를 보고 어떤 장소를 위로 올릴지 알려준다. Open-Meteo는 키가 필요 없어서
+// 환경변수 없이 동작하고, 실패하면 추천 없이 조용히 비운다 — 날씨를 못 가져왔다고
+// 홈 화면이 깨지면 안 된다.
+async function handleToday(url) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  const lat = Number(url.searchParams.get("lat"));
+  const lng = Number(url.searchParams.get("lng"));
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return new Response(JSON.stringify({ error: "좌표가 필요합니다." }), { status: 400, headers });
+  }
+
+  try {
+    const res = await fetchWithTimeout(buildForecastUrl({ lat, lng }));
+    if (!res.ok) return new Response(JSON.stringify({ weather: null }), { status: 200, headers });
+
+    const forecast = parseForecast(await res.json());
+    if (!forecast) return new Response(JSON.stringify({ weather: null }), { status: 200, headers });
+
+    return new Response(
+      JSON.stringify({ weather: forecast, recommendation: recommendationFor(forecast) }),
+      { status: 200, headers }
+    );
+  } catch {
+    return new Response(JSON.stringify({ weather: null }), { status: 200, headers });
+  }
+}
+
 // Claude에 프롬프트 하나를 보내고 응답 텍스트만 돌려준다. 이 저장소는 런타임
 // 의존성 없이 모든 외부 API를 fetch로 부르는 구조라 SDK 대신 같은 방식을 쓴다.
 async function askClaude(env, prompt) {
@@ -1157,6 +1186,11 @@ async function handleRequest(request, env, ctx) {
     // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
     // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
     return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env));
+  }
+  if (url.pathname === "/api/today") {
+    // 하루 단위 예보라 자주 바뀌지 않는다. 좌표를 소수점 1자리로 뭉개서 캐시
+    // 키를 만들기 때문에(약 11km) 같은 동네 사용자는 캐시를 함께 쓴다.
+    return withEdgeCache(request, ctx, 1800, () => handleToday(url));
   }
   if (url.pathname === "/naver-config") {
     return handleNaverConfig(env);

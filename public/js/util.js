@@ -129,6 +129,26 @@ function primaryNearby(value) {
   return splitNearbyList(value)[0] || "";
 }
 
+// 오늘 날씨에 맞는 카테고리를 앞으로 당긴다. 서버(/api/today)가 boost/avoid를
+// 계산해 주므로 여기서는 순서만 바꾼다. 걸러내지 않는 이유는, 비 온다고 야외를
+// 목록에서 지우면 "다음에 갈 곳"을 찾는 사람이 아무것도 못 보게 되기 때문이다.
+// src/today-weather.js에 같은 규칙이 있지만 그쪽은 ESM이라 여기서 못 불러온다.
+function sortByWeather(places, recommendation) {
+  if (!recommendation) return places;
+  const boost = new Set(recommendation.boost || []);
+  const avoid = new Set(recommendation.avoid || []);
+  const score = (place) => {
+    const categories = place.categories || [];
+    if (categories.some((c) => boost.has(c))) return 0;
+    if (categories.some((c) => avoid.has(c))) return 2;
+    return 1;
+  };
+  return places
+    .map((place, index) => ({ place, index, score: score(place) }))
+    .toSorted((a, b) => (a.score !== b.score ? a.score - b.score : a.index - b.index))
+    .map((entry) => entry.place);
+}
+
 // 브라우저 fetch도 기본 타임아웃이 없다 — 네트워크가 불안정한 이동 중(주 사용
 // 상황)에 응답이 안 오면 "불러오는 중..."에서 영영 멈춘다. 공통 래퍼로 10초에
 // 끊어서 각 화면의 catch가 에러 문구를 띄우게 한다.
@@ -151,5 +171,6 @@ window.monthlyRank = monthlyRank;
 window.sortByMonthlyRank = sortByMonthlyRank;
 window.splitNearbyList = splitNearbyList;
 window.primaryNearby = primaryNearby;
+window.sortByWeather = sortByWeather;
 window.fetchJson = fetchJson;
 window.apiUrl = apiUrl;

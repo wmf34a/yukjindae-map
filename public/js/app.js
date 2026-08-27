@@ -71,6 +71,7 @@ const state = {
   places: [],
   banners: [],
   region: null,
+  weather: null,
   category: null,
   query: "",
 };
@@ -247,9 +248,12 @@ function renderPlaces() {
     return;
   }
 
+  // 지역을 고르면 그 지역 월간 Top 10이 주인공이고, 고르기 전 홈에서는 오늘
+  // 날씨에 맞는 곳을 앞으로 당긴다. 둘을 겹치면 어느 기준으로 정렬됐는지
+  // 알 수 없어져서 한 화면에는 하나만 적용한다.
   const showRank = Boolean(state.region);
   const matched = state.places.filter(matchesFilters);
-  const filtered = showRank ? sortByMonthlyRank(matched) : matched;
+  const filtered = showRank ? sortByMonthlyRank(matched) : sortByWeather(matched, state.weather);
   list.innerHTML = filtered.length
     ? filtered.map((place) => placeCard(place, showRank)).join("")
     : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
@@ -450,6 +454,71 @@ async function loadPlaces() {
   renderPlaces();
 }
 
+// 월간 Top 10은 한 달 내내 같은 목록이라 "오늘 뭐하지"에 답하지 못한다. 오늘 날씨로
+// 실내·야외를 바꿔 보여줘서 매일 다른 화면이 되게 한다.
+//
+// 위치 권한은 물어보지 않는다 — 홈에 들어오자마자 권한 팝업이 뜨면 거슬리고, 이미
+// 주변 탭에서 한 번 묻는다. 권한이 이미 허용된 경우에만 현재 위치를 쓰고, 아니면
+// 서울을 기준으로 한다.
+const DEFAULT_WEATHER_COORDS = { lat: 37.5665, lng: 126.978 };
+
+function currentCoords() {
+  return new Promise((resolve) => {
+    if (!navigator.permissions || !navigator.geolocation) return resolve(DEFAULT_WEATHER_COORDS);
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((status) => {
+        if (status.state !== "granted") return resolve(DEFAULT_WEATHER_COORDS);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+          () => resolve(DEFAULT_WEATHER_COORDS),
+          { timeout: 3000, maximumAge: 600000 }
+        );
+      })
+      .catch(() => resolve(DEFAULT_WEATHER_COORDS));
+  });
+}
+
+async function loadTodayWeather() {
+  const box = document.getElementById("today-weather");
+  if (!box) return;
+
+  try {
+    const { lat, lng } = await currentCoords();
+    const data = await fetchJson(`/api/today?lat=${lat}&lng=${lng}`);
+    if (!data.weather || !data.recommendation) return;
+
+    state.weather = data.recommendation;
+    const temp = typeof data.weather.maxTemp === "number" ? `${Math.round(data.weather.maxTemp)}°` : "";
+    box.innerHTML = `
+      <span class="today-weather__icon">${weatherIcon(data.recommendation.tone, data.weather.kind)}</span>
+      <span class="today-weather__text">${escapeHtml(data.recommendation.headline)}</span>
+      ${temp ? `<span class="today-weather__temp">${escapeHtml(temp)}</span>` : ""}
+    `;
+    box.hidden = false;
+    renderPlaces();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+const WEATHER_ICONS = {
+  rain: "🌧",
+  storm: "⛈",
+  snow: "❄️",
+  hot: "🥵",
+  cold: "🧣",
+  fog: "🌫",
+  clear: "☀️",
+};
+
+// tone은 "무엇을 추천할지"라 맑음과 흐림이 같은 clear로 묶인다. 아이콘까지 같으면
+// 흐린 날에 해가 뜨므로, 하늘 상태(kind)로 한 번 더 갈라준다.
+function weatherIcon(tone, kind) {
+  if (tone === "clear" && kind === "cloudy") return "⛅";
+  return WEATHER_ICONS[tone] || "🌤";
+}
+
 // 검색어를 입력하면 배너·지역 지도 섹션을 접어서, 스크롤 없이 검색 결과가 바로
 // 보이도록 한다. 검색어를 지우면 원래대로 되돌아온다.
 function updateSearchModeUI() {
@@ -472,4 +541,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
+  // 장소 로딩과 독립적으로 돈다 — 날씨가 늦거나 실패해도 목록은 그대로 뜬다.
+  loadTodayWeather();
 });

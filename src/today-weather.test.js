@@ -4,7 +4,6 @@ import {
   recommendationFor,
   parseForecast,
   buildForecastUrl,
-  sortByWeather,
   HOT_THRESHOLD,
   COLD_THRESHOLD,
 } from "./today-weather.js";
@@ -126,35 +125,3 @@ describe("buildForecastUrl", () => {
   });
 });
 
-describe("sortByWeather", () => {
-  const places = [
-    { name: "공원", categories: ["자연·공원"] },
-    { name: "박물관", categories: ["실내놀이", "체험·문화"] },
-    { name: "맛집", categories: ["맛집"] },
-  ];
-
-  it("추천 카테고리를 앞으로 당긴다", () => {
-    const rec = { boost: ["실내놀이"], avoid: ["자연·공원"] };
-    expect(sortByWeather(places, rec).map((p) => p.name)).toEqual(["박물관", "맛집", "공원"]);
-  });
-
-  // 비 온다고 야외를 지워버리면 "다음에 갈 곳"을 찾는 사람이 아무것도 못 본다.
-  it("걸러내지 않고 순서만 바꾼다", () => {
-    const rec = { boost: ["실내놀이"], avoid: ["자연·공원"] };
-    expect(sortByWeather(places, rec)).toHaveLength(3);
-  });
-
-  it("같은 점수끼리는 원래 순서를 지킨다", () => {
-    const rec = { boost: [], avoid: [] };
-    expect(sortByWeather(places, rec).map((p) => p.name)).toEqual(["공원", "박물관", "맛집"]);
-  });
-
-  it("추천이 없으면 그대로 둔다", () => {
-    expect(sortByWeather(places, null)).toBe(places);
-  });
-
-  it("카테고리가 없는 장소도 죽지 않는다", () => {
-    const rec = { boost: ["실내놀이"], avoid: [] };
-    expect(sortByWeather([{ name: "무태그" }], rec).map((p) => p.name)).toEqual(["무태그"]);
-  });
-});

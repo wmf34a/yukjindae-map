@@ -4,6 +4,10 @@
 // 기상청 단기예보 API는 서비스별 활용신청이 필요하고 위경도를 격자(nx, ny)로 변환해야
 // 하는데, Open-Meteo는 키 없이 위경도를 그대로 받는다. "오늘 비/맑음/기온" 수준의
 // 판단에는 충분해서 이쪽을 쓴다.
+//
+// 정렬 자체는 여기서 하지 않는다 — 서버는 boost/avoid만 계산해 내려주고, 실제 순서
+// 변경은 프론트(public/js/util.js의 sortByWeather)가 맡는다. 같은 로직을 양쪽에 두면
+// 한쪽만 고쳤을 때 조용히 어긋난다.
 
 export const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 
@@ -125,23 +129,3 @@ export function buildForecastUrl({ lat, lng }) {
   return `${OPEN_METEO_URL}?${params}`;
 }
 
-// 추천 카테고리에 해당하는 장소를 앞으로 당긴다. 걸러내지 않고 순서만 바꾸는 이유는,
-// 비 온다고 야외를 목록에서 지워버리면 "오늘 말고 다음에 갈 곳"을 찾는 사람이
-// 아무것도 못 보게 되기 때문이다.
-export function sortByWeather(places, recommendation) {
-  if (!recommendation) return places;
-  const boost = new Set(recommendation.boost || []);
-  const avoid = new Set(recommendation.avoid || []);
-
-  const score = (place) => {
-    const categories = place.categories || [];
-    if (categories.some((c) => boost.has(c))) return 0;
-    if (categories.some((c) => avoid.has(c))) return 2;
-    return 1;
-  };
-
-  return places
-    .map((place, index) => ({ place, index, score: score(place) }))
-    .toSorted((a, b) => (a.score !== b.score ? a.score - b.score : a.index - b.index))
-    .map((entry) => entry.place);
-}

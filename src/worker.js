@@ -70,6 +70,20 @@ const REPORT_VALUE_MAX_LENGTH = 200;
 // placeId/field는 화이트리스트로, 텍스트값은 필드 성격(불리언 vs 자유서술)에 맞게
 // 검증한다 — 임의 필드에 임의 값을 쓸 수 없게 해서 승인 큐로 들어오는 데이터의
 // 신뢰도를 최소한으로 보장한다(Broken Access Control / 입력 검증 방지).
+// 신규 장소 제보는 아직 DB에 없는 곳이라 placeId가 없다. 대신 장소명이 필수이고,
+// 주소·이유는 한 덩어리 텍스트로 받아 사람이 읽고 판단한다.
+const NEW_PLACE_FIELD = "신규장소";
+const NEW_PLACE_NAME_MAX = 60;
+
+export function validateNewPlacePayload({ placeName, value, turnstileToken }) {
+  if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
+  if (typeof placeName !== "string" || !placeName.trim()) return "장소 이름이 필요합니다.";
+  if (placeName.trim().length > NEW_PLACE_NAME_MAX) return "장소 이름이 너무 깁니다.";
+  if (typeof value !== "string" || !value.trim()) return "어떤 점이 좋았는지 알려주세요.";
+  if (value.length > REPORT_VALUE_MAX_LENGTH) return "내용이 너무 깁니다.";
+  return null;
+}
+
 export function validateReportPayload({ placeId, field, value, turnstileToken }) {
   if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
   // 노션 페이지 ID 형식이 아닌 값이 그대로 API 경로에 들어가지 않도록 막는다.
@@ -805,11 +819,15 @@ async function handleReport(request, env, ctx) {
     return new Response(JSON.stringify({ error: "잘못된 요청 본문입니다." }), { status: 400, headers });
   }
 
-  const validationError = validateReportPayload(body || {});
+  // 신규 장소 제보는 검증 규칙도 저장 형태도 달라서 먼저 갈라낸다.
+  const isNewPlace = (body || {}).field === NEW_PLACE_FIELD;
+  const validationError = isNewPlace
+    ? validateNewPlacePayload(body || {})
+    : validateReportPayload(body || {});
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
-  const { placeId, field, value, turnstileToken } = body;
+  const { placeId, field, value, turnstileToken, placeName } = body;
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
@@ -833,6 +851,38 @@ async function handleReport(request, env, ctx) {
     "Notion-Version": "2022-06-28",
     "content-type": "application/json",
   };
+
+  const ipHashEarly = await hashIp(ip);
+
+  // 신규 장소는 아직 DB에 없으므로 존재 확인을 건너뛰고, 관계 없이 제보만 남긴다.
+  // 운영자가 노션에서 읽고 판단해 장소 DB에 직접 추가한다 — 사용자가 보낸 값이
+  // 장소 DB로 곧장 들어가지 않게 하려는 것이다.
+  if (isNewPlace) {
+    const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        parent: { database_id: env.NOTION_REPORTS_DATABASE_ID },
+        properties: {
+          "장소명": { title: [{ text: { content: placeName.trim().slice(0, 200) } }] },
+          "필드명": { select: { name: NEW_PLACE_FIELD } },
+          "제안값": { rich_text: [{ text: { content: value.trim().slice(0, REPORT_VALUE_MAX_LENGTH) } }] },
+          "상태": { select: { name: "대기중" } },
+          "제보자IP해시": { rich_text: [{ text: { content: ipHashEarly } }] },
+        },
+      }),
+    });
+    if (!res.ok) {
+      return upstreamErrorResponse("제보 저장에 실패했습니다.", await res.text());
+    }
+    ctx.waitUntil(
+      notifySlack(
+        env,
+        `📍 새 장소 추천이 들어왔습니다\n• ${placeName.trim()}\n• ${value.trim().slice(0, 120)}`
+      )
+    );
+    return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+  }
 
   // placeId가 우리 장소 DB에 실제 존재하는 공개 페이지인지 서버에서 직접 확인한다.
   // 클라이언트가 보낸 placeId를 그대로 믿고 관계를 만들면 임의 페이지 ID를 넣어

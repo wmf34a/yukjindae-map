@@ -108,6 +108,13 @@
     <div class="place-grid" id="place-list">
       <p class="place-list__loading" id="place-loading">불러오는 중...</p>
     </div>
+    <button type="button" class="suggest-cta" id="suggest-btn">
+      <span class="suggest-cta__icon">📍</span>
+      <span class="suggest-cta__text">
+        <strong>좋았던 곳이 여기 없나요?</strong>
+        아빠가 직접 다녀온 곳을 추천해주세요
+      </span>
+    </button>
   </section>
 
   <nav class="tabbar">
@@ -119,11 +126,39 @@
 
 </div>
 
+  <div class="report-modal-overlay" id="suggest-modal-overlay">
+    <div class="report-modal" role="dialog" aria-modal="true" aria-label="장소 추천">
+      <div class="report-modal__header">
+        <p class="report-modal__title">장소 추천하기</p>
+        <button type="button" class="report-modal__close" id="suggest-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="report-modal__body">
+        <label class="report-modal__label" for="suggest-name">어디인가요?</label>
+        <input type="text" id="suggest-name" class="report-modal__value-input" placeholder="예: 서울숲 곤충식물원" maxlength="60" />
+
+        <label class="report-modal__label" for="suggest-value">아이와 가기 어떤 점이 좋았나요?</label>
+        <input type="text" id="suggest-value" class="report-modal__value-input" placeholder="예: 무료이고 유모차로 다니기 편해요. 수유실도 있어요" maxlength="200" />
+
+        <div id="suggest-turnstile" class="report-modal__turnstile"></div>
+        <p class="report-modal__error" id="suggest-error" hidden></p>
+      </div>
+      <p class="report-modal__success" id="suggest-success" hidden>추천해주셔서 고마워요! 확인 후 지도에 올릴게요.</p>
+      <div class="report-modal__footer">
+        <button type="button" class="btn-primary" id="suggest-submit" disabled>추천하기</button>
+      </div>
+    </div>
+  </div>
+
 <script src="js/util.js"></script>
 <!-- 지도 좌표는 app.js에서 분리했다(51KB). 앱 로직만 고쳐도 이 파일은 캐시가 유지된다. -->
 <script src="js/region-map-paths.js"></script>
 <script src="js/favorites.js"></script>
 <script src="js/app.js"></script>
+<!-- 장소 추천의 사람 확인(Turnstile)에 사이트 키가 필요하다. 홈은 지도를 쓰지 않아
+     그동안 이 설정을 안 불러왔다. -->
+<script src="/naver-config"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="js/suggest.js"></script>
 <script src="js/pwa.js"></script>
 </body>
 </html>

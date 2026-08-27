@@ -1292,3 +1292,44 @@ body {
   background: rgba(58, 67, 99, 0.55);
   border-radius: var(--radius) 0 0 0;
 }
+
+/* 추천장소 목록을 다 훑고 "여기 없네" 싶을 때 눈에 들어오도록 목록 바로 아래 둔다. */
+.suggest-cta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 16px 0 0;
+  padding: 14px 16px;
+  background: var(--color-white);
+  border: 1px dashed var(--color-accent);
+  border-radius: var(--radius);
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--color-text);
+}
+
+.suggest-cta:active {
+  transform: scale(0.99);
+}
+
+.suggest-cta__icon {
+  font-size: 20px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.suggest-cta__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}
+
+.suggest-cta__text strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}

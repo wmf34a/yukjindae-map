@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { matchesQuery, validateReportPayload } from "./worker.js";
+import { matchesQuery, validateReportPayload, validateNewPlacePayload } from "./worker.js";
 
 const place = {
   name: "전쟁기념관",
@@ -86,5 +86,39 @@ describe("validateReportPayload", () => {
     expect(
       validateReportPayload({ ...valid, field: "무료입장연령", value: longValue })
     ).toMatch(/너무 깁니다/);
+  });
+});
+
+describe("validateNewPlacePayload", () => {
+  const valid = { placeName: "인천대공원", value: "숲이 넓고 주차가 무료예요", turnstileToken: "token" };
+
+  it("정상 제보는 통과한다", () => {
+    expect(validateNewPlacePayload(valid)).toBeNull();
+  });
+
+  // 아직 DB에 없는 장소라 placeId가 없다 — 이걸 요구하면 신규 제보가 아예 불가능하다.
+  it("placeId 없이도 통과한다", () => {
+    expect(validateNewPlacePayload({ ...valid, placeId: undefined })).toBeNull();
+  });
+
+  it("장소 이름이 없으면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, placeName: "" })).toMatch(/이름/);
+    expect(validateNewPlacePayload({ ...valid, placeName: "   " })).toMatch(/이름/);
+  });
+
+  it("장소 이름이 너무 길면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, placeName: "가".repeat(61) })).toMatch(/깁니다/);
+  });
+
+  it("추천 이유가 없으면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, value: "" })).toMatch(/좋았는지/);
+  });
+
+  it("내용이 200자를 넘으면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, value: "가".repeat(201) })).toMatch(/깁니다/);
+  });
+
+  it("사람 확인 토큰이 없으면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, turnstileToken: "" })).toMatch(/사람/);
   });
 });

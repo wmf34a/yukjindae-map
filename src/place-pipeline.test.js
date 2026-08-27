@@ -12,6 +12,7 @@ import {
   AMENITY_TARGETS,
   destinationScore,
   isRejected,
+  districtOf,
 } from "./place-pipeline.js";
 
 describe("isInKorea", () => {
@@ -44,12 +45,12 @@ describe("distanceKm", () => {
 
 describe("pickNearby", () => {
   const items = [
-    { title: "고메돈까스", dist: 736, cat3: "A05020100" },
-    { title: "동네호프집", dist: 300, cat3: "A05020100" },
-    { title: "모모아트", dist: 2098, cat3: "A05020900" },
-    { title: "수피아", dist: 2368, cat3: "A05020900" },
-    { title: "어리버리소머리국밥", dist: 1422, cat3: "A05020100" },
-    { title: "먼집", dist: 9000, cat3: "A05020100" },
+    { title: "고메돈까스", dist: 736, kind: "food" },
+    { title: "동네호프집", dist: 300, kind: "food" },
+    { title: "모모아트", dist: 2098, kind: "cafe" },
+    { title: "수피아", dist: 2368, kind: "cafe" },
+    { title: "어리버리소머리국밥", dist: 1422, kind: "food" },
+    { title: "먼집", dist: 20000, kind: "food" },
   ];
 
   it("카페와 음식점을 나눈다", () => {
@@ -65,8 +66,17 @@ describe("pickNearby", () => {
   });
 
   it("너무 먼 곳은 뺀다", () => {
-    const { restaurants } = pickNearby(items, { maxDistanceKm: 5 });
+    const { restaurants } = pickNearby(items);
     expect(restaurants.map((r) => r.title)).not.toContain("먼집");
+  });
+
+  // TourAPI와 네이버 결과를 합치면 같은 가게가 두 번 나온다.
+  it("같은 상호는 한 번만 넣는다", () => {
+    const dup = [
+      { title: "고메돈까스", dist: 736, kind: "food" },
+      { title: "고메 돈까스", dist: 740, kind: "food" },
+    ];
+    expect(pickNearby(dup).restaurants).toHaveLength(1);
   });
 
   it("가까운 순으로 고른다", () => {
@@ -175,8 +185,8 @@ describe("preparePlace", () => {
   const deps = {
     geocode: async () => ({ lat: 37.5516, lng: 126.74 }),
     findNearby: async () => [
-      { title: "고메돈까스", dist: 736, cat3: "A05020100" },
-      { title: "모모아트", dist: 2098, cat3: "A05020900" },
+      { title: "고메돈까스", dist: 736, kind: "food" },
+      { title: "모모아트", dist: 2098, kind: "cafe" },
     ],
     searchPosts: async () => [],
     today: "2026-08-27",
@@ -302,5 +312,19 @@ describe("지역 검증", () => {
   it("목적지 점수도 지역으로 거른다", () => {
     const posts = [{ title: "중랑 장미공원 아이랑" }, { title: "인천 장미공원 아이랑" }];
     expect(destinationScore(posts, "장미공원", "인천")).toBe(1);
+  });
+});
+
+describe("districtOf", () => {
+  // "정남진물과학관 카페"는 0건이지만 "장흥군 카페"는 다섯 곳이 나온다.
+  it("주소에서 시·군·구를 뽑는다", () => {
+    expect(districtOf("전라남도 장흥군 장흥읍 상성길 24")).toBe("장흥군");
+    expect(districtOf("인천광역시 계양구 방축로 21")).toBe("계양구");
+    expect(districtOf("경기도 용인시 처인구 백암면")).toBe("용인시");
+  });
+
+  it("못 찾으면 빈 문자열", () => {
+    expect(districtOf("제주 표선면")).toBe("");
+    expect(districtOf("")).toBe("");
   });
 });

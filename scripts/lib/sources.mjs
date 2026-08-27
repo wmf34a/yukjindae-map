@@ -43,14 +43,77 @@ export function tourApi(key) {
   return { call, items: tourItems };
 }
 
-// 반경 안의 음식점(contentTypeId 39)을 가까운 순으로 준다. cat3 로 카페/디저트가 갈린다.
-export function makeFindNearby(tour, { radius = 3000 } = {}) {
+// TourAPI 음식점 분류(cat3) 중 카페·디저트.
+const TOUR_CAFE_CAT = "A05020900";
+
+// 반경 안의 음식점(contentTypeId 39)을 가까운 순으로 준다.
+export function makeTourNearby(tour, { radius = 5000 } = {}) {
   return async ({ lat, lng }) => {
     const j = await tour.call("locationBasedList2", {
       mapX: String(lng), mapY: String(lat), radius: String(radius),
       contentTypeId: "39", numOfRows: "30", arrange: "E",
     });
-    return tour.items(j).map((x) => ({ title: clean(x.title), dist: Number(x.dist), cat3: x.cat3 }));
+    return tour.items(j).map((x) => ({
+      title: clean(x.title),
+      dist: Number(x.dist),
+      kind: x.cat3 === TOUR_CAFE_CAT ? "cafe" : "food",
+    }));
+  };
+}
+
+// TourAPI는 관광 등록 업소만 담고 있어 지방에서는 반경 3km 안이 통째로 비는 일이
+// 흔하다(해남공룡박물관은 20km를 뒤져야 한 곳 나왔다). 네이버 지역검색은 바로 옆
+// 식당까지 알고 있어 빈자리를 메운다. 좌표는 WGS84 × 1e7 로 오므로 직접 거리를 잰다.
+export function makeNaverNearby(vars, distanceKm) {
+  const headers = {
+    "X-Naver-Client-Id": vars.NAVER_SEARCH_CLIENT_ID,
+    "X-Naver-Client-Secret": vars.NAVER_SEARCH_CLIENT_SECRET,
+  };
+  return async (origin, query, kind) => {
+    const res = await fetch(
+      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5`,
+      { headers }
+    );
+    const data = await res.json().catch(() => ({}));
+    return (data.items || [])
+      .map((i) => {
+        const lng = Number(i.mapx) / 1e7;
+        const lat = Number(i.mapy) / 1e7;
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return {
+          title: clean(i.title),
+          dist: distanceKm(origin, { lat, lng }) * 1000,
+          kind: /카페|디저트|베이커리|커피/.test(i.category || "") ? "cafe" : kind,
+        };
+      })
+      .filter(Boolean);
+  };
+}
+
+// TourAPI 로 먼저 채우고, 맛집이나 카페가 비면 그 자리만 네이버로 메운다.
+export function makeFindNearby({ tour, vars, distanceKm, pickNearby, placeName, region, district }) {
+  const fromTour = makeTourNearby(tour);
+  const fromNaver = makeNaverNearby(vars, distanceKm);
+
+  // 장소 이름으로 먼저 찾고, 그래도 없으면 시·군·구로 넓힌다. "정남진물과학관 카페"는
+  // 0건이지만 "장흥군 카페"는 다섯 곳이 나온다. 넓힌 결과는 거리 필터가 걸러 준다.
+  const fill = async (coords, kind, word) => {
+    for (const where of [[region, placeName], [district]]) {
+      const query = [...where.filter(Boolean), word].join(" ");
+      if (!query.trim() || query.trim() === word) continue;
+      const hits = await fromNaver(coords, query, kind).catch(() => []);
+      if (hits.length) return hits;
+    }
+    return [];
+  };
+
+  return async (coords) => {
+    const found = await fromTour(coords).catch(() => []);
+    const { restaurants, cafes } = pickNearby(found);
+    const extra = [];
+    if (!restaurants.length) extra.push(...await fill(coords, "food", "맛집"));
+    if (!cafes.length) extra.push(...await fill(coords, "cafe", "카페"));
+    return [...found, ...extra];
   };
 }
 

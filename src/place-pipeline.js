@@ -35,21 +35,30 @@ export function distanceKm(a, b) {
 }
 
 // ── 근처 맛집·카페 ───────────────────────────────────────
-// TourAPI 음식점 분류(cat3). 카페·디저트만 따로 떼어내 "근처카페"에 넣는다.
-const CAFE_CAT = "A05020900";
-
 // 아이를 데리고 갈 곳이라 술집 성격은 뺀다. 상호에 드러나는 것만 걸러도 대부분 잡힌다.
 const EXCLUDE_NAME = /술집|호프|포차|주점|바비큐펍|와인|칵테일|맥주|소주|이자카야|룸|노래/;
 
-export function pickNearby(items, { maxEach = 2, maxDistanceKm = 5 } = {}) {
+// 어댑터가 { title, dist(m), kind: "cafe" | "food" } 로 맞춰서 넘긴다.
+// 지방은 반경 3km 안에 아무것도 없는 곳이 흔해 넉넉히 잡는다 — 차로 움직이는
+// 코스라 10분 거리면 "근처"로 친다.
+export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10 } = {}) {
   const clean = (items || [])
     .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title))
     .filter((i) => !Number.isFinite(Number(i.dist)) || Number(i.dist) / 1000 <= maxDistanceKm)
     .toSorted((a, b) => Number(a.dist || 0) - Number(b.dist || 0));
 
-  const cafes = clean.filter((i) => i.cat3 === CAFE_CAT).slice(0, maxEach);
-  const foods = clean.filter((i) => i.cat3 !== CAFE_CAT).slice(0, maxEach);
-  return { restaurants: foods, cafes };
+  const seen = new Set();
+  const unique = clean.filter((i) => {
+    const key = i.title.replace(/\s/g, "");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  return {
+    restaurants: unique.filter((i) => i.kind !== "cafe").slice(0, maxEach),
+    cafes: unique.filter((i) => i.kind === "cafe").slice(0, maxEach),
+  };
 }
 
 // 노션 "근처맛집"/"근처카페"는 자유 텍스트다. 상세페이지가 괄호 앞부분을 상호로
@@ -62,6 +71,17 @@ export function formatNearby(list) {
       return `${i.title}${dist}`;
     })
     .join(" / ");
+}
+
+// 주소에서 시·군·구를 뽑는다. 장소 이름으로 검색해도 근처 카페가 안 나올 때
+// "장흥군 카페" 처럼 넓혀 다시 찾기 위한 것이다. 거리 필터가 먼 곳을 걸러 준다.
+export function districtOf(address) {
+  const parts = String(address || "").split(/\s+/);
+  // 광역시·특별시는 너무 넓어 건너뛴다 — "인천광역시 카페"로 찾으면 반대편 카페가 나온다.
+  const hit = parts.find(
+    (t) => /[시군구]$/.test(t) && t.length >= 3 && !/(광역시|특별시|특별자치시|특별자치도)$/.test(t)
+  );
+  return hit || "";
 }
 
 // ── 편의시설 ────────────────────────────────────────────

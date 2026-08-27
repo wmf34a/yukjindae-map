@@ -92,8 +92,13 @@ function render(place) {
   const el = document.getElementById("place-detail");
   document.title = `${place.name} | 육진대`;
 
+  // safeImageSrc를 거쳐야 미니앱(다른 오리진)에서도 이미지가 뜬다 — 여기만
+  // 빠져 있었다.
   const hero = place.image
-    ? `<img class="place-detail__hero" src="${escapeHtml(place.image)}" alt="${escapeHtml(place.name)}" />`
+    ? `<figure class="place-detail__hero-wrap">
+        <img class="place-detail__hero" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" />
+        ${place.photoCredit ? `<figcaption class="place-detail__photo-credit">사진 ${escapeHtml(place.photoCredit)}</figcaption>` : ""}
+      </figure>`
     : "";
 
   const tags = [place.region, ...(place.categories || [])]

@@ -82,6 +82,9 @@ export function toPlace(page) {
     eventInfo: text(p["이벤트정보"]),
     eventEndDate: dateValue(p["이벤트종료일"]),
     eventSourceUrl: urlValue(p["이벤트출처"]),
+    // 사진 저작권 표기. 공공누리(한국관광공사·제주관광공사) 이미지는 출처를
+    // 밝히는 것이 이용 조건이고, 시설이 제공한 이미지도 어디 것인지 드러내야 한다.
+    photoCredit: text(p["사진출처"]),
   };
 }
 

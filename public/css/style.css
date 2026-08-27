@@ -1275,3 +1275,20 @@ body {
   opacity: 0.6;
   cursor: default;
 }
+
+/* 사진 저작권 표기. 공공누리 이미지는 출처를 밝히는 것이 이용 조건이다. */
+.place-detail__hero-wrap {
+  margin: 0;
+  position: relative;
+}
+
+.place-detail__photo-credit {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  color: var(--color-white);
+  background: rgba(58, 67, 99, 0.55);
+  border-radius: var(--radius) 0 0 0;
+}

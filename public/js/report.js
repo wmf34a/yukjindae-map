@@ -1,13 +1,27 @@
+// 운영시간·입장료가 틀리면 헛걸음하거나 돈이 어긋난다 — 편의시설 오차보다 훨씬
+// 치명적인데 정작 제보할 방법이 없었다. 자유서술 필드로 함께 받는다.
 const REPORT_FIELDS = [
+  { value: "운영시간", type: "text" },
+  { value: "입장료", type: "text" },
+  { value: "무료입장연령", type: "text" },
+  { value: "주차상세", type: "text" },
   { value: "기저귀교환대", type: "boolean" },
   { value: "수유실", type: "boolean" },
   { value: "유아의자", type: "boolean" },
-  { value: "무료입장연령", type: "text" },
 ];
 
 let turnstileWidgetId = null;
 let turnstileToken = "";
 let selectedValue = "";
+
+// 자유서술 필드는 무엇을 적어야 할지 감이 안 오면 빈 채로 닫힌다. 필드마다
+// 실제 데이터에 가까운 예시를 보여준다.
+const PLACEHOLDERS = {
+  "운영시간": "예: 10:00~18:00, 월요일 휴관",
+  "입장료": "예: 성인 5,000원 / 어린이 3,000원",
+  "무료입장연령": "예: 36개월 미만 무료",
+  "주차상세": "예: 2시간 무료, 이후 30분당 1,000원",
+};
 
 function fieldType(field) {
   const found = REPORT_FIELDS.find((f) => f.value === field);
@@ -93,6 +107,7 @@ function setField(field) {
     boolGroup.hidden = true;
     textInput.hidden = false;
     textInput.value = "";
+    textInput.placeholder = PLACEHOLDERS[field] || "";
   }
   updateSubmitState();
 }

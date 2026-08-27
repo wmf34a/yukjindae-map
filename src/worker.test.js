@@ -53,6 +53,18 @@ describe("validateReportPayload", () => {
     ).toBeNull();
   });
 
+  // 운영시간·입장료가 틀리면 헛걸음하거나 돈이 어긋난다. 편의시설 오차보다
+  // 치명적인데 오래도록 제보 대상이 아니었다.
+  it("운영시간·입장료·주차상세도 제보할 수 있다", () => {
+    expect(validateReportPayload({ ...valid, field: "운영시간", value: "10:00~18:00" })).toBeNull();
+    expect(validateReportPayload({ ...valid, field: "입장료", value: "성인 5,000원" })).toBeNull();
+    expect(validateReportPayload({ ...valid, field: "주차상세", value: "무료 30분" })).toBeNull();
+  });
+
+  it("자유서술 필드는 있음/없음 제약을 받지 않는다", () => {
+    expect(validateReportPayload({ ...valid, field: "운영시간", value: "연중무휴" })).toBeNull();
+  });
+
   it("placeId가 없으면 걸러낸다", () => {
     expect(validateReportPayload({ ...valid, placeId: "" })).toMatch(/placeId/);
   });

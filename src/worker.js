@@ -54,7 +54,15 @@ const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 1";
 // UTC 자정을 쓴다.
 const MONTHLY_TOP10_CRON = "0 0 1 * *";
 
-const REPORTABLE_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자", "무료입장연령"]);
+const REPORTABLE_FIELDS = new Set([
+  "운영시간",
+  "입장료",
+  "무료입장연령",
+  "주차상세",
+  "기저귀교환대",
+  "수유실",
+  "유아의자",
+]);
 const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
 const BOOLEAN_VALUES = new Set(["있음", "없음"]);
 const REPORT_VALUE_MAX_LENGTH = 200;

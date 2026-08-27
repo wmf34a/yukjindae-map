@@ -41,9 +41,14 @@ const EXCLUDE_NAME = /술집|호프|포차|주점|바비큐펍|와인|칵테일|
 // 어댑터가 { title, dist(m), kind: "cafe" | "food" } 로 맞춰서 넘긴다.
 // 지방은 반경 3km 안에 아무것도 없는 곳이 흔해 넉넉히 잡는다 — 차로 움직이는
 // 코스라 10분 거리면 "근처"로 친다.
-export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10 } = {}) {
+export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName = "" } = {}) {
+  // 관내 식당은 "근처"가 아니다. 해남공룡박물관 반경 검색에 "해남공룡박물관 식당"이
+  // 0m로 잡혔는데, 코스보기에서 장소와 핀이 겹쳐 따로 들를 곳이 되지 못한다.
+  const own = String(placeName).replace(/\s/g, "");
+  const isInside = (title) => own.length >= 3 && title.replace(/\s/g, "").includes(own);
+
   const clean = (items || [])
-    .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title))
+    .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title) && !isInside(i.title))
     .filter((i) => !Number.isFinite(Number(i.dist)) || Number(i.dist) / 1000 <= maxDistanceKm)
     .toSorted((a, b) => Number(a.dist || 0) - Number(b.dist || 0));
 
@@ -226,7 +231,7 @@ export async function preparePlace({ base, geocode, findNearby, searchPosts, tod
 
   // 2) 근처 맛집·카페 — 없으면 코스보기에 핀이 안 찍힌다.
   const nearbyRaw = await findNearby(coords).catch(() => []);
-  const nearby = pickNearby(nearbyRaw);
+  const nearby = pickNearby(nearbyRaw, { placeName: base.name });
   if (!nearby.restaurants.length) warnings.push("근처 맛집을 찾지 못했습니다");
   if (!nearby.cafes.length) warnings.push("근처 카페를 찾지 못했습니다");
 

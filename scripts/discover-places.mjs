@@ -12,12 +12,11 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   preparePlace, destinationScore, isRejected, MIN_BLOG_MENTIONS,
-  distanceKm, pickNearby, districtOf,
 } from "../src/place-pipeline.js";
 import {
 
 /* oxlint-disable no-await-in-loop -- TourAPI·네이버 모두 초당 호출 제한이 있어 일부러 순차로 돈다. */
-  loadVars, sleep, clean, tourApi, makeFindNearby, fetchDetail,
+  loadVars, sleep, clean, tourApi, makeKakaoNearby, fetchDetail,
   makeGeocode, makeSearchPosts,
 } from "./lib/sources.mjs";
 
@@ -43,6 +42,7 @@ const vars = loadVars();
 const tour = tourApi(vars.TOUR_API_KEY);
 const geocode = makeGeocode(vars);
 const searchPosts = makeSearchPosts(vars);
+const findNearby = makeKakaoNearby(vars.KAKAO_REST_API_KEY);
 const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 // 이미 등록된 곳은 다시 발굴하지 않는다.
@@ -118,12 +118,6 @@ const results = [];
 for (const c of picks) {
   const detail = await fetchDetail(tour, c.contentid, c.contenttypeid);
   await sleep(200);
-
-  // 근처 맛집은 장소 이름을 알아야 네이버로 보완할 수 있어 장소마다 새로 만든다.
-  const findNearby = makeFindNearby({
-    tour, vars, distanceKm, pickNearby,
-    placeName: c.title, region, district: districtOf(c.addr),
-  });
 
   const out = await preparePlace({
     base: {

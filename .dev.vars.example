@@ -14,3 +14,8 @@ TOUR_API_KEY=
 SLACK_WEBHOOK_URL=
 VISITJEJU_API_KEY=
 ANTHROPIC_API_KEY=
+
+# 카카오 개발자 REST API 키 (근처 맛집·카페 반경 검색).
+# developers.kakao.com > 앱 > 플랫폼 키 > REST API 키
+# 제품 설정 > 카카오맵 을 활성화해야 Local API가 열린다.
+KAKAO_REST_API_KEY=

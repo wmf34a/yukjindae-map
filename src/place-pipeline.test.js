@@ -356,3 +356,21 @@ describe("collectFeeHints", () => {
     expect(collectFeeHints([{ title: "다른 곳", description: "입장료 2000원", date: "20260810" }], "인천어린이과학관", now)).toHaveLength(0);
   });
 });
+
+describe("관내 시설 제외", () => {
+  // 해남공룡박물관 반경 검색에 "해남공룡박물관 식당"이 0m로 잡혔다. 코스보기에서
+  // 장소와 핀이 겹쳐 따로 들를 곳이 되지 못한다.
+  it("장소 이름이 들어간 관내 식당은 뺀다", () => {
+    const items = [
+      { title: "해남공룡박물관 식당", dist: 0, kind: "food" },
+      { title: "사거리공룡식당", dist: 1500, kind: "food" },
+    ];
+    const { restaurants } = pickNearby(items, { placeName: "해남공룡박물관" });
+    expect(restaurants.map((r) => r.title)).toEqual(["사거리공룡식당"]);
+  });
+
+  it("장소 이름을 안 주면 예전처럼 다 남긴다", () => {
+    const items = [{ title: "해남공룡박물관 식당", dist: 0, kind: "food" }];
+    expect(pickNearby(items).restaurants).toHaveLength(1);
+  });
+});

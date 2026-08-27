@@ -43,77 +43,47 @@ export function tourApi(key) {
   return { call, items: tourItems };
 }
 
-// TourAPI 음식점 분류(cat3) 중 카페·디저트.
-const TOUR_CAFE_CAT = "A05020900";
+// ── 근처 맛집·카페 ───────────────────────────────────────
+// 카카오 장소 카테고리 그룹 코드. FD6 음식점 / CE7 카페.
+const KAKAO_FOOD = "FD6";
+const KAKAO_CAFE = "CE7";
+const KAKAO_CAFE_NAME = /카페|디저트|베이커리|제과|커피/;
 
-// 반경 안의 음식점(contentTypeId 39)을 가까운 순으로 준다.
-export function makeTourNearby(tour, { radius = 5000 } = {}) {
-  return async ({ lat, lng }) => {
-    const j = await tour.call("locationBasedList2", {
-      mapX: String(lng), mapY: String(lat), radius: String(radius),
-      contentTypeId: "39", numOfRows: "30", arrange: "E",
+// 카카오는 좌표 반경 검색을 그대로 지원하고 거리까지 응답에 담아 준다.
+//
+// 전에는 TourAPI 반경 → "지역 장소명 맛집" → "시군구 맛집" 3단으로 우회했다.
+// TourAPI가 관광 등록 업소만 담고 있어 지방에서 반경 3km가 통째로 비었고(해남
+// 공룡박물관은 20km를 뒤져야 한 곳 나왔다), 네이버 지역검색에는 좌표 파라미터가
+// 없어 키워드로 위치를 짐작해야 했기 때문이다. 카카오는 같은 자리에서 3km 안에
+// 음식점 5곳·카페 2곳을 바로 준다.
+export function makeKakaoNearby(key, { radius = 5000 } = {}) {
+  const headers = { Authorization: `KakaoAK ${key}` };
+
+  const search = async ({ lat, lng }, code) => {
+    const qs = new URLSearchParams({
+      x: String(lng), y: String(lat), radius: String(radius),
+      category_group_code: code, size: "15", sort: "distance",
     });
-    return tour.items(j).map((x) => ({
-      title: clean(x.title),
-      dist: Number(x.dist),
-      kind: x.cat3 === TOUR_CAFE_CAT ? "cafe" : "food",
+    const res = await fetch(`https://dapi.kakao.com/v2/local/search/category.json?${qs}`, { headers });
+    if (!res.ok) throw new Error(`카카오 ${res.status}: ${(await res.text()).slice(0, 120)}`);
+    const data = await res.json();
+    return (data.documents || []).map((p) => ({
+      title: p.place_name,
+      dist: Number(p.distance),
+      kind: code === KAKAO_CAFE ? "cafe" : "food",
+      category: p.category_name || "",
+      url: p.place_url || "",
     }));
-  };
-}
-
-// TourAPI는 관광 등록 업소만 담고 있어 지방에서는 반경 3km 안이 통째로 비는 일이
-// 흔하다(해남공룡박물관은 20km를 뒤져야 한 곳 나왔다). 네이버 지역검색은 바로 옆
-// 식당까지 알고 있어 빈자리를 메운다. 좌표는 WGS84 × 1e7 로 오므로 직접 거리를 잰다.
-export function makeNaverNearby(vars, distanceKm) {
-  const headers = {
-    "X-Naver-Client-Id": vars.NAVER_SEARCH_CLIENT_ID,
-    "X-Naver-Client-Secret": vars.NAVER_SEARCH_CLIENT_SECRET,
-  };
-  return async (origin, query, kind) => {
-    const res = await fetch(
-      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5`,
-      { headers }
-    );
-    const data = await res.json().catch(() => ({}));
-    return (data.items || [])
-      .map((i) => {
-        const lng = Number(i.mapx) / 1e7;
-        const lat = Number(i.mapy) / 1e7;
-        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-        return {
-          title: clean(i.title),
-          dist: distanceKm(origin, { lat, lng }) * 1000,
-          kind: /카페|디저트|베이커리|커피/.test(i.category || "") ? "cafe" : kind,
-        };
-      })
-      .filter(Boolean);
-  };
-}
-
-// TourAPI 로 먼저 채우고, 맛집이나 카페가 비면 그 자리만 네이버로 메운다.
-export function makeFindNearby({ tour, vars, distanceKm, pickNearby, placeName, region, district }) {
-  const fromTour = makeTourNearby(tour);
-  const fromNaver = makeNaverNearby(vars, distanceKm);
-
-  // 장소 이름으로 먼저 찾고, 그래도 없으면 시·군·구로 넓힌다. "정남진물과학관 카페"는
-  // 0건이지만 "장흥군 카페"는 다섯 곳이 나온다. 넓힌 결과는 거리 필터가 걸러 준다.
-  const fill = async (coords, kind, word) => {
-    for (const where of [[region, placeName], [district]]) {
-      const query = [...where.filter(Boolean), word].join(" ");
-      if (!query.trim() || query.trim() === word) continue;
-      const hits = await fromNaver(coords, query, kind).catch(() => []);
-      if (hits.length) return hits;
-    }
-    return [];
   };
 
   return async (coords) => {
-    const found = await fromTour(coords).catch(() => []);
-    const { restaurants, cafes } = pickNearby(found);
-    const extra = [];
-    if (!restaurants.length) extra.push(...await fill(coords, "food", "맛집"));
-    if (!cafes.length) extra.push(...await fill(coords, "cafe", "카페"));
-    return [...found, ...extra];
+    const [food, cafe] = await Promise.all([
+      search(coords, KAKAO_FOOD),
+      search(coords, KAKAO_CAFE),
+    ]);
+    // FD6에도 카페가 섞여 온다(카카오가 "음식점 > 카페"로 분류하는 것들).
+    // 카페는 CE7 결과만 쓰고 음식점 쪽에서는 걸러 낸다.
+    return [...food.filter((f) => !KAKAO_CAFE_NAME.test(f.category)), ...cafe];
   };
 }
 

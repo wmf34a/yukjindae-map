@@ -209,22 +209,31 @@ function freeBadgeText(place) {
   return "";
 }
 
-function placeCard(place) {
+// 순위는 "지역별" Top 10이라 지역을 고르지 않은 목록에서는 1위가 여러 개 보인다
+// (제주 1위·경상도 1위·서울강남 1위…). 지역을 선택했을 때만 순위를 노출한다.
+function placeCard(place, showRank = false) {
   const thumb = place.image
     ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
   const freeBadge = freeBadgeText(place);
   const badge = freeBadge ? `<span class="place-grid__free-badge">${escapeHtml(freeBadge)}</span>` : "";
+  const rank = showRank ? monthlyRank(place) : null;
+  const rankBadge = rank ? `<span class="place-grid__rank">${rank}</span>` : "";
+  const rankReason = rank && place.rankReason
+    ? `<div class="place-grid__rank-reason">${escapeHtml(place.rankReason)}</div>`
+    : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
+        ${rankBadge}
         ${badge}
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
       <div class="place-grid__body">
         <div class="place-grid__name">${escapeHtml(place.name)}</div>
         <div class="place-grid__region">${escapeHtml(place.region)}</div>
+        ${rankReason}
       </div>
     </a>
   `;
@@ -238,9 +247,11 @@ function renderPlaces() {
     return;
   }
 
-  const filtered = state.places.filter(matchesFilters);
+  const showRank = Boolean(state.region);
+  const matched = state.places.filter(matchesFilters);
+  const filtered = showRank ? sortByMonthlyRank(matched) : matched;
   list.innerHTML = filtered.length
-    ? filtered.map(placeCard).join("")
+    ? filtered.map((place) => placeCard(place, showRank)).join("")
     : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
   bindFavoriteButtons(list);
 }

@@ -6,7 +6,8 @@ import vm from "node:vm";
 // public/js/util.js는 <script>로 직접 읽히는 클래식 스크립트라 import할 수 없다.
 // 화면 XSS 방어의 마지막 관문이라 테스트는 반드시 있어야 해서, 파일을 그대로
 // 읽어 window를 흉내낸 컨텍스트에서 실행하고 노출된 함수를 꺼내 검증한다.
-let escapeHtml, safeHref, safeImageSrc, festivalDday;
+let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
+let splitNearbyList, primaryNearby;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
@@ -14,8 +15,12 @@ beforeAll(() => {
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
-  ({ escapeHtml, safeHref, safeImageSrc, festivalDday } = sandbox.window);
+  ({ escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank } = sandbox.window);
+  ({ splitNearbyList, primaryNearby } = sandbox.window);
 });
+
+// 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
+const thisMonth = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);
 
 describe("escapeHtml", () => {
   it("HTML 특수문자를 모두 엔티티로 바꾼다", () => {
@@ -116,5 +121,128 @@ describe("festivalDday", () => {
 
   it("시작일이 없으면 빈 문자열이다", () => {
     expect(festivalDday({})).toBe("");
+  });
+});
+
+describe("monthlyRank", () => {
+  it("이번 달 순위면 그대로 돌려준다", () => {
+    expect(monthlyRank({ rank: 3, rankMonth: thisMonth() })).toBe(3);
+  });
+
+  // 갱신이 실패하면 지난달 순위가 노션에 남는다. 그걸 이번 달 순위로 쓰면
+  // 계절이 안 맞는 곳이 맨 위에 서게 된다.
+  it("지난달 순위는 인정하지 않는다", () => {
+    expect(monthlyRank({ rank: 1, rankMonth: "2020-01" })).toBeNull();
+  });
+
+  it("순위가 없으면 null", () => {
+    expect(monthlyRank({ rankMonth: thisMonth() })).toBeNull();
+    expect(monthlyRank({ rank: null, rankMonth: thisMonth() })).toBeNull();
+    expect(monthlyRank(undefined)).toBeNull();
+  });
+});
+
+describe("sortByMonthlyRank", () => {
+  const month = thisMonth();
+
+  it("순위 순으로 앞에 세운다", () => {
+    const sorted = sortByMonthlyRank([
+      { name: "c", rank: 2, rankMonth: month },
+      { name: "a", rank: 1, rankMonth: month },
+    ]);
+    expect(sorted.map((p) => p.name)).toEqual(["a", "c"]);
+  });
+
+  it("순위 없는 장소는 뒤로 민다", () => {
+    const sorted = sortByMonthlyRank([
+      { name: "x" },
+      { name: "a", rank: 1, rankMonth: month },
+      { name: "y" },
+    ]);
+    expect(sorted.map((p) => p.name)).toEqual(["a", "x", "y"]);
+  });
+
+  // 목록 순서가 새로고침마다 바뀌면 아까 본 곳을 다시 못 찾는다.
+  it("순위 없는 장소끼리는 원래 순서를 유지한다", () => {
+    const sorted = sortByMonthlyRank([{ name: "x" }, { name: "y" }, { name: "z" }]);
+    expect(sorted.map((p) => p.name)).toEqual(["x", "y", "z"]);
+  });
+
+  it("지난달 순위는 순위 없음으로 취급한다", () => {
+    const sorted = sortByMonthlyRank([
+      { name: "old", rank: 1, rankMonth: "2020-01" },
+      { name: "now", rank: 5, rankMonth: month },
+    ]);
+    expect(sorted.map((p) => p.name)).toEqual(["now", "old"]);
+  });
+
+  it("원본 배열을 바꾸지 않는다", () => {
+    const input = [{ name: "b", rank: 2, rankMonth: month }, { name: "a", rank: 1, rankMonth: month }];
+    sortByMonthlyRank(input);
+    expect(input.map((p) => p.name)).toEqual(["b", "a"]);
+  });
+});
+
+describe("splitNearbyList", () => {
+  it("쉼표로 구분된 기존 형식을 나눈다", () => {
+    expect(splitNearbyList("사생활 영도점, 올바릇식당 영도점")).toEqual([
+      "사생활 영도점",
+      "올바릇식당 영도점",
+    ]);
+  });
+
+  it("슬래시로 구분된 제주 형식을 나눈다", () => {
+    expect(splitNearbyList("무호소반(제주시 수목원길 23) / 밥촐림(제주시 구남로 26)")).toEqual([
+      "무호소반(제주시 수목원길 23)",
+      "밥촐림(제주시 구남로 26)",
+    ]);
+  });
+
+  // 괄호 안 쉼표에서 잘리면 "포도호텔 레스토랑(서귀포시 안덕면 산록남로 863"처럼
+  // 반토막 난 상호가 지도 검색어로 나가서 핀을 못 찾는다.
+  it("괄호 안 쉼표에서는 자르지 않는다", () => {
+    expect(splitNearbyList("포도호텔 레스토랑(서귀포시 안덕면 산록남로 863, 일식)")).toEqual([
+      "포도호텔 레스토랑(서귀포시 안덕면 산록남로 863, 일식)",
+    ]);
+  });
+
+  it("괄호가 섞인 여러 건도 정확히 나눈다", () => {
+    expect(
+      splitNearbyList("별돈별 중문 본점(구산봉로 61, 아기 식사 무료·고기 구워줌) / 달페이지(색달로64번길 51, 브런치)")
+    ).toEqual([
+      "별돈별 중문 본점(구산봉로 61, 아기 식사 무료·고기 구워줌)",
+      "달페이지(색달로64번길 51, 브런치)",
+    ]);
+  });
+
+  it("한 곳만 있으면 그대로 한 건", () => {
+    expect(splitNearbyList("오색막국수")).toEqual(["오색막국수"]);
+  });
+
+  it("빈 값은 빈 배열", () => {
+    expect(splitNearbyList("")).toEqual([]);
+    expect(splitNearbyList(null)).toEqual([]);
+    expect(splitNearbyList(undefined)).toEqual([]);
+  });
+
+  it("구분자만 연달아 있어도 빈 항목을 만들지 않는다", () => {
+    expect(splitNearbyList("A, , B")).toEqual(["A", "B"]);
+  });
+});
+
+describe("primaryNearby", () => {
+  it("맨 앞을 대표로 고른다", () => {
+    expect(primaryNearby("사생활 영도점, 올바릇식당 영도점")).toBe("사생활 영도점");
+  });
+
+  it("괄호 메모가 붙어도 첫 건을 통째로 준다", () => {
+    expect(primaryNearby("포도호텔 레스토랑(산록남로 863, 일식) / 두도 레스토랑")).toBe(
+      "포도호텔 레스토랑(산록남로 863, 일식)"
+    );
+  });
+
+  it("빈 값은 빈 문자열", () => {
+    expect(primaryNearby("")).toBe("");
+    expect(primaryNearby(undefined)).toBe("");
   });
 });

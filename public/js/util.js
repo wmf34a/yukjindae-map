@@ -67,6 +67,68 @@ function festivalDday(festival) {
   return "";
 }
 
+// 매월 1일 크론이 매기는 "이달의 지역별 Top 10" 순위. 갱신이 실패하면 지난달
+// 순위가 노션에 그대로 남으므로, 추천월이 이번 달과 같을 때만 순위로 인정한다 —
+// 8월에 뽑은 물놀이장이 9월에도 1위로 서 있으면 추천이 아니라 방해가 된다.
+function currentMonthKey() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 7);
+}
+
+function monthlyRank(place) {
+  if (!place || typeof place.rank !== "number") return null;
+  if (place.rankMonth !== currentMonthKey()) return null;
+  return place.rank;
+}
+
+// 순위가 있는 곳을 앞에, 없는 곳을 뒤에 둔다. 순위 없는 곳끼리는 원래 순서를
+// 유지한다 — 목록 순서가 새로고침마다 바뀌면 아까 본 곳을 다시 못 찾는다.
+function sortByMonthlyRank(places) {
+  return places
+    .map((place, index) => ({ place, index, rank: monthlyRank(place) }))
+    .toSorted((a, b) => {
+      if (a.rank === null && b.rank === null) return a.index - b.index;
+      if (a.rank === null) return 1;
+      if (b.rank === null) return -1;
+      return a.rank - b.rank;
+    })
+    .map((entry) => entry.place);
+}
+
+// 근처맛집/근처카페는 노션에 자유 텍스트로 들어있고, 형식이 두 가지로 섞여 있다.
+//   "사생활 영도점, 올바릇식당 영도점"                     ← 쉼표, 상호만
+//   "포도호텔 레스토랑(주소, 일식) / 두도 레스토랑(주소)"    ← 슬래시, 괄호에 주소·메모
+// 괄호 안에도 쉼표가 들어가므로 단순 split은 상호를 두 동강 낸다. 괄호 깊이를
+// 세면서 바깥에 있는 구분자에서만 자른다.
+function splitNearbyList(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return [];
+
+  const items = [];
+  let depth = 0;
+  let buffer = "";
+  for (const ch of text) {
+    if (ch === "(" || ch === "（") depth += 1;
+    else if (ch === ")" || ch === "）") depth = Math.max(0, depth - 1);
+
+    if (depth === 0 && (ch === "," || ch === "/")) {
+      items.push(buffer);
+      buffer = "";
+      continue;
+    }
+    buffer += ch;
+  }
+  items.push(buffer);
+
+  return items.map((s) => s.trim()).filter(Boolean);
+}
+
+// 코스 지도 핀과 상세페이지 대표 표시에 쓸 첫 번째 가게. 여러 곳이 적혀 있으면
+// 지금까지는 코스에서 통째로 버려져 핀이 안 찍혔다 — 맨 앞을 대표로 쓴다.
+function primaryNearby(value) {
+  return splitNearbyList(value)[0] || "";
+}
+
 // 브라우저 fetch도 기본 타임아웃이 없다 — 네트워크가 불안정한 이동 중(주 사용
 // 상황)에 응답이 안 오면 "불러오는 중..."에서 영영 멈춘다. 공통 래퍼로 10초에
 // 끊어서 각 화면의 catch가 에러 문구를 띄우게 한다.
@@ -85,5 +147,9 @@ window.escapeHtml = escapeHtml;
 window.safeHref = safeHref;
 window.safeImageSrc = safeImageSrc;
 window.festivalDday = festivalDday;
+window.monthlyRank = monthlyRank;
+window.sortByMonthlyRank = sortByMonthlyRank;
+window.splitNearbyList = splitNearbyList;
+window.primaryNearby = primaryNearby;
 window.fetchJson = fetchJson;
 window.apiUrl = apiUrl;

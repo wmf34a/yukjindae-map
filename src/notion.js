@@ -70,6 +70,13 @@ export function toPlace(page) {
     nearbyRestaurant: text(p["근처맛집"]),
     nearbyCafe: text(p["근처카페"]),
     registeredBy: text(p["등록자"]),
+    // 매월 1일 크론이 계절에 맞게 다시 매기는 지역별 추천 순위. 순위가 없는
+    // 장소는 rank가 null이라 정렬에서 뒤로 밀린다("아직 안 뽑힌 곳"과 "1위"를
+    // 0으로 뭉뚱그리지 않기 위해 ?? 0을 쓰지 않는다).
+    rank: (p["추천순위"] && typeof p["추천순위"].number === "number") ? p["추천순위"].number : null,
+    rankMonth: text(p["추천월"]),
+    rankReason: text(p["추천사유"]),
+    rankPinned: Boolean(p["추천고정"] && p["추천고정"].checkbox),
   };
 }
 

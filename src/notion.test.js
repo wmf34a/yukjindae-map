@@ -183,6 +183,57 @@ describe("toPlace", () => {
       verifiedStatus: "",
     });
   });
+
+  it("월간 추천 순위 필드를 변환한다", () => {
+    const page = {
+      id: "page-3",
+      created_time: "2026-07-20T03:00:00.000Z",
+      properties: {
+        "장소명": { title: [{ plain_text: "표선해수욕장" }] },
+        "추천순위": { number: 1 },
+        "추천월": { rich_text: [{ plain_text: "2026-08" }] },
+        "추천사유": { rich_text: [{ plain_text: "수심이 얕아 한여름 아기 물놀이에 좋다" }] },
+        "추천고정": { checkbox: true },
+      },
+    };
+
+    expect(toPlace(page)).toMatchObject({
+      rank: 1,
+      rankMonth: "2026-08",
+      rankReason: "수심이 얕아 한여름 아기 물놀이에 좋다",
+      rankPinned: true,
+    });
+  });
+
+  it("아직 순위가 없으면 rank는 null이고 고정은 false다", () => {
+    const page = {
+      id: "page-4",
+      created_time: "2026-07-20T03:00:00.000Z",
+      properties: { "장소명": { title: [{ plain_text: "순위없음" }] } },
+    };
+
+    expect(toPlace(page)).toMatchObject({
+      rank: null,
+      rankMonth: "",
+      rankReason: "",
+      rankPinned: false,
+    });
+  });
+
+  // 0위는 존재하지 않지만, number 필드를 0으로 채워둔 페이지가 "순위 없음"으로
+  // 뭉개지면 정렬이 조용히 틀어지므로 null과 구분되는지 확인한다.
+  it("추천순위 0을 null로 뭉개지 않는다", () => {
+    const page = {
+      id: "page-5",
+      created_time: "2026-07-20T03:00:00.000Z",
+      properties: {
+        "장소명": { title: [{ plain_text: "영순위" }] },
+        "추천순위": { number: 0 },
+      },
+    };
+
+    expect(toPlace(page).rank).toBe(0);
+  });
 });
 
 describe("toBanner", () => {

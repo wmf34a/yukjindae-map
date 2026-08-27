@@ -1,6 +1,7 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
+import { runMonthlyTop10 } from "./monthly-top10.js";
 import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
@@ -46,6 +47,11 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
 const FESTIVAL_IMPORT_CRON = "0 19 * * 1";
 const STATION_GEOCODE_CRON = "0 20 * * 1";
 const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 1";
+// 매월 1일 09:00 KST(= 1일 00:00 UTC). 지역별 Top 10을 그 달 계절에 맞게 다시 매긴다.
+// 다른 크론들처럼 새벽에 돌리려면 UTC 기준 "전달 말일 19시"여야 하는데 말일은
+// 28~31일로 달마다 달라 크론으로 표현할 수 없다. 그래서 1일이 확실히 보장되는
+// UTC 자정을 쓴다.
+const MONTHLY_TOP10_CRON = "0 0 1 * *";
 
 const REPORTABLE_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자", "무료입장연령"]);
 const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
@@ -943,6 +949,75 @@ async function runScheduledEnrichment(env) {
   });
 }
 
+// Claude에 프롬프트 하나를 보내고 응답 텍스트만 돌려준다. 이 저장소는 런타임
+// 의존성 없이 모든 외부 API를 fetch로 부르는 구조라 SDK 대신 같은 방식을 쓴다.
+async function askClaude(env, prompt) {
+  const res = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-opus-5",
+      max_tokens: 4000,
+      // 순위를 매기는 정도라 최고 강도까지 갈 일이 아니다. medium이면 계절
+      // 판단은 충분히 하면서 토큰을 아낀다.
+      output_config: { effort: "medium" },
+      messages: [{ role: "user", content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  return (data.content || [])
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("");
+}
+
+// Cron Trigger(매월 1일)로 실행 — 장소 풀은 계절을 안 가리고 쌓이지만 그 달에
+// 갈 만한 곳은 달마다 다르다. 지역별로 Claude를 한 번씩 불러 순위를 다시 매긴다.
+async function runScheduledMonthlyTop10(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.ANTHROPIC_API_KEY) {
+    await notifySlack(env, "⚠️ 월간 Top10 갱신을 건너뛰었습니다 — 환경변수가 설정되지 않았습니다.");
+    return;
+  }
+
+  const places = await fetchAllPlaces(env);
+  // KST 기준의 "이번 달"이어야 한다. UTC로 계산하면 매월 1일 09:00 KST 실행
+  // 시점이 UTC로는 아직 1일 00:00이라 문제없지만, 실행이 밀리거나 수동으로
+  // 돌릴 때 달이 어긋날 수 있어 명시적으로 KST로 옮긴다.
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const monthKey = kst.toISOString().slice(0, 7);
+
+  const result = await runMonthlyTop10({
+    places,
+    monthKey,
+    askClaude: (prompt) => askClaude(env, prompt),
+    patchPlace: (placeId, properties) => patchPlaceProperties(env, placeId, properties),
+  });
+
+  const ok = result.regions.filter((r) => r.ok);
+  const failed = result.regions.filter((r) => !r.ok);
+  const lines = [
+    `🗓️ ${monthKey} 지역별 Top 10 갱신 ${result.ok ? "완료" : "일부 실패"}`,
+    `• 성공 ${ok.length}개 지역 (${ok.reduce((sum, r) => sum + r.ranked, 0)}곳 순위 부여)`,
+  ];
+  if (failed.length) {
+    lines.push(`• 실패 ${failed.length}개 지역 — 지난달 순위를 그대로 유지합니다`);
+    for (const r of failed.slice(0, 5)) {
+      lines.push(`   - ${r.region}: ${r.error || (r.failures || []).join(", ")}`);
+    }
+  }
+  lines.push("https://yukjindae-map.wmf34a.workers.dev");
+  await notifySlack(env, lines.join("\n"));
+}
+
 // Cron Trigger(매주 1회, 역명 지오코딩 다음 슬롯)로 실행 — 우리 장소 좌표와
 // 공공 수유실 좌표를 250m 반경으로 대조해서, 아직 수유실이 미확인인 장소에
 // "수유실" 체크박스를 자동으로 켜준다. 확신할 수 없는 매칭이라 확인상태는
@@ -1125,6 +1200,10 @@ export default {
     }
     if (event.cron === FESTIVAL_IMPORT_CRON) {
       ctx.waitUntil(runScheduledFestivalImport(env));
+      return;
+    }
+    if (event.cron === MONTHLY_TOP10_CRON) {
+      ctx.waitUntil(runScheduledMonthlyTop10(env));
       return;
     }
     ctx.waitUntil(runScheduledEnrichment(env));

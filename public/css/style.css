@@ -741,6 +741,77 @@ body {
   box-shadow: 0 2px 6px rgba(58, 67, 99, 0.18);
 }
 
+/* 이달의 순위 배지. 무료입장 배지와 같은 자리라, 순위가 있으면 아래 규칙으로
+   무료 배지를 한 칸 내려서 겹치지 않게 한다(HTML에서 순위가 먼저 나온다). */
+/* 근처 맛집·카페가 여러 곳일 때 대표 아래로 접어두는 영역. */
+.place-detail__nearby-more {
+  margin-top: 6px;
+}
+
+.place-detail__nearby-more > summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  list-style: none;
+}
+
+.place-detail__nearby-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.place-detail__nearby-more > summary::after {
+  content: " ▾";
+}
+
+.place-detail__nearby-more[open] > summary::after {
+  content: " ▴";
+}
+
+.place-detail__nearby-more ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.place-detail__nearby-more li {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.place-grid__rank {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 800;
+  border-radius: 999px;
+  background: var(--color-primary-dark);
+  color: var(--color-white);
+  box-shadow: 0 2px 6px rgba(58, 67, 99, 0.28);
+}
+
+.place-grid__rank + .place-grid__free-badge {
+  top: 36px;
+}
+
+.place-grid__rank-reason {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .place-grid__body {
   display: flex;
   flex-direction: column;

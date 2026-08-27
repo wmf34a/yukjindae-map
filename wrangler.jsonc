@@ -29,10 +29,16 @@
   // 매주 월요일에는 새벽 4시 TourAPI 축제 수집 → 5시 코레일/서울교통공사 수유실
   // 역명 지오코딩(좌표 없는 API라 KV에 미리 캐싱) → 6시 장소 좌표와 공공 수유실
   // 좌표를 대조해 "수유실" 체크박스 자동 보강 순으로 돈다(뒤 단계가 앞 단계의
-  // 최신 결과를 써야 해서 순서가 중요함). 네 스케줄 모두 같은 scheduled() 핸들러가
-  // 받으므로 worker.js의 FESTIVAL_IMPORT_CRON/STATION_GEOCODE_CRON/
-  // PUBLIC_DATA_PLACE_MATCH_CRON 상수와 아래 크론 표현식이 항상 일치해야 한다.
+  // 최신 결과를 써야 해서 순서가 중요함).
+  //
+  // 매월 1일 오전 9시(KST)에는 지역별 Top 10을 그 달 계절에 맞게 다시 매긴다.
+  // 다른 크론처럼 새벽에 두려면 UTC로 "전달 말일 19시"여야 하는데 말일이 28~31일로
+  // 달마다 달라 크론으로 못 쓴다 — 1일이 확실한 UTC 자정을 쓴다.
+  //
+  // 다섯 스케줄 모두 같은 scheduled() 핸들러가 받으므로 worker.js의
+  // FESTIVAL_IMPORT_CRON/STATION_GEOCODE_CRON/PUBLIC_DATA_PLACE_MATCH_CRON/
+  // MONTHLY_TOP10_CRON 상수와 아래 크론 표현식이 항상 일치해야 한다.
   "triggers": {
-    "crons": ["0 19 * * *", "0 19 * * 1", "0 20 * * 1", "0 21 * * 1"]
+    "crons": ["0 19 * * *", "0 19 * * 1", "0 20 * * 1", "0 21 * * 1", "0 0 1 * *"]
   }
 }

@@ -5,14 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8788",
+    "build": "node scripts/build-ait.mjs && ait build",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "husky",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "deploy:ait": "ait deploy"
   },
   "devDependencies": {
+    "@apps-in-toss/devtools": "^3.1.1",
     "husky": "^9.1.7",
     "lint-staged": "^17.1.0",
     "oxlint": "^1.71.0",
@@ -21,5 +24,8 @@
   },
   "lint-staged": {
     "*.js": "oxlint --fix"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "^3.1.1"
   }
 }

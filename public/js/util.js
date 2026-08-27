@@ -28,6 +28,18 @@ function safeHref(url) {
   }
 }
 
+// 앱인토스 미니앱 번들은 *.tossmini.com 오리진에서 실행되지만 API와 이미지는 그대로
+// Cloudflare Worker가 서빙한다 — 그래서 미니앱에서만 절대경로가 필요하다. 웹
+// (workers.dev)에서는 같은 오리진이라 빈 문자열로 두고 기존 상대경로를 유지한다.
+const API_ORIGIN = globalThis.location?.hostname.endsWith(".tossmini.com")
+  ? "https://yukjindae-map.wmf34a.workers.dev"
+  : "";
+
+function apiUrl(path) {
+  const value = String(path ?? "");
+  return API_ORIGIN && value.startsWith("/") && !value.startsWith("//") ? API_ORIGIN + value : value;
+}
+
 // img src 전용. 우리 이미지는 R2 미러링 결과라 "/images/..." 상대경로로 오고,
 // 장소 사진은 외부 https URL로 오는 경우도 있어서 safeHref(http(s) 전용)로는
 // 상대경로가 전부 걸러진다. 같은 출처 절대경로와 http(s)만 허용하고 javascript:,
@@ -35,7 +47,7 @@ function safeHref(url) {
 function safeImageSrc(url) {
   const value = String(url ?? "").trim();
   if (!value) return "";
-  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  if (value.startsWith("/") && !value.startsWith("//")) return apiUrl(value);
   return safeHref(value);
 }
 
@@ -61,7 +73,7 @@ function festivalDday(festival) {
 const FETCH_TIMEOUT_MS = 10000;
 
 function fetchJson(url, options = {}) {
-  return fetch(url, { ...options, signal: AbortSignal.timeout(options.timeoutMs || FETCH_TIMEOUT_MS) }).then(
+  return fetch(apiUrl(url), { ...options, signal: AbortSignal.timeout(options.timeoutMs || FETCH_TIMEOUT_MS) }).then(
     (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
@@ -74,3 +86,4 @@ window.safeHref = safeHref;
 window.safeImageSrc = safeImageSrc;
 window.festivalDday = festivalDday;
 window.fetchJson = fetchJson;
+window.apiUrl = apiUrl;

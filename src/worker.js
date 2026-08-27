@@ -1006,61 +1006,112 @@ function withSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+// 앱인토스 미니앱 번들은 *.tossmini.com 오리진에서 실행되는데 API와 이미지는 계속
+// 이 Worker가 서빙한다 — 웹(workers.dev)과 달리 교차 출처 요청이라 CORS 허용이
+// 필요하다. 오리진은 콘솔 appName(yukjindae-map)으로 고정 발급되고, SDK 버전과
+// 업로드 시점에 따라 apps/web 두 계열이 모두 쓰일 수 있어 넷 다 열어둔다.
+const MINIAPP_ORIGINS = new Set([
+  "https://yukjindae-map.apps.tossmini.com",
+  "https://yukjindae-map.private-apps.tossmini.com",
+  "https://yukjindae-map.web.tossmini.com",
+  "https://yukjindae-map.private-web.tossmini.com",
+]);
+
+function miniAppOrigin(request) {
+  const origin = request.headers.get("Origin");
+  return origin && MINIAPP_ORIGINS.has(origin) ? origin : null;
+}
+
+function withCors(request, response) {
+  const origin = miniAppOrigin(request);
+  if (!origin) return response;
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", origin);
+  // 허용 오리진이 여러 개라 응답이 오리진별로 달라진다 — 엣지 캐시가 한 오리진의
+  // 응답을 다른 오리진에 재사용하지 않도록 Vary를 붙인다.
+  headers.set("vary", "Origin");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+// /api/reports는 JSON 본문 POST라 브라우저가 먼저 preflight를 보낸다. 라우터는
+// OPTIONS를 모르고 405로 떨구므로 여기서 먼저 받아낸다.
+function handlePreflight(request, origin) {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": request.headers.get("Access-Control-Request-Headers") || "content-type",
+      "access-control-max-age": "86400",
+      vary: "Origin",
+    },
+  });
+}
+
+// 라우팅 본문. 바깥 fetch()가 이 응답에 CORS 헤더를 덧씌운다.
+async function handleRequest(request, env, ctx) {
+  const url = new URL(request.url);
+
+  if (url.pathname === "/api/places") {
+    if (request.method === "GET" && !url.search) {
+      return withEdgeCache(request, ctx, 60, () => handlePlaces(env, url));
+    }
+    return handlePlaces(env, url);
+  }
+  if (url.pathname === "/api/banners") {
+    return withEdgeCache(request, ctx, 60, () => handleBanners(env));
+  }
+  if (url.pathname === "/api/courses") {
+    return withEdgeCache(request, ctx, 60, () => handleCourses(env));
+  }
+  if (url.pathname === "/api/festivals") {
+    return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
+  }
+  if (url.pathname.startsWith("/api/festivals/")) {
+    const id = url.pathname.slice("/api/festivals/".length);
+    // 클라이언트가 준 값을 그대로 노션 API 경로에 넣기 전에 ID 형식을 확인한다.
+    if (!isNotionId(id)) {
+      return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), {
+        status: 404,
+        headers: { "content-type": "application/json; charset=utf-8" },
+      });
+    }
+    return withEdgeCache(request, ctx, 3600, () => handleFestivalDetail(env, id, ctx));
+  }
+  if (url.pathname === "/api/nursing-rooms") {
+    // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
+    // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
+    return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env));
+  }
+  if (url.pathname === "/naver-config") {
+    return handleNaverConfig(env);
+  }
+  if (url.pathname === "/api/nearby-place") {
+    return withProxyRateLimit(request, env, () => handleNearbyPlace(env, url));
+  }
+  if (url.pathname === "/api/geocode") {
+    return withProxyRateLimit(request, env, () => handleGeocode(env, url));
+  }
+  if (url.pathname === "/api/directions") {
+    return withProxyRateLimit(request, env, () => handleDirections(env, url));
+  }
+  if (url.pathname === "/api/reports") {
+    return handleReport(request, env, ctx);
+  }
+  if (url.pathname.startsWith("/images/")) {
+    return handleImage(env, url.pathname.slice("/images/".length));
+  }
+
+  return withSecurityHeaders(await env.ASSETS.fetch(request));
+}
+
 export default {
   async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-
-    if (url.pathname === "/api/places") {
-      if (request.method === "GET" && !url.search) {
-        return withEdgeCache(request, ctx, 60, () => handlePlaces(env, url));
-      }
-      return handlePlaces(env, url);
+    const origin = miniAppOrigin(request);
+    if (request.method === "OPTIONS" && origin) {
+      return handlePreflight(request, origin);
     }
-    if (url.pathname === "/api/banners") {
-      return withEdgeCache(request, ctx, 60, () => handleBanners(env));
-    }
-    if (url.pathname === "/api/courses") {
-      return withEdgeCache(request, ctx, 60, () => handleCourses(env));
-    }
-    if (url.pathname === "/api/festivals") {
-      return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
-    }
-    if (url.pathname.startsWith("/api/festivals/")) {
-      const id = url.pathname.slice("/api/festivals/".length);
-      // 클라이언트가 준 값을 그대로 노션 API 경로에 넣기 전에 ID 형식을 확인한다.
-      if (!isNotionId(id)) {
-        return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), {
-          status: 404,
-          headers: { "content-type": "application/json; charset=utf-8" },
-        });
-      }
-      return withEdgeCache(request, ctx, 3600, () => handleFestivalDetail(env, id, ctx));
-    }
-    if (url.pathname === "/api/nursing-rooms") {
-      // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
-      // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
-      return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env));
-    }
-    if (url.pathname === "/naver-config") {
-      return handleNaverConfig(env);
-    }
-    if (url.pathname === "/api/nearby-place") {
-      return withProxyRateLimit(request, env, () => handleNearbyPlace(env, url));
-    }
-    if (url.pathname === "/api/geocode") {
-      return withProxyRateLimit(request, env, () => handleGeocode(env, url));
-    }
-    if (url.pathname === "/api/directions") {
-      return withProxyRateLimit(request, env, () => handleDirections(env, url));
-    }
-    if (url.pathname === "/api/reports") {
-      return handleReport(request, env, ctx);
-    }
-    if (url.pathname.startsWith("/images/")) {
-      return handleImage(env, url.pathname.slice("/images/".length));
-    }
-
-    return withSecurityHeaders(await env.ASSETS.fetch(request));
+    return withCors(request, await handleRequest(request, env, ctx));
   },
 
   async scheduled(event, env, ctx) {

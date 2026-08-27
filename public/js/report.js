@@ -105,7 +105,7 @@ async function submitReport(placeId) {
   btn.disabled = true;
 
   try {
-    const res = await fetch("/api/reports", {
+    const res = await fetch(window.apiUrl("/api/reports"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ placeId, field, value: selectedValue, turnstileToken }),

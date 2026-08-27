@@ -16,7 +16,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # npm ci 대신 install — @apps-in-toss/devtools가 플랫폼별 optional 의존성
+      # (@emnapi/*)을 끌어와서 lock 파일이 OS에 종속된다. macOS에서 만든 lock을
+      # 리눅스 러너의 npm ci가 "lock과 package.json 불일치"로 거부한다.
+      - run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
@@ -36,7 +39,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      # npm ci 대신 install — @apps-in-toss/devtools가 플랫폼별 optional 의존성
+      # (@emnapi/*)을 끌어와서 lock 파일이 OS에 종속된다. macOS에서 만든 lock을
+      # 리눅스 러너의 npm ci가 "lock과 package.json 불일치"로 거부한다.
+      - run: npm install --no-audit --no-fund
 
       - uses: cloudflare/wrangler-action@v3
         with:

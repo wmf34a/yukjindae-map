@@ -465,40 +465,71 @@ async function loadPlaces() {
 // 서울을 기준으로 한다.
 const DEFAULT_WEATHER_COORDS = { lat: 37.5665, lng: 126.978 };
 
-function currentCoords() {
-  return new Promise((resolve) => {
-    if (!navigator.permissions || !navigator.geolocation) return resolve(DEFAULT_WEATHER_COORDS);
-    navigator.permissions
-      .query({ name: "geolocation" })
-      .then((status) => {
-        if (status.state !== "granted") return resolve(DEFAULT_WEATHER_COORDS);
-        navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-          () => resolve(DEFAULT_WEATHER_COORDS),
-          { timeout: 3000, maximumAge: 600000 }
-        );
-      })
-      .catch(() => resolve(DEFAULT_WEATHER_COORDS));
+// 이미 허용된 경우에만 조용히 현재 위치를 쓴다. 권한을 물어야 하는 상태면
+// 여기서 팝업을 띄우지 않고 서울 기준으로 보여준 뒤, 배너의 버튼을 눌렀을 때만
+// 요청한다 — 페이지를 열자마자 권한 팝업이 뜨면 거부율이 크게 올라간다.
+function geolocationState() {
+  if (!navigator.permissions || !navigator.geolocation) return Promise.resolve("unsupported");
+  return navigator.permissions
+    .query({ name: "geolocation" })
+    .then((s) => s.state)
+    .catch(() => "unsupported");
+}
+
+function readPosition() {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      reject,
+      { timeout: 8000, maximumAge: 600000 }
+    );
   });
 }
 
-async function loadTodayWeather() {
+async function currentCoords({ ask = false } = {}) {
+  const permission = await geolocationState();
+  if (permission === "unsupported" || permission === "denied") return DEFAULT_WEATHER_COORDS;
+  if (permission === "prompt" && !ask) return DEFAULT_WEATHER_COORDS;
+  try {
+    return await readPosition();
+  } catch {
+    return DEFAULT_WEATHER_COORDS;
+  }
+}
+
+async function loadTodayWeather({ ask = false } = {}) {
   const box = document.getElementById("today-weather");
   if (!box) return;
 
   try {
-    const { lat, lng } = await currentCoords();
-    const data = await fetchJson(`/api/today?lat=${lat}&lng=${lng}`);
+    const coords = await currentCoords({ ask });
+    const usingDefault = coords === DEFAULT_WEATHER_COORDS;
+    const data = await fetchJson(`/api/today?lat=${coords.lat}&lng=${coords.lng}`);
     if (!data.weather || !data.recommendation) return;
 
     state.weather = data.recommendation;
     const temp = typeof data.weather.maxTemp === "number" ? `${Math.round(data.weather.maxTemp)}°` : "";
+
+    // 서울 기준으로 보여주는 중이고 아직 물어볼 여지가 있으면, 내 위치로 바꿀
+    // 버튼을 같이 띄운다. 지방 사용자에게 서울 날씨만 보여주면 안 맞는다.
+    const canAsk = usingDefault && (await geolocationState()) === "prompt";
+
     box.innerHTML = `
       <span class="today-weather__icon">${weatherIcon(data.recommendation.tone, data.weather.kind)}</span>
       <span class="today-weather__text">${escapeHtml(data.recommendation.headline)}</span>
       ${temp ? `<span class="today-weather__temp">${escapeHtml(temp)}</span>` : ""}
+      ${canAsk ? `<button type="button" class="today-weather__locate" id="weather-locate">📍 내 위치</button>` : ""}
     `;
     box.hidden = false;
+
+    const locate = document.getElementById("weather-locate");
+    if (locate) {
+      locate.addEventListener("click", () => {
+        locate.disabled = true;
+        locate.textContent = "확인 중...";
+        loadTodayWeather({ ask: true });
+      });
+    }
     renderPlaces();
   } catch (err) {
     console.error(err);

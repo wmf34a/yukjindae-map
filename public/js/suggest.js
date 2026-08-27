@@ -7,6 +7,10 @@
 let widgetId = null;
 let token = "";
 
+// 고르지 않은 항목은 아예 보내지 않는다 — "모름"을 "없음"으로 저장하면
+// 지도 API도 모르는 정보를 우리가 틀리게 아는 셈이 된다.
+const amenities = {};
+
 /* oxlint-disable no-underscore-dangle -- window.__ENV__은 worker.js가 주입하는 전역 이름 */
 function hasSiteKey() {
   return Boolean(window.__ENV__ && window.__ENV__.TURNSTILE_SITE_KEY);
@@ -56,6 +60,34 @@ function renderTurnstile(retries = 20) {
   });
 }
 
+function clearAmenities() {
+  for (const key of Object.keys(amenities)) delete amenities[key];
+  for (const btn of document.querySelectorAll(".suggest-amenity__opt")) {
+    btn.classList.remove("is-picked");
+    btn.setAttribute("aria-pressed", "false");
+  }
+}
+
+// 같은 버튼을 다시 누르면 선택이 풀린다 — 잘못 눌렀을 때 "모름"으로 되돌릴
+// 방법이 있어야 한다.
+function pickAmenity(btn) {
+  const row = btn.closest(".suggest-amenity__row");
+  const key = row.dataset.key;
+  const picked = btn.classList.contains("is-picked");
+
+  for (const sibling of row.querySelectorAll(".suggest-amenity__opt")) {
+    sibling.classList.remove("is-picked");
+    sibling.setAttribute("aria-pressed", "false");
+  }
+  if (picked) {
+    delete amenities[key];
+    return;
+  }
+  btn.classList.add("is-picked");
+  btn.setAttribute("aria-pressed", "true");
+  amenities[key] = btn.dataset.value;
+}
+
 function openModal() {
   const overlay = el("suggest-modal-overlay");
   overlay.classList.add("is-open");
@@ -63,6 +95,7 @@ function openModal() {
   el("suggest-success").hidden = true;
   el("suggest-name").value = "";
   el("suggest-value").value = "";
+  clearAmenities();
   renderTurnstile();
   updateSubmitState();
   el("suggest-name").focus();
@@ -86,6 +119,7 @@ async function submit() {
         field: "신규장소",
         placeName: el("suggest-name").value.trim(),
         value: el("suggest-value").value.trim(),
+        amenities,
         turnstileToken: token,
       }),
     });
@@ -95,6 +129,7 @@ async function submit() {
     el("suggest-success").hidden = false;
     el("suggest-name").value = "";
     el("suggest-value").value = "";
+    clearAmenities();
     setTimeout(closeModal, 1800);
   } catch (err) {
     error.textContent = err.message;
@@ -116,6 +151,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target === el("suggest-modal-overlay")) closeModal();
   });
   el("suggest-submit").addEventListener("click", submit);
+  el("suggest-amenities").addEventListener("click", (e) => {
+    const btn = e.target.closest(".suggest-amenity__opt");
+    if (btn) pickAmenity(btn);
+  });
   el("suggest-name").addEventListener("input", updateSubmitState);
   el("suggest-value").addEventListener("input", updateSubmitState);
 });

@@ -137,7 +137,40 @@
         <input type="text" id="suggest-name" class="report-modal__value-input" placeholder="예: 서울숲 곤충식물원" maxlength="60" />
 
         <label class="report-modal__label" for="suggest-value">아이와 가기 어떤 점이 좋았나요?</label>
-        <input type="text" id="suggest-value" class="report-modal__value-input" placeholder="예: 무료이고 유모차로 다니기 편해요. 수유실도 있어요" maxlength="200" />
+        <input type="text" id="suggest-value" class="report-modal__value-input" placeholder="예: 무료이고 유모차로 다니기 편해요" maxlength="200" />
+
+        <p class="report-modal__label">기억나는 것만 골라주세요 <span class="suggest-amenity__hint">(지도에 없는 정보라 큰 도움이 돼요)</span></p>
+        <div class="suggest-amenity" id="suggest-amenities">
+          <div class="suggest-amenity__row" data-key="수유실">
+            <span class="suggest-amenity__name">수유실</span>
+            <div class="suggest-amenity__options">
+              <button type="button" class="suggest-amenity__opt" data-value="있음">있음</button>
+              <button type="button" class="suggest-amenity__opt" data-value="없음">없음</button>
+            </div>
+          </div>
+          <div class="suggest-amenity__row" data-key="기저귀교환대">
+            <span class="suggest-amenity__name">기저귀교환대</span>
+            <div class="suggest-amenity__options">
+              <button type="button" class="suggest-amenity__opt" data-value="있음">있음</button>
+              <button type="button" class="suggest-amenity__opt" data-value="없음">없음</button>
+            </div>
+          </div>
+          <div class="suggest-amenity__row" data-key="유아의자">
+            <span class="suggest-amenity__name">유아의자</span>
+            <div class="suggest-amenity__options">
+              <button type="button" class="suggest-amenity__opt" data-value="있음">있음</button>
+              <button type="button" class="suggest-amenity__opt" data-value="없음">없음</button>
+            </div>
+          </div>
+          <div class="suggest-amenity__row" data-key="주차">
+            <span class="suggest-amenity__name">주차</span>
+            <div class="suggest-amenity__options">
+              <button type="button" class="suggest-amenity__opt" data-value="무료">무료</button>
+              <button type="button" class="suggest-amenity__opt" data-value="유료">유료</button>
+              <button type="button" class="suggest-amenity__opt" data-value="없음">없음</button>
+            </div>
+          </div>
+        </div>
 
         <div id="suggest-turnstile" class="report-modal__turnstile"></div>
         <p class="report-modal__error" id="suggest-error" hidden></p>

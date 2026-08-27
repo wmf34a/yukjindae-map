@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { matchesQuery, validateReportPayload, validateNewPlacePayload } from "./worker.js";
+import {
+  matchesQuery, validateReportPayload, validateNewPlacePayload,
+  validateNewPlaceAmenities, buildNewPlaceValue,
+} from "./worker.js";
 
 const place = {
   name: "전쟁기념관",
@@ -120,5 +123,63 @@ describe("validateNewPlacePayload", () => {
 
   it("사람 확인 토큰이 없으면 걸러낸다", () => {
     expect(validateNewPlacePayload({ ...valid, turnstileToken: "" })).toMatch(/사람/);
+  });
+
+  it("편의시설을 같이 보내도 통과한다", () => {
+    expect(validateNewPlacePayload({ ...valid, amenities: { 수유실: "있음", 주차: "무료" } })).toBeNull();
+  });
+
+  it("편의시설 값이 이상하면 걸러낸다", () => {
+    expect(validateNewPlacePayload({ ...valid, amenities: { 수유실: "아마도" } })).toMatch(/편의시설/);
+  });
+});
+
+describe("validateNewPlaceAmenities", () => {
+  // 안 고른 항목은 아예 안 보내는 게 정상이라 빈 값도 통과해야 한다.
+  it("없거나 비어 있으면 통과한다", () => {
+    expect(validateNewPlaceAmenities(undefined)).toBeNull();
+    expect(validateNewPlaceAmenities(null)).toBeNull();
+    expect(validateNewPlaceAmenities({})).toBeNull();
+  });
+
+  it("허용된 항목과 값만 통과시킨다", () => {
+    expect(validateNewPlaceAmenities({ 수유실: "있음", 기저귀교환대: "없음", 유아의자: "있음" })).toBeNull();
+    expect(validateNewPlaceAmenities({ 주차: "유료" })).toBeNull();
+  });
+
+  // 임의 필드에 임의 값을 넣지 못하게 막는다 — 제보는 승인 큐로 들어가는 입력이다.
+  it("모르는 항목은 거절한다", () => {
+    expect(validateNewPlaceAmenities({ 엘리베이터: "있음" })).toMatch(/항목/);
+  });
+
+  it("항목별 허용값이 아니면 거절한다", () => {
+    expect(validateNewPlaceAmenities({ 수유실: "무료" })).toMatch(/값/);
+    expect(validateNewPlaceAmenities({ 주차: "있음" })).toMatch(/값/);
+    expect(validateNewPlaceAmenities({ 수유실: 1 })).toMatch(/값/);
+  });
+
+  it("객체가 아니면 거절한다", () => {
+    expect(validateNewPlaceAmenities([])).toMatch(/형식/);
+    expect(validateNewPlaceAmenities("있음")).toMatch(/형식/);
+  });
+});
+
+describe("buildNewPlaceValue", () => {
+  it("고른 편의시설을 정해진 형식으로 붙인다", () => {
+    const out = buildNewPlaceValue({
+      value: " 숲이 넓어요 ",
+      amenities: { 수유실: "있음", 주차: "무료" },
+    });
+    expect(out).toBe("숲이 넓어요\n[편의시설] 수유실:있음 / 주차:무료");
+  });
+
+  it("고른 게 없으면 본문만 남긴다", () => {
+    expect(buildNewPlaceValue({ value: "좋아요", amenities: {} })).toBe("좋아요");
+    expect(buildNewPlaceValue({ value: "좋아요" })).toBe("좋아요");
+  });
+
+  // 검증을 통과한 값만 오지만, 형식 문자열을 만들 때도 화이트리스트를 다시 본다.
+  it("모르는 항목은 붙이지 않는다", () => {
+    expect(buildNewPlaceValue({ value: "좋아요", amenities: { 엘리베이터: "있음" } })).toBe("좋아요");
   });
 });

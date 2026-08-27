@@ -75,13 +75,44 @@ const REPORT_VALUE_MAX_LENGTH = 200;
 const NEW_PLACE_FIELD = "신규장소";
 const NEW_PLACE_NAME_MAX = 60;
 
-export function validateNewPlacePayload({ placeName, value, turnstileToken }) {
+// 편의시설은 어떤 지도 API도 알려주지 않는다. 좌표·운영시간은 장소명만 있으면
+// API로 채울 수 있지만, 수유실이 있는지는 다녀온 사람만 안다 — 그래서 제보 때
+// 같이 받는다. 고르지 않으면(모름) 아예 보내지 않아 추측이 섞이지 않게 한다.
+const NEW_PLACE_AMENITIES = new Map([
+  ["수유실", new Set(["있음", "없음"])],
+  ["기저귀교환대", new Set(["있음", "없음"])],
+  ["유아의자", new Set(["있음", "없음"])],
+  ["주차", new Set(["무료", "유료", "없음"])],
+]);
+
+export function validateNewPlaceAmenities(amenities) {
+  if (amenities === undefined || amenities === null) return null;
+  if (typeof amenities !== "object" || Array.isArray(amenities)) return "편의시설 정보 형식이 올바르지 않습니다.";
+  for (const [key, picked] of Object.entries(amenities)) {
+    const allowed = NEW_PLACE_AMENITIES.get(key);
+    if (!allowed) return "지원하지 않는 편의시설 항목입니다.";
+    if (typeof picked !== "string" || !allowed.has(picked)) return "편의시설 값이 올바르지 않습니다.";
+  }
+  return null;
+}
+
+// 제보 DB에는 편의시설 칸이 따로 없다. 칼럼을 늘리는 대신 제안값 끝에 정해진
+// 형식으로 붙여, 사람이 읽기도 쉽고 나중에 파이프라인이 파싱하기도 쉽게 한다.
+export function buildNewPlaceValue({ value, amenities }) {
+  const picked = Object.entries(amenities || {})
+    .filter(([key]) => NEW_PLACE_AMENITIES.has(key))
+    .map(([key, v]) => `${key}:${v}`);
+  const body = String(value).trim();
+  return picked.length ? `${body}\n[편의시설] ${picked.join(" / ")}` : body;
+}
+
+export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }) {
   if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
   if (typeof placeName !== "string" || !placeName.trim()) return "장소 이름이 필요합니다.";
   if (placeName.trim().length > NEW_PLACE_NAME_MAX) return "장소 이름이 너무 깁니다.";
   if (typeof value !== "string" || !value.trim()) return "어떤 점이 좋았는지 알려주세요.";
   if (value.length > REPORT_VALUE_MAX_LENGTH) return "내용이 너무 깁니다.";
-  return null;
+  return validateNewPlaceAmenities(amenities);
 }
 
 export function validateReportPayload({ placeId, field, value, turnstileToken }) {
@@ -827,7 +858,7 @@ async function handleReport(request, env, ctx) {
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
-  const { placeId, field, value, turnstileToken, placeName } = body;
+  const { placeId, field, value, turnstileToken, placeName, amenities } = body;
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
@@ -858,6 +889,7 @@ async function handleReport(request, env, ctx) {
   // 운영자가 노션에서 읽고 판단해 장소 DB에 직접 추가한다 — 사용자가 보낸 값이
   // 장소 DB로 곧장 들어가지 않게 하려는 것이다.
   if (isNewPlace) {
+    const reportValue = buildNewPlaceValue({ value, amenities });
     const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
       method: "POST",
       headers: notionHeaders,
@@ -866,7 +898,8 @@ async function handleReport(request, env, ctx) {
         properties: {
           "장소명": { title: [{ text: { content: placeName.trim().slice(0, 200) } }] },
           "필드명": { select: { name: NEW_PLACE_FIELD } },
-          "제안값": { rich_text: [{ text: { content: value.trim().slice(0, REPORT_VALUE_MAX_LENGTH) } }] },
+          // 편의시설 줄이 붙어 본문 상한보다 길어질 수 있어 넉넉히 자른다.
+          "제안값": { rich_text: [{ text: { content: reportValue.slice(0, REPORT_VALUE_MAX_LENGTH * 2) } }] },
           "상태": { select: { name: "대기중" } },
           "제보자IP해시": { rich_text: [{ text: { content: ipHashEarly } }] },
         },
@@ -878,7 +911,7 @@ async function handleReport(request, env, ctx) {
     ctx.waitUntil(
       notifySlack(
         env,
-        `📍 새 장소 추천이 들어왔습니다\n• ${placeName.trim()}\n• ${value.trim().slice(0, 120)}`
+        `📍 새 장소 추천이 들어왔습니다\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
       )
     );
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers });

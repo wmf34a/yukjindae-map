@@ -1460,6 +1460,55 @@ body {
   display: none;
 }
 
+/* 신규 장소 제보의 편의시설 선택. 고르지 않으면 "모름"이라 아무 표시도 남지 않는다. */
+.suggest-amenity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.suggest-amenity__hint {
+  color: var(--color-text-secondary);
+}
+
+.suggest-amenity__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.suggest-amenity__name {
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.suggest-amenity__options {
+  display: flex;
+  gap: 6px;
+}
+
+.suggest-amenity__opt {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.suggest-amenity__opt:hover {
+  border-color: var(--color-primary);
+}
+
+.suggest-amenity__opt.is-picked {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
 .report-modal__turnstile {
   margin-bottom: 8px;
   display: flex;

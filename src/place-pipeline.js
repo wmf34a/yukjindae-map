@@ -148,6 +148,32 @@ export function collectAmenityHints(items, placeName, target, now = Date.now(), 
   return hits;
 }
 
+// TourAPI는 공원의 입장료 필드를 비워 둔다. 74곳을 뽑아 보니 65곳이 그랬다.
+// "공원이니 무료겠지"로 채우면 틀렸을 때 고객이 헛걸음하므로, 여기서도 근거만 모아
+// 사람이 판단하게 한다. 편의시설과 달리 "입장료 없어요"는 유효한 정보라 부정문을
+// 걸러내지 않는다.
+export const FEE_KEYS = ["입장료", "이용료", "관람료", "요금", "무료"];
+
+export function collectFeeHints(items, placeName, now = Date.now(), region = "") {
+  const hits = [];
+  for (const item of items || []) {
+    if (!mentionsPlace(item, placeName, region)) continue;
+    if (!isRecent(item.date, now)) continue;
+    const combined = `${item.title || ""} ${item.description || ""}`;
+    for (const key of FEE_KEYS) {
+      const idx = combined.indexOf(key);
+      if (idx === -1) continue;
+      hits.push({
+        snippet: combined.slice(Math.max(0, idx - 30), idx + key.length + 40).trim(),
+        link: item.link || "",
+        date: item.date || "",
+      });
+      break;
+    }
+  }
+  return hits;
+}
+
 // ── 조립 ────────────────────────────────────────────────
 export function buildPlaceRecord({ base, coords, nearby, photoUrl, photoCredit, today }) {
   const { restaurants, cafes } = nearby || { restaurants: [], cafes: [] };
@@ -214,8 +240,17 @@ export async function preparePlace({ base, geocode, findNearby, searchPosts, tod
     if (hits.length) amenityHints[target.field] = hits;
   }
 
+  // 4) 입장료 — TourAPI가 비워 둔 곳만 근거를 찾는다.
+  const feeHints = base.fee
+    ? []
+    : collectFeeHints(
+        await searchPosts(base.name, "입장료", base.region).catch(() => []),
+        base.name, Date.now(), base.region
+      );
+
   return {
     ok: true,
+    feeHints,
     record: buildPlaceRecord({
       base, coords, nearby,
       photoUrl: base.photoUrl, photoCredit: base.photoCredit, today,

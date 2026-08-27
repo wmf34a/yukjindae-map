@@ -160,13 +160,20 @@ for (const r of results) {
   lines.push(`- 주소: ${p["주소"]}`);
   lines.push(`- 좌표: ${p["위도"]}, ${p["경도"]}`);
   lines.push(`- 운영시간: ${p["운영시간"] || "**확인 필요**"}`);
-  lines.push(`- 입장료: ${p["입장료"] || "**확인 필요**"}`);
+  lines.push(`- 입장료: ${p["입장료"] || "**확인 필요 — 아래 근거 참고**"}`);
   lines.push(`- 주차: ${p["주차가능여부"]}`);
   lines.push(`- 문의: ${r.tel || "-"}`);
   lines.push(`- 근처맛집: ${p["근처맛집"] || "**없음 — 코스보기 핀이 안 찍힌다**"}`);
   lines.push(`- 근처카페: ${p["근처카페"] || "**없음**"}`);
   lines.push(`- 사진: ${p["사진"] || "없음"}`);
   lines.push(`- 공식: ${p["정보출처"] || "-"}`);
+  if (r.feeHints?.length) {
+    lines.push("", "입장료 근거 (읽고 판단할 것):");
+    for (const h of r.feeHints.slice(0, 4)) {
+      lines.push(`- (${h.date || "날짜미상"}) ${h.snippet}`);
+      if (h.link) lines.push(`  - ${h.link}`);
+    }
+  }
   const hints = Object.entries(r.amenityHints);
   if (hints.length) {
     lines.push("", "편의시설 근거 (읽고 판단할 것):");

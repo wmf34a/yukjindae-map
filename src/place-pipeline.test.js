@@ -13,6 +13,7 @@ import {
   destinationScore,
   isRejected,
   districtOf,
+  collectFeeHints,
 } from "./place-pipeline.js";
 
 describe("isInKorea", () => {
@@ -326,5 +327,32 @@ describe("districtOf", () => {
   it("못 찾으면 빈 문자열", () => {
     expect(districtOf("제주 표선면")).toBe("");
     expect(districtOf("")).toBe("");
+  });
+});
+
+describe("collectFeeHints", () => {
+  const now = new Date("2026-08-28").getTime();
+
+  it("요금이 적힌 최근 글의 근거를 모은다", () => {
+    const hits = collectFeeHints(
+      [{ title: "인천어린이과학관 방문", description: "입장료 어른 2000원", date: "20260810", link: "https://x" }],
+      "인천어린이과학관", now
+    );
+    expect(hits).toHaveLength(1);
+    expect(hits[0].snippet).toContain("입장료");
+  });
+
+  // 편의시설과 달리 "입장료 없어요"는 무료라는 유효한 정보다.
+  it("부정문도 근거로 남긴다", () => {
+    const hits = collectFeeHints(
+      [{ title: "인천어린이과학관", description: "입장료 없어요 무료입니다", date: "20260810" }],
+      "인천어린이과학관", now
+    );
+    expect(hits).toHaveLength(1);
+  });
+
+  it("오래된 글과 다른 장소 글은 뺀다", () => {
+    expect(collectFeeHints([{ title: "인천어린이과학관", description: "입장료 2000원", date: "20240101" }], "인천어린이과학관", now)).toHaveLength(0);
+    expect(collectFeeHints([{ title: "다른 곳", description: "입장료 2000원", date: "20260810" }], "인천어린이과학관", now)).toHaveLength(0);
   });
 });

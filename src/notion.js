@@ -77,6 +77,11 @@ export function toPlace(page) {
     rankMonth: text(p["추천월"]),
     rankReason: text(p["추천사유"]),
     rankPinned: Boolean(p["추천고정"] && p["추천고정"].checkbox),
+    // 할인·이벤트. 종료일이 없는 건("상시 할인" 등) 만료를 판정할 수 없어서
+    // 프론트에서 노출하지 않는다 — 끝난 행사가 계속 붙어 있는 쪽이 더 나쁘다.
+    eventInfo: text(p["이벤트정보"]),
+    eventEndDate: dateValue(p["이벤트종료일"]),
+    eventSourceUrl: urlValue(p["이벤트출처"]),
   };
 }
 

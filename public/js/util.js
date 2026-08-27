@@ -149,6 +149,18 @@ function sortByWeather(places, recommendation) {
     .map((entry) => entry.place);
 }
 
+// 진행 중인 할인·이벤트만 통과시킨다. 종료일이 없으면("상시 할인" 등) 언제
+// 내려야 할지 알 수 없어 아예 노출하지 않는다 — 끝난 행사가 계속 붙어 있는 쪽이
+// 정보가 없는 것보다 나쁘다. 종료일 당일까지는 유효한 것으로 본다.
+function activeEvent(place) {
+  const info = String(place?.eventInfo || "").trim();
+  const end = String(place?.eventEndDate || "").slice(0, 10);
+  if (!info || !end) return null;
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (end < today) return null;
+  return { info, end, source: place.eventSourceUrl || "" };
+}
+
 // 브라우저 fetch도 기본 타임아웃이 없다 — 네트워크가 불안정한 이동 중(주 사용
 // 상황)에 응답이 안 오면 "불러오는 중..."에서 영영 멈춘다. 공통 래퍼로 10초에
 // 끊어서 각 화면의 catch가 에러 문구를 띄우게 한다.
@@ -172,5 +184,6 @@ window.sortByMonthlyRank = sortByMonthlyRank;
 window.splitNearbyList = splitNearbyList;
 window.primaryNearby = primaryNearby;
 window.sortByWeather = sortByWeather;
+window.activeEvent = activeEvent;
 window.fetchJson = fetchJson;
 window.apiUrl = apiUrl;

@@ -1225,3 +1225,34 @@ body {
   font-weight: 700;
   color: var(--color-primary);
 }
+
+/* 진행 중인 할인·이벤트. 종료일이 지나면 렌더 단계에서 빠지므로 만료 처리는 불필요. */
+.place-grid__event-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #FFF1DC;
+  color: #B25E00;
+  box-shadow: 0 2px 6px rgba(58, 67, 99, 0.18);
+}
+
+.place-detail__event {
+  background: #FFF8EE;
+  border: 1px solid #FFE2BC;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.place-detail__event-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.place-detail__event-meta a {
+  color: var(--color-primary);
+}

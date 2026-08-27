@@ -223,12 +223,15 @@ function placeCard(place, showRank = false) {
   const rankReason = rank && place.rankReason
     ? `<div class="place-grid__rank-reason">${escapeHtml(place.rankReason)}</div>`
     : "";
+  const event = activeEvent(place);
+  const eventBadge = event ? `<span class="place-grid__event-badge">🎟 할인</span>` : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
         ${rankBadge}
         ${badge}
+        ${eventBadge}
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
       <div class="place-grid__body">

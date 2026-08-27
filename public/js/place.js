@@ -113,6 +113,20 @@ function render(place) {
       </div>`
     : "";
 
+  // 진행 중인 할인·이벤트. 종료일이 지나면 activeEvent가 null을 주므로 자동으로 사라진다.
+  const event = window.activeEvent(place);
+  const eventHtml = event
+    ? `<div class="place-detail__section place-detail__event">
+        <p class="place-detail__label">🎟 진행 중인 혜택</p>
+        <p class="place-detail__value">${escapeHtml(event.info)}</p>
+        <p class="place-detail__event-meta">${escapeHtml(event.end)}까지${
+          safeHref(event.source)
+            ? ` · <a href="${escapeHtml(safeHref(event.source))}" target="_blank" rel="noopener">출처 ↗</a>`
+            : ""
+        }</p>
+      </div>`
+    : "";
+
   let parking = "";
   if (place.parkingAvailable || place.parkingDetail) {
     parking = [place.parkingAvailable, place.parkingDetail].filter(Boolean).join(" · ");
@@ -136,6 +150,7 @@ function render(place) {
       ${row("✏️ 추천 이유", place.reason)}
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
+      ${eventHtml}
       ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant)}
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe)}
 

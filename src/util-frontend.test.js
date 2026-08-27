@@ -7,7 +7,7 @@ import vm from "node:vm";
 // 화면 XSS 방어의 마지막 관문이라 테스트는 반드시 있어야 해서, 파일을 그대로
 // 읽어 window를 흉내낸 컨텍스트에서 실행하고 노출된 함수를 꺼내 검증한다.
 let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
-let splitNearbyList, primaryNearby;
+let splitNearbyList, primaryNearby, activeEvent;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
@@ -16,7 +16,7 @@ beforeAll(() => {
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
   ({ escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank } = sandbox.window);
-  ({ splitNearbyList, primaryNearby } = sandbox.window);
+  ({ splitNearbyList, primaryNearby, activeEvent } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -244,5 +244,46 @@ describe("primaryNearby", () => {
   it("빈 값은 빈 문자열", () => {
     expect(primaryNearby("")).toBe("");
     expect(primaryNearby(undefined)).toBe("");
+  });
+});
+
+const kstToday = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const shiftKst = (days) =>
+  new Date(Date.now() + 9 * 60 * 60 * 1000 + days * 86400000).toISOString().slice(0, 10);
+
+describe("activeEvent", () => {
+  it("진행 중인 이벤트를 통과시킨다", () => {
+    const e = activeEvent({ eventInfo: "현장 결제 25% 할인", eventEndDate: shiftKst(3) });
+    expect(e.info).toBe("현장 결제 25% 할인");
+  });
+
+  // 끝난 행사가 계속 붙어 있는 쪽이, 정보가 없는 것보다 나쁘다.
+  it("종료일이 지나면 노출하지 않는다", () => {
+    expect(activeEvent({ eventInfo: "할인", eventEndDate: shiftKst(-1) })).toBeNull();
+  });
+
+  it("종료일 당일까지는 유효하다", () => {
+    expect(activeEvent({ eventInfo: "할인", eventEndDate: kstToday() })).not.toBeNull();
+  });
+
+  // "상시 할인"처럼 종료일이 없으면 언제 내려야 할지 알 수 없다.
+  it("종료일이 없으면 노출하지 않는다", () => {
+    expect(activeEvent({ eventInfo: "상시 할인" })).toBeNull();
+    expect(activeEvent({ eventInfo: "상시 할인", eventEndDate: "" })).toBeNull();
+  });
+
+  it("내용이 비면 노출하지 않는다", () => {
+    expect(activeEvent({ eventInfo: "   ", eventEndDate: shiftKst(3) })).toBeNull();
+    expect(activeEvent({ eventEndDate: shiftKst(3) })).toBeNull();
+  });
+
+  it("장소가 없어도 죽지 않는다", () => {
+    expect(activeEvent(undefined)).toBeNull();
+    expect(activeEvent(null)).toBeNull();
+  });
+
+  it("출처가 있으면 함께 준다", () => {
+    const e = activeEvent({ eventInfo: "할인", eventEndDate: shiftKst(1), eventSourceUrl: "https://x.com/a" });
+    expect(e.source).toBe("https://x.com/a");
   });
 });

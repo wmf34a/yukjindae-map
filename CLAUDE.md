@@ -13,7 +13,7 @@
 | `make install` | `npm install` (husky 훅 포함) |
 | `make dev` | `wrangler dev` — http://localhost:8788 |
 | `make lint` / `make lint-fix` | **oxlint** (ESLint 아님) |
-| `make test` / `make test-watch` | vitest. 현재 **10개 파일 159개 통과** |
+| `make test` / `make test-watch` | vitest. 현재 **13개 파일 285개 통과** |
 | `make ci` | lint + test. CI와 같은 체크 |
 | `make deploy` | `wrangler deploy` (수동/즉시 배포용) — **웹만** |
 | `npm run build` | 앱인토스 미니앱 번들 `yukjindae-map.ait` 생성 — **웹과 무관** |
@@ -44,11 +44,38 @@ src/nursing-match.js     # 장소 ↔ 수유실 매칭
 src/festival-import.js   # 축제 데이터 수집
 src/rate-limit.js        # 요청 제한
 src/http.js              # fetchWithTimeout 등 공용
+src/place-pipeline.js    # 신규 장소 등록 파이프라인 (좌표·근처맛집·편의시설)
 
 apps-in-toss.config.ts   # 앱인토스 미니앱 설정
 scripts/build-ait.mjs    # public/ → dist/ (미니앱 번들 전처리)
-dist/, *.ait             # 미니앱 빌드 산출물. gitignore 됨
+scripts/discover-places.mjs   # 지역별 신규 장소 후보 발굴 + 검수표 생성
+scripts/register-places.mjs   # 검수 끝난 후보를 Notion에 등록 + 사진 R2 미러링
+scripts/lib/sources.mjs       # 위 두 스크립트가 쓰는 TourAPI/네이버 어댑터
+dist/, *.ait, tmp/       # 빌드·발굴 산출물. gitignore 됨
 ```
+
+## 장소 발굴 파이프라인
+
+장소를 추가할 땐 스크립트 두 개를 순서대로 돌린다. 좌표·상세정보·근처 맛집/카페·
+편의시설 근거를 **한 번에** 채우기 위한 것이다 — 예전처럼 따로 돌리면 근처 맛집이 비어
+코스보기 핀이 안 찍히거나 편의시설이 통째로 빠진다.
+
+```
+node scripts/discover-places.mjs <지역명> [최대개수]   # tmp/<지역>-후보.json + 검수표.md
+node scripts/register-places.mjs tmp/<지역>-후보.json  # 공개여부=false 로 Notion 등록
+```
+
+- 로직은 `src/place-pipeline.js` 에 순수 함수로 있고 테스트가 붙어 있다. 네트워크
+  어댑터만 `scripts/lib/sources.mjs` 에 모여 있다.
+- **검수표를 반드시 사람이 읽는다.** 편의시설은 자동으로 체크하지 않고 근거 스니펫과
+  링크만 모아 준다 — 블로그 글의 절반은 근처 카페 후기라 그대로 믿으면 틀린다.
+- 흔한 이름(7자 미만)은 글이 지역까지 함께 말하는 것만 인정한다. 안 그러면 인천
+  장미공원을 찾는데 중랑 장미공원 글이 걸린다.
+- 블로그 언급이 5건도 안 되는 곳은 후보에서 뺀다 — 동네 근린공원이지 목적지가 아니다.
+- 취지에 안 맞아 뺀 곳은 `place-pipeline.js` 의 `REJECTED` 목록에 이유와 함께 남긴다.
+  발굴을 다시 돌려도 올라오지 않는다.
+- 지역당 5곳 안팎으로만 채운다. 공공데이터로 무제한 늘리면 "아빠들이 직접 다녀온 곳"
+  이라는 앱의 정체성이 흐려진다.
 
 `src/` 는 worker.js만 크고 나머지는 전부 순수 함수 모듈이라 테스트가 붙어 있다.
 로직을 추가할 땐 worker.js에 밀어넣지 말고 모듈로 빼는 쪽이 이 저장소의 결에 맞는다.

@@ -8,6 +8,10 @@ const REPORT_FIELDS = [
   { value: "기저귀교환대", type: "boolean" },
   { value: "수유실", type: "boolean" },
   { value: "유아의자", type: "boolean" },
+  // 코스보기가 이 값에서 상호를 읽어 지도에 핀을 찍는다. 지도 API는 어떤 가게가
+  // 있는지는 알려줘도 아이랑 가도 되는지는 알려주지 않아서, 다녀온 분께 받는다.
+  { value: "근처맛집", type: "text" },
+  { value: "근처카페", type: "text" },
 ];
 
 let turnstileWidgetId = null;
@@ -21,6 +25,9 @@ const PLACEHOLDERS = {
   "입장료": "예: 성인 5,000원 / 어린이 3,000원",
   "무료입장연령": "예: 36개월 미만 무료",
   "주차상세": "예: 2시간 무료, 이후 30분당 1,000원",
+  // 상호를 맨 앞에 두어야 코스보기가 지도에서 찾는다.
+  "근처맛집": "예: 고메돈까스 (유아의자 있어요)",
+  "근처카페": "예: 모모아트 (기저귀갈이대 있음)",
 };
 
 function fieldType(field) {

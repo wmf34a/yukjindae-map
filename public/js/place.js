@@ -44,15 +44,19 @@ window.stripParenthetical = stripParenthetical;
 // 한 줄에 늘어놨는데, 길어서 읽기 나쁜 데다 길찾기 버튼도 안 붙었다 — 값에 쉼표가
 // 있으면 통째로 검색 불가로 판정했기 때문이다. 이제 대표 한 곳을 정한 뒤 괄호
 // 설명만 걷어내면 그게 곧 검색어라, 별도 판정 없이 항상 길찾기를 붙일 수 있다.
-function nearbyRow(label, value) {
+function nearbyRow(label, value, origin) {
   if (!value) return "";
   const items = window.splitNearbyList(value);
   const primary = items[0] || value;
   const rest = items.slice(1);
 
   const query = stripParenthetical(primary);
+  // 장소 좌표를 함께 심어 두면, 같은 상호의 다른 지점이 아니라 이 근처가 잡힌다.
+  const coords = origin && typeof origin.lat === "number" && typeof origin.lng === "number"
+    ? ` data-origin-lat="${origin.lat}" data-origin-lng="${origin.lng}"`
+    : "";
   const navSlot = query
-    ? `<span class="place-detail__nav-slot" data-biz-query="${encodeURIComponent(query)}"></span>`
+    ? `<span class="place-detail__nav-slot" data-biz-query="${encodeURIComponent(query)}"${coords}></span>`
     : "";
   const more = rest.length
     ? `<details class="place-detail__nearby-more">
@@ -75,7 +79,11 @@ function nearbyRow(label, value) {
 async function loadNearbyNav(slot) {
   const q = decodeURIComponent(slot.dataset.bizQuery);
   try {
-    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(q)}`);
+    // 좌표를 같이 넘겨야 같은 상호의 다른 지점이 아니라 이 장소 근처가 잡힌다.
+    const lat = slot.dataset.originLat;
+    const lng = slot.dataset.originLng;
+    const near = lat && lng ? `&lat=${lat}&lng=${lng}` : "";
+    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(q)}${near}`);
     if (!data.found) {
       slot.remove();
       return;
@@ -156,8 +164,8 @@ function render(place) {
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
       ${eventHtml}
-      ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant)}
-      ${nearbyRow("☕ 근처 카페", place.nearbyCafe)}
+      ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
+      ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
 
       <div class="place-detail__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>

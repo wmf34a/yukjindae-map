@@ -1502,6 +1502,95 @@ body {
   border-color: var(--color-primary);
 }
 
+/* 첫 방문 사용법 안내. 설치 팝업과 같은 자리에 뜨지만 먼저 닫히고 나서
+   설치 팝업이 뜬다(pwa.js). */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(58, 67, 99, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1200;
+}
+
+.tour {
+  position: relative;
+  width: 100%;
+  max-width: 320px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 32px 24px 24px;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(26, 47, 107, 0.24);
+}
+
+.tour__skip {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tour__icon {
+  font-size: 44px;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+
+.tour__title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.tour__body {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  /* 네 장이 길이가 달라, 넘길 때마다 카드 높이가 튀지 않도록 최소 높이를 준다. */
+  min-height: 66px;
+}
+
+.tour__dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.tour__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+
+.tour__dot.is-active {
+  background: var(--color-primary);
+  width: 18px;
+  border-radius: 3px;
+}
+
+.tour__next {
+  width: 100%;
+  padding: 13px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .about-link {
   display: block;
   margin: 16px 0 0;

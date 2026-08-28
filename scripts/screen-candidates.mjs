@@ -78,7 +78,7 @@ for (const file of files) {
   fs.writeFileSync(path.join("tmp", file), JSON.stringify(passed, null, 2));
 
   console.log(`\n[${region}] ${passed.length}/${entries.length}곳 통과 (${PASS_SCORE}점 이상)`);
-  for (const v of out.verdicts.sort((a, b) => b.score - a.score)) {
+  for (const v of out.verdicts.toSorted((a, b) => b.score - a.score)) {
     console.log(`  ${v.pass ? "✓" : "✗"} ${v.score}점  ${v.name}  — ${v.reason}`);
   }
   if (out.missing?.length) console.log(`  ! 판정 누락: ${out.missing.join(", ")}`);

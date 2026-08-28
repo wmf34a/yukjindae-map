@@ -173,9 +173,11 @@ async function resolvePlaceStop(place) {
   return coords ? { name: place.name, ...coords } : null;
 }
 
-// 근처맛집/근처카페는 노션에 주소가 아니라 상호 텍스트로 들어있어서, 우선 네이버
-// 지역검색으로 실제 도로명주소를 찾은 뒤 그 주소를 지오코딩해서 좌표를 얻는다.
-async function resolveNearbyStop(rawValue) {
+// 근처맛집/근처카페는 노션에 주소가 아니라 상호 텍스트로 들어있다. 이름만으로
+// 찾으면 같은 상호의 다른 지점이 걸린다 — 대전 국립중앙과학관의 "신세계백화점
+// 푸드코트"가 서울 강남점으로 잡혀 총 거리 306km짜리 코스가 나왔다. 장소 좌표를
+// 함께 넘겨 그 근처의 지점을 고르게 한다.
+async function resolveNearbyStop(rawValue, origin) {
   // 여러 곳이 적힌 값은 예전에 통째로 걸러져 핀이 아예 안 찍혔다(전국 44곳 + 제주
   // 대부분). 맨 앞을 대표로 잡고 괄호 설명을 걷어낸 상호를 검색어로 쓴다 —
   // 괄호 안에 주소·메모가 들어가는 형식이라 벗기지 않으면 검색이 실패한다.
@@ -183,8 +185,13 @@ async function resolveNearbyStop(rawValue) {
   const query = window.stripParenthetical(primary);
   if (!query) return null;
   try {
-    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(query)}`);
+    const near = origin ? `&lat=${origin.lat}&lng=${origin.lng}` : "";
+    const data = await fetchJson(`/api/nearby-place?q=${encodeURIComponent(query)}${near}`);
     if (!data.found) return null;
+    // 카카오로 찾으면 좌표가 함께 온다. 네이버 폴백일 때만 주소를 지오코딩한다.
+    if (typeof data.lat === "number" && typeof data.lng === "number") {
+      return { name: data.name || query, lat: data.lat, lng: data.lng };
+    }
     const coords = await geocodeAddress(data.address);
     return coords ? { name: data.name || query, ...coords } : null;
   } catch (err) {
@@ -194,10 +201,11 @@ async function resolveNearbyStop(rawValue) {
 }
 
 async function resolveCourseStops(place) {
-  const [placeStop, restaurantStop, cafeStop] = await Promise.all([
-    resolvePlaceStop(place),
-    resolveNearbyStop(place.nearbyRestaurant),
-    resolveNearbyStop(place.nearbyCafe),
+  // 맛집·카페는 장소 좌표를 기준으로 찾아야 하므로 장소부터 먼저 푼다.
+  const placeStop = await resolvePlaceStop(place);
+  const [restaurantStop, cafeStop] = await Promise.all([
+    resolveNearbyStop(place.nearbyRestaurant, placeStop),
+    resolveNearbyStop(place.nearbyCafe, placeStop),
   ]);
 
   // 색상은 역할(장소/맛집/카페) 고정이라, 맛집이 빠져서 카페가 두 번째 정차지가 되는

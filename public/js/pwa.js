@@ -188,9 +188,16 @@ window.addEventListener("load", () => {
   const splash = document.getElementById("splash");
   const scheduleShow = () => setTimeout(showInstallPopup, 800);
 
+  // 첫 방문에는 사용법 튜토리얼이 먼저 뜬다. 둘이 겹치면 팝업 두 개가 포개져
+  // 어느 것도 제대로 안 읽힌다 — 튜토리얼이 닫힌 뒤에 설치를 권한다.
+  const afterTour = () => {
+    if (!window.yukjindaeTourPending) return scheduleShow();
+    window.addEventListener("yukjindae:tour-closed", scheduleShow, { once: true });
+  };
+
   if (splash && splash.style.display !== "none") {
-    window.addEventListener("splashHidden", scheduleShow, { once: true });
+    window.addEventListener("splashHidden", afterTour, { once: true });
   } else {
-    scheduleShow();
+    afterTour();
   }
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesQuery, validateReportPayload, validateNewPlacePayload,
-  validateNewPlaceAmenities, buildNewPlaceValue,
+  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst,
 } from "./worker.js";
 
 const place = {
@@ -181,5 +181,50 @@ describe("buildNewPlaceValue", () => {
   // 검증을 통과한 값만 오지만, 형식 문자열을 만들 때도 화이트리스트를 다시 본다.
   it("모르는 항목은 붙이지 않는다", () => {
     expect(buildNewPlaceValue({ value: "좋아요", amenities: { 엘리베이터: "있음" } })).toBe("좋아요");
+  });
+});
+
+describe("근처 맛집·카페 제보", () => {
+  const base = { placeId: "3a5a4eba1ccb8184a779e148112599e7", turnstileToken: "token" };
+
+  // 지도 API는 어떤 가게가 있는지는 알려줘도 아이랑 가도 되는지는 알려주지 않는다.
+  it("근처맛집·근처카페를 제보할 수 있다", () => {
+    expect(validateReportPayload({ ...base, field: "근처맛집", value: "고메돈까스 (유아의자 있어요)" })).toBeNull();
+    expect(validateReportPayload({ ...base, field: "근처카페", value: "모모아트" })).toBeNull();
+  });
+
+  // 자유서술 필드라 있음/없음으로 제한하면 안 된다.
+  it("자유서술로 받는다", () => {
+    expect(validateReportPayload({ ...base, field: "근처맛집", value: "아무 상호나 (메모)" })).toBeNull();
+  });
+
+  it("200자를 넘으면 걸러낸다", () => {
+    expect(validateReportPayload({ ...base, field: "근처맛집", value: "가".repeat(201) })).toMatch(/깁니다/);
+  });
+
+  it("여전히 화이트리스트 밖 필드는 막는다", () => {
+    expect(validateReportPayload({ ...base, field: "공개여부", value: "true" })).toMatch(/지원하지 않는/);
+  });
+});
+
+describe("isFirstDayInKst", () => {
+  // 크론이 UTC 말일 15:00에 도는데, 그 시각의 KST는 다음 달 1일 00:00이다.
+  it("UTC 말일 15시는 KST로 1일이다", () => {
+    expect(isFirstDayInKst(Date.parse("2026-08-31T15:00:00Z"))).toBe(true);
+    expect(isFirstDayInKst(Date.parse("2026-09-30T15:00:00Z"))).toBe(true);
+    // 2월은 28일이 말일이다.
+    expect(isFirstDayInKst(Date.parse("2027-02-28T15:00:00Z"))).toBe(true);
+  });
+
+  // 말일 후보 네 날짜에 모두 걸려 있어, 아닌 날은 걸러야 한다.
+  it("말일이 아닌 날은 걸러낸다", () => {
+    expect(isFirstDayInKst(Date.parse("2026-08-28T15:00:00Z"))).toBe(false);
+    expect(isFirstDayInKst(Date.parse("2026-08-29T15:00:00Z"))).toBe(false);
+    expect(isFirstDayInKst(Date.parse("2026-08-30T15:00:00Z"))).toBe(false);
+  });
+
+  it("31일이 없는 달의 30일 15시도 1일이다", () => {
+    expect(isFirstDayInKst(Date.parse("2026-11-30T15:00:00Z"))).toBe(true);
+    expect(isFirstDayInKst(Date.parse("2026-11-29T15:00:00Z"))).toBe(false);
   });
 });

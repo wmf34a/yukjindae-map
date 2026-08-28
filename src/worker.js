@@ -9,6 +9,7 @@ import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
+import { pickNearest, isValidCoords, NEARBY_SEARCH_RADIUS_M } from "./nearby-lookup.js";
 import {
   consumeRateLimit,
   hashIp,
@@ -46,14 +47,26 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
 // wrangler.jsonc의 triggers.crons 중 축제 자동 수집용 주간 스케줄을 식별하는 값 —
 // scheduled()에서 이 값과 event.cron을 비교해 매일 도는 블로그 enrichment와
 // 구분한다.
-const FESTIVAL_IMPORT_CRON = "0 19 * * 1";
-const STATION_GEOCODE_CRON = "0 20 * * 1";
-const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 1";
+// 크론은 UTC로 돈다. 사람이 가장 안 쓰는 일요일 새벽(KST)에 몰아 두려면 토요일
+// 오후 UTC가 된다 — 토 18:00 UTC = 일 03:00 KST. 서로 다른 시각에 하나씩 두어
+// 무거운 작업이 겹치지 않게 한다.
+const ENRICHMENT_CRON = "0 18 * * 6";
+const FESTIVAL_IMPORT_CRON = "0 19 * * 6";
+const STATION_GEOCODE_CRON = "0 20 * * 6";
+const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 6";
 // 매월 1일 09:00 KST(= 1일 00:00 UTC). 지역별 Top 10을 그 달 계절에 맞게 다시 매긴다.
 // 다른 크론들처럼 새벽에 돌리려면 UTC 기준 "전달 말일 19시"여야 하는데 말일은
 // 28~31일로 달마다 달라 크론으로 표현할 수 없다. 그래서 1일이 확실히 보장되는
 // UTC 자정을 쓴다.
-const MONTHLY_TOP10_CRON = "0 0 1 * *";
+// "매월 1일 새벽 KST"는 크론으로 곧장 쓸 수 없다. KST 1일 00:00은 UTC로는 전달
+// 마지막 날 15:00인데, 말일이 28~31일로 달마다 달라 날짜를 못 박을 수 없기
+// 때문이다. 그래서 말일 후보에 모두 걸어 두고 실행 시점의 KST 날짜가 1일인지
+// 코드에서 확인한다.
+const MONTHLY_TOP10_CRON = "0 15 28-31 * *";
+
+export function isFirstDayInKst(now = Date.now()) {
+  return new Date(now + 9 * 60 * 60 * 1000).getUTCDate() === 1;
+}
 
 const REPORTABLE_FIELDS = new Set([
   "운영시간",
@@ -63,6 +76,10 @@ const REPORTABLE_FIELDS = new Set([
   "기저귀교환대",
   "수유실",
   "유아의자",
+  // 근처 맛집·카페는 코스보기의 재료다. 지도 API는 어떤 가게가 있는지는 알려줘도
+  // 아이랑 가도 되는지(유아의자·노키즈존)는 알려주지 않는다. 다녀온 사람만 안다.
+  "근처맛집",
+  "근처카페",
 ]);
 const BOOLEAN_FIELDS = new Set(["기저귀교환대", "수유실", "유아의자"]);
 const BOOLEAN_VALUES = new Set(["있음", "없음"]);
@@ -715,6 +732,36 @@ async function handleNursingRooms(env) {
   }
 }
 
+// 카카오 키워드 검색은 기준 좌표와 반경을 받아 가까운 순으로 준다. 좌표까지 함께
+// 주므로 주소를 다시 지오코딩할 필요가 없다.
+async function searchNearbyByCoords(env, query, origin) {
+  const qs = new URLSearchParams({
+    query,
+    x: String(origin.lng),
+    y: String(origin.lat),
+    radius: String(NEARBY_SEARCH_RADIUS_M),
+    size: "10",
+    sort: "distance",
+  });
+  try {
+    const res = await fetchWithTimeout(`https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`, {
+      headers: { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return pickNearest(data.documents, origin);
+  } catch {
+    // 카카오가 죽어도 네이버 폴백이 있으므로 조용히 넘긴다.
+    return null;
+  }
+}
+
+// 상호 텍스트로 실제 가게를 찾는다.
+//
+// 이름만으로 찾으면 같은 상호의 다른 지점이 걸린다 — 대전 국립중앙과학관의
+// "신세계백화점 푸드코트"가 서울 강남점으로 잡혀 총 거리 306km짜리 코스가
+// 나왔다. 장소 좌표(lat/lng)를 함께 받으면 카카오 반경 검색으로 가장 가까운
+// 지점을 고른다. 좌표가 없거나 카카오가 비면 예전처럼 네이버로 찾는다.
 async function handleNearbyPlace(env, url) {
   const q = url.searchParams.get("q");
   if (!q) {
@@ -723,11 +770,23 @@ async function handleNearbyPlace(env, url) {
       headers: { "content-type": "application/json; charset=utf-8" },
     });
   }
+
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "public, max-age=86400",
+  };
+  const origin = { lat: Number(url.searchParams.get("lat")), lng: Number(url.searchParams.get("lng")) };
+
+  // 좌표를 받았으면 그 근처에서만 찾는다. 못 찾았다고 네이버로 넘어가면 위치를
+  // 안 보고 다시 검색해 엉뚱한 지점을 집어온다 — 300km 떨어진 핀을 찍느니
+  // 아무것도 안 찍는 편이 낫다.
+  if (isValidCoords(origin)) {
+    const hit = env.KAKAO_REST_API_KEY ? await searchNearbyByCoords(env, q, origin) : null;
+    return new Response(JSON.stringify(hit || { found: false }), { status: 200, headers });
+  }
+
   if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
-    return new Response(JSON.stringify({ error: "네이버 검색 API 환경변수가 설정되지 않았습니다." }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
+    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
   }
 
   const res = await fetchWithTimeout(
@@ -746,10 +805,6 @@ async function handleNearbyPlace(env, url) {
 
   const data = await res.json();
   const item = data.items && data.items[0];
-  const headers = {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=86400",
-  };
 
   if (!item) {
     return new Response(JSON.stringify({ found: false }), { status: 200, headers });
@@ -1159,9 +1214,8 @@ async function runScheduledMonthlyTop10(env) {
   }
 
   const places = await fetchAllPlaces(env);
-  // KST 기준의 "이번 달"이어야 한다. UTC로 계산하면 매월 1일 09:00 KST 실행
-  // 시점이 UTC로는 아직 1일 00:00이라 문제없지만, 실행이 밀리거나 수동으로
-  // 돌릴 때 달이 어긋날 수 있어 명시적으로 KST로 옮긴다.
+  // KST 기준의 "이번 달"이어야 한다. 크론이 UTC로는 전달 말일에 도는 탓에
+  // UTC로 계산하면 지난달이 잡힌다.
   const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const monthKey = kst.toISOString().slice(0, 7);
 
@@ -1378,9 +1432,17 @@ export default {
       return;
     }
     if (event.cron === MONTHLY_TOP10_CRON) {
-      ctx.waitUntil(runScheduledMonthlyTop10(env));
+      // 말일 후보 네 날짜에 모두 걸려 있어, 실제로 다음이 1일일 때만 돌린다.
+      if (isFirstDayInKst(event.scheduledTime || Date.now())) {
+        ctx.waitUntil(runScheduledMonthlyTop10(env));
+      }
       return;
     }
+    if (event.cron === ENRICHMENT_CRON) {
+      ctx.waitUntil(runScheduledEnrichment(env));
+      return;
+    }
+    // 크론 목록에 없는 값이 오면(수동 트리거 등) 가장 가벼운 보강만 돌린다.
     ctx.waitUntil(runScheduledEnrichment(env));
   },
 };

@@ -8,6 +8,7 @@ import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festi
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
+import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
   consumeRateLimit,
   hashIp,
@@ -521,6 +522,43 @@ async function runScheduledFestivalImport(env) {
   await notifyFestivalCandidates(env, fresh);
 }
 
+// 운영진에게 제보를 알린다. 노션 페이지에 댓글로 멘션하면 노션이 알아서 메일을
+// 보내 준다 — 운영진은 개발자가 아니라 슬랙을 안 쓰고, 카카오톡은 단체방 발송
+// API가 없으며, 메일을 직접 보내려면 Workers 밖의 발송 서비스가 또 필요하다.
+//
+// 슬랙과 마찬가지로 실패해도 조용히 넘어간다. 알림이 안 갔다고 제보 저장까지
+// 되돌릴 이유는 없다.
+async function notifyNotionMention(env, pageId, { placeName, field, value }) {
+  const emails = parseNotifyEmails(env.NOTION_NOTIFY_EMAILS);
+  if (!emails.length || !env.NOTION_API_KEY) return;
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const usersRes = await fetchWithTimeout("https://api.notion.com/v1/users?page_size=100", {
+      headers: notionHeaders,
+    });
+    if (!usersRes.ok) return;
+    const { results } = await usersRes.json();
+    const { targets, missing } = resolveMentionTargets(results, emails);
+
+    await fetchWithTimeout("https://api.notion.com/v1/comments", {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        parent: { page_id: pageId },
+        rich_text: buildReportComment({ placeName, field, value, targets, missing }),
+      }),
+    });
+  } catch {
+    // 무시 — 위 주석 참고.
+  }
+}
+
 // SLACK_WEBHOOK_URL이 없으면(로컬 등) 조용히 건너뛴다. 알림 실패가 원래 하려던
 // 작업(노션 등록 등)을 막을 이유는 없으므로 에러도 조용히 무시한다.
 async function notifySlack(env, text) {
@@ -908,11 +946,19 @@ async function handleReport(request, env, ctx) {
     if (!res.ok) {
       return upstreamErrorResponse("제보 저장에 실패했습니다.", await res.text());
     }
+    const created = await res.json();
     ctx.waitUntil(
       notifySlack(
         env,
         `📍 새 장소 추천이 들어왔습니다\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
       )
+    );
+    ctx.waitUntil(
+      notifyNotionMention(env, created.id, {
+        placeName: placeName.trim(),
+        field: NEW_PLACE_FIELD,
+        value: reportValue,
+      })
     );
     return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
   }
@@ -955,9 +1001,13 @@ async function handleReport(request, env, ctx) {
     return upstreamErrorResponse("제보 저장에 실패했습니다.", await createRes.text());
   }
 
+  const createdReport = await createRes.json();
   const reportsDbUrl = `https://www.notion.so/${env.NOTION_REPORTS_DATABASE_ID.replace(/-/g, "")}`;
   ctx.waitUntil(
     notifySlack(env, `📝 새 제보가 도착했어요\n• ${place.name} — ${field}: ${value.trim().slice(0, REPORT_VALUE_MAX_LENGTH)}\n${reportsDbUrl}`)
+  );
+  ctx.waitUntil(
+    notifyNotionMention(env, createdReport.id, { placeName: place.name, field, value: value.trim() })
   );
 
   return new Response(JSON.stringify({ ok: true }), { status: 201, headers });

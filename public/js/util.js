@@ -101,9 +101,12 @@ function currentMonthKey() {
   return kst.toISOString().slice(0, 7);
 }
 
+// 막아야 하는 것은 "지난달 순위가 남아 있는 것"이지 "다음 달 것이 미리 매겨진 것"이
+// 아니다. 오픈 전에 다음 달 순위를 미리 돌려 두는 일이 있는데, 정확히 같은 달만
+// 인정하면 그게 통째로 안 보인다.
 function monthlyRank(place) {
   if (!place || typeof place.rank !== "number") return null;
-  if (place.rankMonth !== currentMonthKey()) return null;
+  if (!place.rankMonth || place.rankMonth < currentMonthKey()) return null;
   return place.rank;
 }
 

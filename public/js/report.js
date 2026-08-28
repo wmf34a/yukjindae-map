@@ -17,6 +17,8 @@ const REPORT_FIELDS = [
 let turnstileWidgetId = null;
 let turnstileToken = "";
 let selectedValue = "";
+// 모달을 연 장소. 지금 값을 미리 채워 주려면 필요하다.
+let reportPlace = null;
 // 광고 차단 등으로 Turnstile을 끝내 못 불러온 상태. 그래도 제보는 보낼 수 있어야
 // 한다 — 서버가 확인 없는 제보를 좁은 허용량으로 따로 받는다.
 let turnstileUnavailable = false;
@@ -128,6 +130,21 @@ function renderTurnstile(retriesLeft = 50) {
 }
 /* oxlint-enable no-underscore-dangle */
 
+// 노션 속성 이름 → 화면이 들고 있는 장소 객체의 키.
+const PLACE_KEY = {
+  "운영시간": "hours",
+  "입장료": "fee",
+  "무료입장연령": "freeAgePolicy",
+  "주차상세": "parkingDetail",
+  "근처맛집": "nearbyRestaurant",
+  "근처카페": "nearbyCafe",
+};
+
+function currentValue(field) {
+  const key = PLACE_KEY[field];
+  return key && reportPlace ? String(reportPlace[key] || "") : "";
+}
+
 function setField(field) {
   const boolGroup = document.getElementById("report-value-boolean");
   const textInput = document.getElementById("report-value-text");
@@ -140,7 +157,11 @@ function setField(field) {
   } else {
     boolGroup.hidden = true;
     textInput.hidden = false;
-    textInput.value = "";
+    // 제보는 그 칸을 통째로 덮어쓴다. 빈 칸에서 시작하면 "월요일 휴관"만 적어
+    // 보내게 되고, 원래 있던 "09:30~17:30"이 사라진다. 지금 값을 채워 두면
+    // 고칠 부분만 손보게 된다.
+    textInput.value = currentValue(field);
+    selectedValue = textInput.value;
     textInput.placeholder = PLACEHOLDERS[field] || "";
   }
   updateSubmitState();
@@ -200,6 +221,7 @@ window.openReportModal = function openReportModal(place) {
   document.getElementById("report-success").hidden = true;
   document.getElementById("report-error").hidden = true;
   turnstileToken = "";
+  reportPlace = place;
 
   const select = document.getElementById("report-field");
   select.onchange = () => setField(select.value);

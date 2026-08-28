@@ -315,12 +315,24 @@ function renderPlaces() {
 
 // 무엇을 보고 있는지 제목으로 알려준다. 정렬 기준이 셋이라 제목이 같으면
 // 왜 이 순서인지 알 수 없다.
+//
+// 지역별 요약은 날씨에 따라 고르는 곳이 달라진다. 비 오는 날에는 그 지역 1위가
+// 야외면 순위를 양보하고 실내를 고르는데, 제목에 "1위"라고 써두면 사실과 다르다.
 function setPlaceListTitle(showRank, regionDigest) {
   const title = document.querySelector(".section__title--diary");
   if (!title) return;
-  if (showRank) title.textContent = `${state.region} 이달의 Top 10`;
-  else if (regionDigest) title.textContent = "이달의 지역별 1위";
-  else title.textContent = "전체 장소";
+  if (showRank) {
+    title.textContent = `${state.region} 이달의 Top 10`;
+    return;
+  }
+  if (!regionDigest) {
+    title.textContent = "전체 장소";
+    return;
+  }
+  const weatherApplied = Boolean(
+    state.weather && ((state.weather.boost || []).length || (state.weather.avoid || []).length)
+  );
+  title.textContent = weatherApplied ? "오늘 가기 좋은 곳 · 지역별 한 곳씩" : "이달의 지역별 1위";
 }
 
 // "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해

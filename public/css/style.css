@@ -1750,3 +1750,12 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* 제보 오류 아래 보조 안내. 원인을 안 알려주면 앱이 고장난 줄 안다. */
+.report-modal__hint {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}

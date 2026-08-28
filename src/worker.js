@@ -124,8 +124,12 @@ export function buildNewPlaceValue({ value, amenities }) {
   return picked.length ? `${body}\n[편의시설] ${picked.join(" / ")}` : body;
 }
 
-export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }) {
-  if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
+// reviewer: 검수 토큰으로 들어온 요청. 초대받은 사람만 토큰을 갖고 있으므로
+// 사람 확인의 목적을 이미 충족한다 — 자세한 사정은 handleReport 주석 참고.
+export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }, { reviewer = false } = {}) {
+  if (!reviewer && (typeof turnstileToken !== "string" || !turnstileToken)) {
+    return "사람인지 확인이 필요합니다.";
+  }
   if (typeof placeName !== "string" || !placeName.trim()) return "장소 이름이 필요합니다.";
   if (placeName.trim().length > NEW_PLACE_NAME_MAX) return "장소 이름이 너무 깁니다.";
   if (typeof value !== "string" || !value.trim()) return "어떤 점이 좋았는지 알려주세요.";
@@ -133,12 +137,14 @@ export function validateNewPlacePayload({ placeName, value, turnstileToken, amen
   return validateNewPlaceAmenities(amenities);
 }
 
-export function validateReportPayload({ placeId, field, value, turnstileToken }) {
+export function validateReportPayload({ placeId, field, value, turnstileToken }, { reviewer = false } = {}) {
   if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
   // 노션 페이지 ID 형식이 아닌 값이 그대로 API 경로에 들어가지 않도록 막는다.
   if (!isNotionId(placeId)) return "잘못된 장소 ID입니다.";
   if (typeof field !== "string" || !REPORTABLE_FIELDS.has(field)) return "지원하지 않는 필드입니다.";
-  if (typeof turnstileToken !== "string" || !turnstileToken) return "사람인지 확인이 필요합니다.";
+  if (!reviewer && (typeof turnstileToken !== "string" || !turnstileToken)) {
+    return "사람인지 확인이 필요합니다.";
+  }
   if (typeof value !== "string" || !value.trim()) return "제안값이 필요합니다.";
   if (BOOLEAN_FIELDS.has(field)) {
     if (!BOOLEAN_VALUES.has(value)) return "제안값은 있음/없음 중 하나여야 합니다.";
@@ -966,8 +972,18 @@ async function verifyTurnstile(env, token, ip) {
   return data.success === true;
 }
 
-async function handleReport(request, env, ctx) {
+// 검수 토큰으로 들어온 요청은 Turnstile을 건너뛴다.
+//
+// 삼성 인터넷 같은 곳에서 광고 차단이 challenges.cloudflare.com을 막으면 Turnstile
+// 스크립트가 아예 안 실려 "보안 인증을 불러오지 못했어요"에서 제보가 통째로 막힌다.
+// 정작 그 제보를 부탁한 것이 검수자인데, 브라우저 설정 때문에 못 하게 되는 셈이다.
+//
+// 토큰은 초대받은 사람에게만 개별로 보낸 값이라 사람 확인의 목적을 이미 충족한다.
+// 토큰이 새더라도 제보는 장소 DB가 아니라 승인 큐로만 들어가고, 요청 제한도
+// 그대로 걸린다.
+async function handleReport(request, env, ctx, url) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+  const reviewer = isReviewer(env, url);
 
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ error: "허용되지 않은 메서드입니다." }), { status: 405, headers });
@@ -986,8 +1002,8 @@ async function handleReport(request, env, ctx) {
   // 신규 장소 제보는 검증 규칙도 저장 형태도 달라서 먼저 갈라낸다.
   const isNewPlace = (body || {}).field === NEW_PLACE_FIELD;
   const validationError = isNewPlace
-    ? validateNewPlacePayload(body || {})
-    : validateReportPayload(body || {});
+    ? validateNewPlacePayload(body || {}, { reviewer })
+    : validateReportPayload(body || {}, { reviewer });
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
@@ -1005,9 +1021,11 @@ async function handleReport(request, env, ctx) {
     return new Response(JSON.stringify({ error: "잠시 후 다시 시도해주세요." }), { status: 429, headers });
   }
 
-  const isHuman = await verifyTurnstile(env, turnstileToken, ip);
-  if (!isHuman) {
-    return new Response(JSON.stringify({ error: "사람인지 확인에 실패했습니다." }), { status: 400, headers });
+  if (!reviewer) {
+    const isHuman = await verifyTurnstile(env, turnstileToken, ip);
+    if (!isHuman) {
+      return new Response(JSON.stringify({ error: "사람인지 확인에 실패했습니다." }), { status: 400, headers });
+    }
   }
 
   const notionHeaders = {
@@ -1440,7 +1458,7 @@ async function handleRequest(request, env, ctx) {
     return withProxyRateLimit(request, env, () => handleDirections(env, url));
   }
   if (url.pathname === "/api/reports") {
-    return handleReport(request, env, ctx);
+    return handleReport(request, env, ctx, url);
   }
   if (url.pathname.startsWith("/images/")) {
     return handleImage(env, url.pathname.slice("/images/".length));

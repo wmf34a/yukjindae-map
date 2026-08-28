@@ -247,3 +247,33 @@ describe("isReviewer", () => {
     expect(isReviewer({ REVIEW_TOKEN: "" }, url("?review="))).toBe(false);
   });
 });
+
+describe("검수자 Turnstile 면제", () => {
+  const base = { placeId: "3a5a4eba1ccb8184a779e148112599e7", field: "운영시간", value: "10시 오픈" };
+
+  // 광고 차단이 challenges.cloudflare.com을 막으면 Turnstile이 아예 안 실린다.
+  // 정작 제보를 부탁한 검수자가 그것 때문에 못 하게 되면 안 된다.
+  it("검수자는 토큰 없이도 통과한다", () => {
+    expect(validateReportPayload(base, { reviewer: true })).toBeNull();
+    expect(validateNewPlacePayload(
+      { placeName: "가", value: "좋아요" }, { reviewer: true }
+    )).toBeNull();
+  });
+
+  // 면제는 사람 확인만 건너뛴다. 나머지 검증은 그대로 걸려야 한다.
+  it("검수자여도 다른 검증은 그대로 받는다", () => {
+    expect(validateReportPayload({ ...base, field: "공개여부" }, { reviewer: true })).toMatch(/지원하지 않는/);
+    expect(validateReportPayload({ ...base, placeId: "잘못된id" }, { reviewer: true })).toMatch(/잘못된 장소/);
+    expect(validateReportPayload({ ...base, value: "" }, { reviewer: true })).toMatch(/제안값/);
+    expect(validateNewPlacePayload(
+      { placeName: "가", value: "나", amenities: { 수유실: "아마도" } }, { reviewer: true }
+    )).toMatch(/편의시설/);
+  });
+
+  // 검수자가 아니면 예전 그대로 사람 확인이 필요하다.
+  it("일반 사용자는 여전히 토큰이 필요하다", () => {
+    expect(validateReportPayload(base)).toMatch(/사람인지/);
+    expect(validateReportPayload(base, { reviewer: false })).toMatch(/사람인지/);
+    expect(validateNewPlacePayload({ placeName: "가", value: "나" })).toMatch(/사람인지/);
+  });
+});

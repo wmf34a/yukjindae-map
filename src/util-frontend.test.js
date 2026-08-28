@@ -7,7 +7,7 @@ import vm from "node:vm";
 // 화면 XSS 방어의 마지막 관문이라 테스트는 반드시 있어야 해서, 파일을 그대로
 // 읽어 window를 흉내낸 컨텍스트에서 실행하고 노출된 함수를 꺼내 검증한다.
 let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
-let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT;
+let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
@@ -17,7 +17,7 @@ beforeAll(() => {
   vm.runInContext(source, sandbox);
   ({ escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank } = sandbox.window);
   ({ splitNearbyList, primaryNearby, activeEvent } = sandbox.window);
-  ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT } = sandbox.window);
+  ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -334,5 +334,136 @@ describe("HOME_PLACE_LIMIT", () => {
   it("첫 화면 노출 개수를 정해 둔다", () => {
     expect(HOME_PLACE_LIMIT).toBeGreaterThan(0);
     expect(HOME_PLACE_LIMIT).toBeLessThan(30);
+  });
+});
+
+describe("monthlyRank 기간 판정", () => {
+  const thisMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  const shift = (n) => {
+    const d = new Date(`${thisMonth}-01T00:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() + n);
+    return d.toISOString().slice(0, 7);
+  };
+
+  it("이번 달 순위는 보여준다", () => {
+    expect(monthlyRank({ rank: 3, rankMonth: thisMonth })).toBe(3);
+  });
+
+  // 8월에 뽑은 물놀이장이 9월에도 1위로 서 있으면 추천이 아니라 방해가 된다.
+  it("지난달 순위는 숨긴다", () => {
+    expect(monthlyRank({ rank: 1, rankMonth: shift(-1) })).toBeNull();
+  });
+
+  // 오픈 전에 다음 달 순위를 미리 돌려 두는 일이 있다. 낡은 게 아니라 앞선 것이다.
+  it("다음 달 순위는 보여준다", () => {
+    expect(monthlyRank({ rank: 1, rankMonth: shift(1) })).toBe(1);
+  });
+
+  it("순위나 추천월이 없으면 null", () => {
+    expect(monthlyRank({ rankMonth: thisMonth })).toBeNull();
+    expect(monthlyRank({ rank: 1 })).toBeNull();
+    expect(monthlyRank(null)).toBeNull();
+  });
+});
+
+describe("pickRegionTops", () => {
+  const thisMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  const p = (name, region, rank) => ({ name, region, rank, rankMonth: rank ? thisMonth : undefined });
+
+  it("지역마다 한 곳씩만 고른다", () => {
+    const out = pickRegionTops([
+      p("가", "서울강북", 1), p("나", "서울강북", 2),
+      p("다", "제주", 1), p("라", "제주", 3),
+    ]);
+    expect(out.map((x) => x.name).toSorted()).toEqual(["가", "다"]);
+  });
+
+  it("순위가 높은 쪽을 고른다", () => {
+    const out = pickRegionTops([p("나", "인천", 5), p("가", "인천", 1)]);
+    expect(out[0].name).toBe("가");
+  });
+
+  // 새로 공개한 장소는 아직 순위가 없다. 그 지역이 통째로 빠지면 안 된다.
+  it("순위 있는 곳을 순위 없는 곳보다 앞세운다", () => {
+    expect(pickRegionTops([p("무순위", "강원도"), p("일위", "강원도", 1)])[0].name).toBe("일위");
+  });
+
+  it("순위가 아무 곳에도 없으면 그 지역의 첫 장소를 쓴다", () => {
+    const out = pickRegionTops([p("가", "경상도"), p("나", "경상도")]);
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe("가");
+  });
+
+  // 지역이 비어 있는 장소가 섞이면 "undefined 지역" 카드가 생긴다.
+  it("지역이 없는 장소는 뺀다", () => {
+    expect(pickRegionTops([{ name: "가" }, p("나", "제주", 1)]).map((x) => x.name)).toEqual(["나"]);
+  });
+
+  it("빈 목록도 죽지 않는다", () => {
+    expect(pickRegionTops([])).toEqual([]);
+  });
+});
+
+describe("pickRegionTops 날씨 반영", () => {
+  const thisMonth = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 7);
+  const p = (name, region, rank, categories) => ({
+    name, region, rank, rankMonth: thisMonth, categories,
+  });
+  const rainy = { boost: ["실내놀이"], avoid: ["자연·공원"] };
+
+  // 화면 위에서 "실내에서 놀기 좋은 곳"이라 해놓고 아래에 야외만 늘어놓으면 안 된다.
+  it("비 오는 날에는 순위를 양보하고 실내를 고른다", () => {
+    const out = pickRegionTops([
+      p("야외1위", "인천", 1, ["자연·공원"]),
+      p("실내3위", "인천", 3, ["실내놀이"]),
+    ], rainy);
+    expect(out[0].name).toBe("실내3위");
+  });
+
+  it("같은 날씨 조건이면 순위가 높은 쪽을 고른다", () => {
+    const out = pickRegionTops([
+      p("실내5위", "인천", 5, ["실내놀이"]),
+      p("실내2위", "인천", 2, ["실내놀이"]),
+    ], rainy);
+    expect(out[0].name).toBe("실내2위");
+  });
+
+  it("날씨 정보가 없으면 순위만 본다", () => {
+    const out = pickRegionTops([
+      p("야외1위", "인천", 1, ["자연·공원"]),
+      p("실내3위", "인천", 3, ["실내놀이"]),
+    ]);
+    expect(out[0].name).toBe("야외1위");
+  });
+
+  it("맑은 날에는 야외가 앞선다", () => {
+    const sunny = { boost: ["자연·공원"], avoid: [] };
+    const out = pickRegionTops([
+      p("실내1위", "제주", 1, ["실내놀이"]),
+      p("야외4위", "제주", 4, ["자연·공원"]),
+    ], sunny);
+    expect(out[0].name).toBe("야외4위");
+  });
+});
+
+describe("weatherScore 우선순위", () => {
+  const rainy = { boost: ["실내놀이", "체험·문화"], avoid: ["자연·공원"] };
+
+  // 목장·수목원은 "자연·공원"과 "체험·문화"를 둘 다 달고 있다. boost를 먼저 보면
+  // 비 오는 날에도 체험이라는 이유로 통과해, 홈에 야외만 늘어섰다.
+  it("야외 태그가 있으면 체험 태그가 있어도 비 오는 날엔 뒤로 보낸다", () => {
+    expect(weatherScore({ categories: ["자연·공원", "체험·문화"] }, rainy)).toBe(2);
+  });
+
+  it("실내 전용은 앞으로 당긴다", () => {
+    expect(weatherScore({ categories: ["체험·문화", "무료"] }, rainy)).toBe(0);
+  });
+
+  it("해당 없는 곳은 가운데", () => {
+    expect(weatherScore({ categories: ["맛집"] }, rainy)).toBe(1);
+  });
+
+  it("날씨 정보가 없으면 모두 같게 본다", () => {
+    expect(weatherScore({ categories: ["자연·공원"] }, null)).toBe(1);
   });
 });

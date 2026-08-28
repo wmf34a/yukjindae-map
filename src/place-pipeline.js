@@ -332,6 +332,10 @@ export function destinationScore(posts, placeName, region) {
 export const REJECTED = new Map([
   ["인천어린이천문대", "전면 예약제 + 회차당 가격이 높아 '아빠랑 가볍게' 취지와 안 맞음"],
   ["일산어린이천문대", "인천어린이천문대와 같은 이유"],
+  // 캠핑장은 예약이 필수고 1박이 기준이라 "잠깐 다녀오는 곳"이 아니다.
+  // 어린이천문대를 뺀 것과 같은 기준이다.
+  ["트리캠핑장", "예약 필수 + 1박 기준이라 '아빠랑 가볍게' 취지와 안 맞음"],
+  ["블랙트리캠핑", "트리캠핑장과 같은 이유"],
 ]);
 
 export function isRejected(name) {

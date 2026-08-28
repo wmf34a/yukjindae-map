@@ -70,18 +70,9 @@ const NOTICES_SEEN_KEY = "yukjindae_notices_seen_at";
 
 // 지도 아래 큐레이션 카드. 테마 코스는 탭바로 옮겼으므로 축제만 남기고 전폭으로
 // 키운다 — 카드 두 개를 반씩 나눠 놓으니 둘 다 눈에 안 들어왔다.
-const FESTIVAL_LINK = {
-  label: "축제·행사 TOP10",
-  sub: "이번 주말 아이와 갈 만한 행사",
-  href: "festival.html",
-  icon: `<svg width="26" height="26" viewBox="0 0 28 28">
-    <path d="M6 24l3-11 9 4z" fill="#2563EB"/>
-    <path d="M9 13l11-7-1 6z" fill="#4A90D9"/>
-    <circle cx="8" cy="6" r="1.4" fill="#F7B84B"/>
-    <circle cx="14" cy="4" r="1.1" fill="#F7B84B"/>
-    <circle cx="20" cy="8" r="1.1" fill="#F7B84B"/>
-  </svg>`,
-};
+// 홈에 실을 축제 수. 가로로 넘겨 보는 형태라 서너 개면 "더 있다"는 것이 드러나고,
+// 많이 실으면 아래 추천장소까지 내려가기 전에 지친다.
+const HOME_FESTIVAL_COUNT = 4;
 
 function regionCount(region) {
   return state.places.filter((p) => REGION_GROUPS[region].includes(p.region)).length;
@@ -148,30 +139,49 @@ function renderReviewBanner() {
   document.body.prepend(bar);
 }
 
-function renderCuratedLinks() {
+// 지금까지는 "축제·행사 TOP10 / 지금 열리는 행사 10개"라는 링크 한 줄이었다.
+// 무엇이 열리는지 안 보여주니 눌러볼 이유가 없었다. 실제 축제를 카드로 깔고
+// 전체 보기를 옆에 둔다.
+async function renderFestivals() {
   const wrap = document.getElementById("curated-links");
-  wrap.innerHTML = `<a class="curated-links__item" href="${FESTIVAL_LINK.href}">
-      <span class="curated-links__icon">${FESTIVAL_LINK.icon}</span>
-      <span class="curated-links__text">
-        <strong class="curated-links__label">${FESTIVAL_LINK.label}</strong>
-        <span class="curated-links__sub" id="festival-count">${FESTIVAL_LINK.sub}</span>
-      </span>
-      <span class="curated-links__arrow" aria-hidden="true">›</span>
-    </a>`;
-}
+  if (!wrap) return;
 
-// 진행 중인 축제 수를 카드에 채운다. 숫자가 있으면 "지금 볼 게 있다"는 게 드러나
-// 눌러볼 이유가 생긴다. 못 가져오면 기본 문구를 그대로 둔다.
-async function loadFestivalCount() {
+  let festivals = [];
   try {
     const data = await fetchJson("/api/festivals");
-    const count = (data.festivals || []).length;
-    if (!count) return;
-    const el = document.getElementById("festival-count");
-    if (el) el.textContent = `지금 열리는 행사 ${count}개`;
+    festivals = data.festivals || [];
   } catch {
-    // 기본 문구 유지 — 축제 수를 못 가져왔다고 카드를 숨길 이유는 없다.
+    // 축제를 못 가져와도 홈은 떠야 한다.
   }
+
+  if (!festivals.length) {
+    wrap.hidden = true;
+    return;
+  }
+
+  const cards = festivals.slice(0, HOME_FESTIVAL_COUNT).map((f) => {
+    const dday = festivalDday(f);
+    const badge = dday ? `<span class="festival-strip__dday">${escapeHtml(dday)}</span>` : "";
+    const thumb = f.image
+      ? `<img class="festival-strip__thumb" src="${escapeHtml(safeImageSrc(f.image))}" alt="" loading="lazy" />`
+      : `<div class="festival-strip__thumb"></div>`;
+    const where = [f.region, f.placeName].filter(Boolean).join(" · ");
+    return `
+      <a class="festival-strip__card" href="festival-detail.html?id=${encodeURIComponent(f.id)}">
+        <div class="festival-strip__thumb-wrap">${thumb}${badge}</div>
+        <div class="festival-strip__name">${escapeHtml(f.title || "")}</div>
+        ${where ? `<div class="festival-strip__where">${escapeHtml(where)}</div>` : ""}
+      </a>`;
+  }).join("");
+
+  wrap.hidden = false;
+  wrap.innerHTML = `
+    <div class="festival-strip__head">
+      <h2 class="section__title">🎪 지금 열리는 축제</h2>
+      <a class="festival-strip__more" href="festival.html">전체 ${festivals.length}개 ›</a>
+    </div>
+    <div class="festival-strip__scroll">${cards}</div>
+  `;
 }
 
 function renderCategoryFilter() {
@@ -678,8 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
   renderReviewBanner();
-  renderCuratedLinks();
-  loadFestivalCount();
+  renderFestivals();
   renderCategoryFilter();
   initNoticesBell();
 

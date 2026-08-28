@@ -296,7 +296,7 @@ function renderPlaces() {
     rest = 0;
   } else if (regionDigest) {
     // 위치를 알려줬으면 내 지역 1위가 맨 앞에 오게 가까운 순으로 세운다.
-    const tops = pickRegionTops(matched);
+    const tops = pickRegionTops(matched, state.weather);
     shown = state.coords ? sortByDistance(tops, state.coords) : sortByMonthlyRank(tops);
     rest = matched.length - shown.length;
   } else {

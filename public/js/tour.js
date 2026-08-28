@@ -66,6 +66,9 @@ function render(overlay) {
   overlay.querySelector(".tour__title").textContent = slide.title;
   overlay.querySelector(".tour__body").textContent = slide.body;
   overlay.querySelector(".tour__next").textContent = isLast ? "시작하기" : "다음";
+  // 첫 장에서는 돌아갈 곳이 없다. 버튼을 지우지 않고 감추기만 해서 다음 버튼의
+  // 자리가 장마다 흔들리지 않게 한다.
+  overlay.querySelector(".tour__prev").hidden = index === 0;
 
   const dots = overlay.querySelector(".tour__dots");
   dots.innerHTML = SLIDES.map(
@@ -74,6 +77,8 @@ function render(overlay) {
 }
 
 function open() {
+  // 다시 볼 때는 처음부터 시작한다.
+  index = 0;
   const overlay = document.createElement("div");
   overlay.className = "tour-overlay";
   overlay.innerHTML = `
@@ -83,13 +88,21 @@ function open() {
       <h2 class="tour__title"></h2>
       <p class="tour__body"></p>
       <div class="tour__dots"></div>
-      <button type="button" class="tour__next"></button>
+      <div class="tour__actions">
+        <button type="button" class="tour__prev" hidden>이전</button>
+        <button type="button" class="tour__next"></button>
+      </div>
     </div>
   `;
   document.body.append(overlay);
   render(overlay);
 
   overlay.querySelector(".tour__skip").addEventListener("click", close);
+  overlay.querySelector(".tour__prev").addEventListener("click", () => {
+    if (index === 0) return;
+    index -= 1;
+    render(overlay);
+  });
   overlay.querySelector(".tour__next").addEventListener("click", () => {
     if (index === SLIDES.length - 1) {
       close();
@@ -107,7 +120,11 @@ function open() {
 // 튜토리얼이 떠 있는 동안에는 설치 팝업을 미룬다.
 window.yukjindaeTourPending = !hasSeen();
 
+// 한 번 닫으면 다시 안 뜬다. 나중에 찾아볼 수 있게 여는 길을 남긴다.
+window.openTour = open;
+
 document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("tour-again")?.addEventListener("click", open);
   if (hasSeen()) return;
   open();
 });

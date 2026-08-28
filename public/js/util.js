@@ -162,16 +162,24 @@ function primaryNearby(value) {
 // 계산해 주므로 여기서는 순서만 바꾼다. 걸러내지 않는 이유는, 비 온다고 야외를
 // 목록에서 지우면 "다음에 갈 곳"을 찾는 사람이 아무것도 못 보게 되기 때문이다.
 // src/today-weather.js에 같은 규칙이 있지만 그쪽은 ESM이라 여기서 못 불러온다.
+// 0이 오늘 날씨에 가장 맞고 2가 가장 안 맞는다. 지역별 1위를 고를 때도 같은
+// 기준을 써야, 화면 위에서는 "실내에서 놀기 좋은 곳"이라 해놓고 아래에는 야외만
+// 늘어놓는 일이 생기지 않는다.
+//
+// avoid를 boost보다 먼저 본다. 목장·수목원은 "자연·공원"과 "체험·문화"를 둘 다
+// 달고 있어서, boost를 먼저 보면 비 오는 날에도 체험이라는 이유로 통과했다.
+// 비가 오면 "야외다"라는 사실이 "체험이다"보다 앞선다.
+function weatherScore(place, recommendation) {
+  if (!recommendation) return 1;
+  const categories = place.categories || [];
+  if ((recommendation.avoid || []).some((c) => categories.includes(c))) return 2;
+  if ((recommendation.boost || []).some((c) => categories.includes(c))) return 0;
+  return 1;
+}
+
 function sortByWeather(places, recommendation) {
   if (!recommendation) return places;
-  const boost = new Set(recommendation.boost || []);
-  const avoid = new Set(recommendation.avoid || []);
-  const score = (place) => {
-    const categories = place.categories || [];
-    if (categories.some((c) => boost.has(c))) return 0;
-    if (categories.some((c) => avoid.has(c))) return 2;
-    return 1;
-  };
+  const score = (place) => weatherScore(place, recommendation);
   return places
     .map((place, index) => ({ place, index, score: score(place) }))
     .toSorted((a, b) => (a.score !== b.score ? a.score - b.score : a.index - b.index))
@@ -245,7 +253,14 @@ function sortByDistance(places, coords) {
 // 대신 지역마다 이달의 1위를 한 곳씩 모은다. AI가 그 달 계절에 맞춰 고른 곳들이라
 // 아무 곳이나 열두 개 뽑는 것보다 낫고, 지역이 골고루 섞여 어디 사는 사람이 열어도
 // 자기 지역이 보인다.
-function pickRegionTops(places) {
+function pickRegionTops(places, recommendation) {
+  // 날씨가 먼저다. 비 오는 날 그 지역 1위가 야외라면, 순위를 조금 양보하더라도
+  // 오늘 갈 수 있는 곳을 보여주는 편이 맞다. 같은 날씨 조건 안에서는 순위로 가린다.
+  const key = (place) => [
+    weatherScore(place, recommendation),
+    monthlyRank(place) ?? Number.MAX_SAFE_INTEGER,
+  ];
+
   const best = new Map();
   for (const place of places) {
     if (!place.region) continue;
@@ -254,10 +269,11 @@ function pickRegionTops(places) {
       best.set(place.region, place);
       continue;
     }
-    const a = monthlyRank(place);
-    const b = monthlyRank(current);
-    // 순위가 있는 쪽이 우선이고, 둘 다 있으면 높은 쪽이 이긴다.
-    if (a !== null && (b === null || a < b)) best.set(place.region, place);
+    const [aWeather, aRank] = key(place);
+    const [bWeather, bRank] = key(current);
+    if (aWeather < bWeather || (aWeather === bWeather && aRank < bRank)) {
+      best.set(place.region, place);
+    }
   }
   return [...best.values()];
 }
@@ -278,5 +294,6 @@ window.sortByDistance = sortByDistance;
 window.distanceKm = distanceKm;
 window.HOME_PLACE_LIMIT = HOME_PLACE_LIMIT;
 window.pickRegionTops = pickRegionTops;
+window.weatherScore = weatherScore;
 window.reviewToken = reviewToken;
 window.withReview = withReview;

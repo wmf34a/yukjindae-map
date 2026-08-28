@@ -1566,6 +1566,26 @@ body {
   margin-bottom: 18px;
 }
 
+/* 이전 버튼이 생겨도 다음 버튼의 자리가 장마다 흔들리지 않아야 한다. */
+.tour__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tour__prev {
+  flex: 0 0 auto;
+  padding: 13px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tour__prev[hidden] { display: none; }
+
 .tour__dot {
   width: 6px;
   height: 6px;
@@ -1580,7 +1600,7 @@ body {
 }
 
 .tour__next {
-  width: 100%;
+  flex: 1;
   padding: 13px;
   border: 0;
   border-radius: 12px;
@@ -1616,13 +1636,23 @@ body {
   font-weight: 700;
 }
 
-.about-link {
-  display: block;
+/* 목록 끝의 보조 링크들. 자주 쓰는 것이 아니라 조용히 둔다. */
+.foot-links {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
   margin: 16px 0 0;
-  text-align: center;
+}
+
+.about-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
   font-size: 13px;
   color: var(--color-text-secondary);
   text-decoration: underline;
+  cursor: pointer;
 }
 
 .suggest-amenity {

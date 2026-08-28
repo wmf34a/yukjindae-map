@@ -391,7 +391,7 @@ function renderRegionChips() {
 }
 
 async function loadPlaces() {
-  const data = await fetchJson("/api/places");
+  const data = await fetchJson(window.withReview("/api/places"));
   places = (data.places || []).filter((p) => typeof p.lat === "number" && typeof p.lng === "number");
   renderMarkers(places);
   renderNearbyList();

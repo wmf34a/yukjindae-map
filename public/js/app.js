@@ -138,6 +138,16 @@ function renderRegionLegend() {
   });
 }
 
+// 검수 모드로 들어왔다는 걸 화면에 드러낸다. 아직 공개하지 않은 장소가 섞여 있어
+// 일반 화면과 다르다는 것을 모르면 "왜 이런 게 있지" 하게 된다.
+function renderReviewBanner() {
+  if (!window.reviewToken()) return;
+  const bar = document.createElement("div");
+  bar.className = "review-bar";
+  bar.textContent = "검수 모드 — 아직 공개하지 않은 장소가 함께 보입니다";
+  document.body.prepend(bar);
+}
+
 function renderCuratedLinks() {
   const wrap = document.getElementById("curated-links");
   wrap.innerHTML = `<a class="curated-links__item" href="${FESTIVAL_LINK.href}">
@@ -222,12 +232,18 @@ function placeCard(place, showRank = false) {
     : "";
   const event = activeEvent(place);
   const eventBadge = event ? `<span class="place-grid__event-badge">🎟 할인</span>` : "";
+  // 검수 모드에서만 비공개 장소가 섞여 온다. 표시가 없으면 이미 공개된 곳으로
+  // 착각해 검수해야 할 곳을 지나친다.
+  const pendingBadge = place.published === false
+    ? `<span class="place-grid__pending">검수 대기</span>`
+    : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
         ${rankBadge}
         ${badge}
+        ${pendingBadge}
         ${eventBadge}
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
@@ -476,7 +492,7 @@ function initNoticesBell() {
 
 async function loadPlaces() {
   try {
-    const data = await fetchJson("/api/places");
+    const data = await fetchJson(window.withReview("/api/places"));
     state.places = data.places || [];
   } catch (err) {
     console.error(err);
@@ -617,6 +633,7 @@ function updateSearchModeUI() {
 document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
+  renderReviewBanner();
   renderCuratedLinks();
   loadFestivalCount();
   renderCategoryFilter();

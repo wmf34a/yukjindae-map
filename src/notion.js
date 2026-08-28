@@ -58,6 +58,8 @@ export function toPlace(page) {
     // 노션에 직접 올린 사진은 한 시간쯤 지나면 만료되는 서명 URL이라 그대로 쓰면
     // 화면에서 깨진다. 배너·코스·축제처럼 R2로 미러링하려면 원본 식별자가 필요하다.
     imageSource: firstFileSource(p["사진"]),
+    // 검수 모드에서만 비공개 장소가 섞여 오므로, 화면이 구분할 수 있게 함께 넘긴다.
+    published: Boolean(p["공개여부"] && p["공개여부"].checkbox),
     hours: text(p["운영시간"]),
     fee: text(p["입장료"]),
     reason: text(p["추천이유"]),

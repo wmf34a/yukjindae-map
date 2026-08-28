@@ -161,7 +161,15 @@ export function matchesQuery(place, { region, category, q }) {
 
 // handlePlaces(목록 API)와 enrich.js(블로그 힌트 배치)가 같은 전체 장소 목록이
 // 필요해서, 노션 페이지네이션 순회 로직을 공용 헬퍼로 뺐다.
-async function fetchAllPlaces(env) {
+// 검수용 토큰. 지역장이 아직 공개하지 않은 장소까지 앱에서 보려면 필요하다.
+// 노션 편집 권한을 열면 실수로 행이 지워질 수 있어, 대신 앱에서 읽기만 하도록
+// 길을 냈다. 고칠 내용은 기존 제보 기능으로 받는다.
+export function isReviewer(env, url) {
+  const token = url.searchParams.get("review");
+  return Boolean(token && env.REVIEW_TOKEN && token === env.REVIEW_TOKEN);
+}
+
+async function fetchAllPlaces(env, { includeHidden = false } = {}) {
   const notionHeaders = {
     Authorization: `Bearer ${env.NOTION_API_KEY}`,
     "Notion-Version": "2022-06-28",
@@ -174,10 +182,9 @@ async function fetchAllPlaces(env) {
   // 다음 페이지 커서가 이전 응답에서만 나오므로 순차 호출이 필수라 병렬화 불가
   /* oxlint-disable no-await-in-loop */
   do {
-    const body = {
-      page_size: 100,
-      filter: { property: "공개여부", checkbox: { equals: true } },
-    };
+    const body = { page_size: 100 };
+    // 검수 모드에서는 비공개 장소까지 가져온다.
+    if (!includeHidden) body.filter = { property: "공개여부", checkbox: { equals: true } };
     if (cursor) body.start_cursor = cursor;
 
     const res = await fetchWithTimeout(
@@ -226,7 +233,11 @@ async function handlePlaces(env, url) {
   }
 
   try {
-    const places = await withMirroredPlacePhotos(env, await fetchAllPlaces(env));
+    const review = isReviewer(env, url);
+    const places = await withMirroredPlacePhotos(
+      env,
+      await fetchAllPlaces(env, { includeHidden: review })
+    );
 
     const limitParam = url.searchParams.get("limit");
     if (!limitParam) {

@@ -368,3 +368,17 @@ describe("장소 사진 원본 식별자", () => {
     expect(place.imageSource).toBeNull();
   });
 });
+
+describe("공개 여부", () => {
+  // 검수 모드에서는 비공개 장소가 섞여 오므로 화면이 구분할 수 있어야 한다.
+  it("공개 여부를 함께 넘긴다", () => {
+    const on = toPlace({ id: "a", properties: { "장소명": { title: [{ plain_text: "가" }] }, "공개여부": { checkbox: true } } });
+    const off = toPlace({ id: "b", properties: { "장소명": { title: [{ plain_text: "나" }] }, "공개여부": { checkbox: false } } });
+    expect(on.published).toBe(true);
+    expect(off.published).toBe(false);
+  });
+
+  it("속성이 없으면 비공개로 본다", () => {
+    expect(toPlace({ id: "c", properties: { "장소명": { title: [{ plain_text: "다" }] } } }).published).toBe(false);
+  });
+});

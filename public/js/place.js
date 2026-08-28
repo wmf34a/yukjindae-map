@@ -194,7 +194,7 @@ async function init() {
     return;
   }
   try {
-    const data = await fetchJson("/api/places");
+    const data = await fetchJson(window.withReview("/api/places"));
     const place = (data.places || []).find((p) => p.id === id);
     if (!place) {
       el.innerHTML = `<p class="place-list__empty">장소 정보를 찾을 수 없어요.</p>`;

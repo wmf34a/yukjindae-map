@@ -40,6 +40,32 @@ function apiUrl(path) {
   return API_ORIGIN && value.startsWith("/") && !value.startsWith("//") ? API_ORIGIN + value : value;
 }
 
+// 검수 모드. ?review=토큰 으로 들어오면 아직 공개하지 않은 장소까지 앱에서 보인다.
+// 지역장이 노션을 직접 고치다 데이터를 날리는 것보다, 앱에서 보고 제보로 알려주는
+// 편이 안전하다. 토큰은 이 탭에만 남겨 두어 상세페이지로 넘어가도 유지된다.
+const REVIEW_KEY = "yukjindae_review_token";
+
+function reviewToken() {
+  try {
+    const fromUrl = new URLSearchParams(location.search).get("review");
+    if (fromUrl) {
+      sessionStorage.setItem(REVIEW_KEY, fromUrl);
+      return fromUrl;
+    }
+    return sessionStorage.getItem(REVIEW_KEY) || "";
+  } catch {
+    // 저장소가 막혀 있으면 이 페이지에서만 동작한다.
+    return new URLSearchParams(location.search).get("review") || "";
+  }
+}
+
+// 검수 모드일 때만 토큰을 붙인다. 일반 사용자의 요청에는 아무것도 달라지지 않는다.
+function withReview(path) {
+  const token = reviewToken();
+  if (!token) return path;
+  return path + (path.includes("?") ? "&" : "?") + "review=" + encodeURIComponent(token);
+}
+
 // img src 전용. 우리 이미지는 R2 미러링 결과라 "/images/..." 상대경로로 오고,
 // 장소 사진은 외부 https URL로 오는 경우도 있어서 safeHref(http(s) 전용)로는
 // 상대경로가 전부 걸러진다. 같은 출처 절대경로와 http(s)만 허용하고 javascript:,
@@ -222,3 +248,5 @@ window.apiUrl = apiUrl;
 window.sortByDistance = sortByDistance;
 window.distanceKm = distanceKm;
 window.HOME_PLACE_LIMIT = HOME_PLACE_LIMIT;
+window.reviewToken = reviewToken;
+window.withReview = withReview;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesQuery, validateReportPayload, validateNewPlacePayload,
-  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst,
+  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst, isReviewer,
 } from "./worker.js";
 
 const place = {
@@ -226,5 +226,24 @@ describe("isFirstDayInKst", () => {
   it("31일이 없는 달의 30일 15시도 1일이다", () => {
     expect(isFirstDayInKst(Date.parse("2026-11-30T15:00:00Z"))).toBe(true);
     expect(isFirstDayInKst(Date.parse("2026-11-29T15:00:00Z"))).toBe(false);
+  });
+});
+
+describe("isReviewer", () => {
+  const url = (q) => new URL(`https://x/api/places${q}`);
+
+  it("토큰이 맞으면 검수자로 본다", () => {
+    expect(isReviewer({ REVIEW_TOKEN: "abc" }, url("?review=abc"))).toBe(true);
+  });
+
+  it("틀리거나 없으면 아니다", () => {
+    expect(isReviewer({ REVIEW_TOKEN: "abc" }, url("?review=xyz"))).toBe(false);
+    expect(isReviewer({ REVIEW_TOKEN: "abc" }, url(""))).toBe(false);
+  });
+
+  // 토큰이 설정 안 된 환경에서 빈 문자열끼리 맞아떨어지면 아무나 검수자가 된다.
+  it("서버에 토큰이 없으면 아무도 통과시키지 않는다", () => {
+    expect(isReviewer({}, url("?review="))).toBe(false);
+    expect(isReviewer({ REVIEW_TOKEN: "" }, url("?review="))).toBe(false);
   });
 });

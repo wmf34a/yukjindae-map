@@ -14,6 +14,7 @@ import {
   isRejected,
   districtOf,
   collectFeeHints,
+  sidoOf,
 } from "./place-pipeline.js";
 
 describe("isInKorea", () => {
@@ -372,5 +373,21 @@ describe("관내 시설 제외", () => {
   it("장소 이름을 안 주면 예전처럼 다 남긴다", () => {
     const items = [{ title: "해남공룡박물관 식당", dist: 0, kind: "food" }];
     expect(pickNearby(items).restaurants).toHaveLength(1);
+  });
+});
+
+describe("sidoOf", () => {
+  // "마포구"만으로 찾으면 "서울 난지한강공원" 같은 흔한 표기를 놓친다.
+  it("주소에서 블로그가 쓰는 짧은 시·도 이름을 뽑는다", () => {
+    expect(sidoOf("서울특별시 마포구 한강난지로 162")).toBe("서울");
+    expect(sidoOf("충청북도 청주시 상당구 미원면")).toBe("충북");
+    expect(sidoOf("강원특별자치도 원주시 지정로")).toBe("강원");
+    expect(sidoOf("전북특별자치도 임실군 호국로")).toBe("전북");
+    expect(sidoOf("제주특별자치도 서귀포시")).toBe("제주");
+  });
+
+  it("못 찾으면 빈 문자열", () => {
+    expect(sidoOf("")).toBe("");
+    expect(sidoOf("어딘가")).toBe("");
   });
 });

@@ -28,13 +28,24 @@ const H = {
 const text = (p, k) => p.properties[k]?.rich_text?.[0]?.plain_text || "";
 
 // 이것들이 비어 있으면 화면이 눈에 띄게 빈다. 사진이 없으면 카드가 회색으로
-// 남고, 근처맛집이 없으면 코스보기에 핀이 안 찍힌다.
+// 남고, 근처에 들를 곳이 하나도 없으면 코스보기가 장소 하나짜리가 된다.
+//
+// 다만 장소 자체가 맛집·카페면 그 자체로 코스의 한 정거장이라 근처 가게를
+// 요구하지 않는다 — 원주 스톤크릭은 "소금산 나들이 전후로 들르기 좋은 카페"인데
+// 근처 가게가 없다는 이유로 걸렸다.
+const SELF_IS_STOP = new Set(["맛집", "카페"]);
+
 function missingEssentials(p) {
   const missing = [];
   if (typeof p.properties["위도"]?.number !== "number") missing.push("좌표");
   if (!text(p, "운영시간")) missing.push("운영시간");
   if ((p.properties["사진"]?.files?.length || 0) === 0) missing.push("사진");
-  if (!text(p, "근처맛집")) missing.push("근처맛집");
+
+  const categories = (p.properties["카테고리"]?.multi_select || []).map((c) => c.name);
+  const isStopItself = categories.some((c) => SELF_IS_STOP.has(c));
+  if (!isStopItself && !text(p, "근처맛집") && !text(p, "근처카페")) {
+    missing.push("근처 맛집·카페");
+  }
   return missing;
 }
 

@@ -219,14 +219,17 @@ function freeBadgeText(place) {
 
 // 순위는 "지역별" Top 10이라 지역을 고르지 않은 목록에서는 1위가 여러 개 보인다
 // (제주 1위·경상도 1위·서울강남 1위…). 지역을 선택했을 때만 순위를 노출한다.
-function placeCard(place, showRank = false) {
+// showRank: 순위를 근거로 사유를 함께 보여줄지.
+// hideRankBadge: 사유는 두되 숫자 배지만 감춘다 — 지역별 1위 모음에서는 모든
+// 카드가 "1"이라 번호 매긴 목록처럼 읽혀 오히려 방해가 된다.
+function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
   const thumb = place.image
     ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;
   const freeBadge = freeBadgeText(place);
   const badge = freeBadge ? `<span class="place-grid__free-badge">${escapeHtml(freeBadge)}</span>` : "";
   const rank = showRank ? monthlyRank(place) : null;
-  const rankBadge = rank ? `<span class="place-grid__rank">${rank}</span>` : "";
+  const rankBadge = rank && !hideRankBadge ? `<span class="place-grid__rank">${rank}</span>` : "";
   const rankReason = rank && place.rankReason
     ? `<div class="place-grid__rank-reason">${escapeHtml(place.rankReason)}</div>`
     : "";
@@ -267,28 +270,57 @@ function renderPlaces() {
   // 지역을 고르면 그 지역 월간 Top 10이 주인공이고, 고르기 전 홈에서는 오늘
   // 날씨에 맞는 곳을 앞으로 당긴다. 둘을 겹치면 어느 기준으로 정렬됐는지
   // 알 수 없어져서 한 화면에는 하나만 적용한다.
-  // 지역을 고르면 그 지역 월간 Top 10이 주인공이다. 고르기 전 홈에서는 위치를
-  // 알려준 사람에게 가까운 곳부터, 아니면 오늘 날씨에 맞는 곳을 앞으로 당긴다.
+  // 지역을 고르면 그 지역 월간 Top 10이 주인공이다.
+  //
+  // 고르기 전 홈에서는 지역마다 이달의 1위를 한 곳씩 모아 보여준다. 전국을
+  // 날씨순으로 정렬해 앞에서 자르면 한 지역이 몰려 나온다 — 비 오는 날 실내가
+  // 우대되면서 전라도 박물관 다섯 곳이 연달아 뜬 적이 있다.
+  //
+  // "더보기"를 누르면 그때부터는 전체를, 위치를 알려줬으면 가까운 순으로 본다.
   const showRank = Boolean(state.region);
   const matched = state.places.filter(matchesFilters);
-  let filtered;
-  if (showRank) filtered = sortByMonthlyRank(matched);
-  else if (state.coords) filtered = sortByDistance(matched, state.coords);
-  else filtered = sortByWeather(matched, state.weather);
 
-  if (!filtered.length) {
+  if (!matched.length) {
     list.innerHTML = `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+    setPlaceListTitle(showRank);
+    renderMoreButton(0);
     return;
   }
 
-  // 지역을 고르지 않으면 전국이 다 걸려서, 다 그리면 화면을 끝까지 내려야
-  // 제보 버튼이 나온다. 첫 화면은 끊고 나머지는 "더보기"로 넘긴다.
-  const capped = showRank || state.showAll ? filtered : filtered.slice(0, HOME_PLACE_LIMIT);
-  const rest = filtered.length - capped.length;
+  const regionDigest = !showRank && !state.showAll;
+  let shown;
+  let rest;
 
-  list.innerHTML = capped.map((place) => placeCard(place, showRank)).join("");
+  if (showRank) {
+    shown = sortByMonthlyRank(matched);
+    rest = 0;
+  } else if (regionDigest) {
+    // 위치를 알려줬으면 내 지역 1위가 맨 앞에 오게 가까운 순으로 세운다.
+    const tops = pickRegionTops(matched);
+    shown = state.coords ? sortByDistance(tops, state.coords) : sortByMonthlyRank(tops);
+    rest = matched.length - shown.length;
+  } else {
+    const all = state.coords ? sortByDistance(matched, state.coords) : sortByWeather(matched, state.weather);
+    shown = all;
+    rest = 0;
+  }
+
+  setPlaceListTitle(showRank, regionDigest);
+  list.innerHTML = shown
+    .map((place) => placeCard(place, showRank || regionDigest, { hideRankBadge: regionDigest }))
+    .join("");
   bindFavoriteButtons(list);
   renderMoreButton(rest);
+}
+
+// 무엇을 보고 있는지 제목으로 알려준다. 정렬 기준이 셋이라 제목이 같으면
+// 왜 이 순서인지 알 수 없다.
+function setPlaceListTitle(showRank, regionDigest) {
+  const title = document.querySelector(".section__title--diary");
+  if (!title) return;
+  if (showRank) title.textContent = `${state.region} 이달의 Top 10`;
+  else if (regionDigest) title.textContent = "이달의 지역별 1위";
+  else title.textContent = "전체 장소";
 }
 
 // "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해
@@ -302,7 +334,7 @@ function renderMoreButton(rest) {
   btn.type = "button";
   btn.id = "place-more";
   btn.className = "place-more";
-  btn.textContent = `${rest}곳 더보기`;
+  btn.textContent = `전체 ${rest + document.querySelectorAll("#place-list .place-grid__card").length}곳 보기`;
   btn.addEventListener("click", () => {
     state.showAll = true;
     renderPlaces();

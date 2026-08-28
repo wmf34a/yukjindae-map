@@ -236,6 +236,32 @@ function sortByDistance(places, coords) {
     .map((x) => x.place);
 }
 
+// 지역을 고르기 전 홈에 무엇을 보여줄지.
+//
+// 예전에는 전국 224곳을 날씨순으로 정렬해 앞 12곳을 잘랐다. 그랬더니 비 오는 날
+// 실내 시설이 우대되면서 전라도 박물관 다섯 곳이 연달아 뜨는 식이 됐다 — 서울에
+// 사는 사람이 열면 전주가 첫 화면이었다.
+//
+// 대신 지역마다 이달의 1위를 한 곳씩 모은다. AI가 그 달 계절에 맞춰 고른 곳들이라
+// 아무 곳이나 열두 개 뽑는 것보다 낫고, 지역이 골고루 섞여 어디 사는 사람이 열어도
+// 자기 지역이 보인다.
+function pickRegionTops(places) {
+  const best = new Map();
+  for (const place of places) {
+    if (!place.region) continue;
+    const current = best.get(place.region);
+    if (!current) {
+      best.set(place.region, place);
+      continue;
+    }
+    const a = monthlyRank(place);
+    const b = monthlyRank(current);
+    // 순위가 있는 쪽이 우선이고, 둘 다 있으면 높은 쪽이 이긴다.
+    if (a !== null && (b === null || a < b)) best.set(place.region, place);
+  }
+  return [...best.values()];
+}
+
 window.escapeHtml = escapeHtml;
 window.safeHref = safeHref;
 window.safeImageSrc = safeImageSrc;
@@ -251,5 +277,6 @@ window.apiUrl = apiUrl;
 window.sortByDistance = sortByDistance;
 window.distanceKm = distanceKm;
 window.HOME_PLACE_LIMIT = HOME_PLACE_LIMIT;
+window.pickRegionTops = pickRegionTops;
 window.reviewToken = reviewToken;
 window.withReview = withReview;

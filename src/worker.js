@@ -199,6 +199,24 @@ async function fetchAllPlaces(env) {
   return results.map(toPlace).filter((p) => p.name);
 }
 
+// 지역장이 노션에 사진을 직접 올리면 서명 URL로 들어와 한 시간쯤 뒤에 깨진다.
+// 우리가 올린 사진은 이미 R2 외부 URL이라 손댈 게 없으므로, 노션이 호스팅하는
+// 것만 골라 미러링한다 — 매 요청마다 224곳을 훑지 않기 위해서다.
+async function withMirroredPlacePhotos(env, places) {
+  const needsMirror = places.filter((p) => p.imageSource && !p.imageSource.stable);
+  if (needsMirror.length === 0) return places;
+
+  const mirrored = new Map();
+  await Promise.all(
+    needsMirror.map(async (p) => {
+      const path = await ensureMirroredImage(env, "places", p.id, p.imageSource);
+      if (path) mirrored.set(p.id, path);
+    })
+  );
+
+  return places.map((p) => (mirrored.has(p.id) ? { ...p, image: mirrored.get(p.id) } : p));
+}
+
 async function handlePlaces(env, url) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
     return new Response(JSON.stringify({ error: "Notion 환경변수가 설정되지 않았습니다." }), {
@@ -208,7 +226,7 @@ async function handlePlaces(env, url) {
   }
 
   try {
-    const places = await fetchAllPlaces(env);
+    const places = await withMirroredPlacePhotos(env, await fetchAllPlaces(env));
 
     const limitParam = url.searchParams.get("limit");
     if (!limitParam) {

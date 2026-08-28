@@ -336,3 +336,35 @@ describe("toFestival", () => {
     expect(toFestival(page)).toMatchObject({ description: "", address: "", published: false, tourApiId: "" });
   });
 });
+
+describe("장소 사진 원본 식별자", () => {
+  // 노션에 직접 올린 사진은 한 시간쯤 지나면 만료되는 서명 URL이다. R2로
+  // 미러링하려면 쿼리스트링을 뺀 안정적인 식별자가 필요하다.
+  it("노션이 호스팅한 사진은 미러링 대상으로 표시한다", () => {
+    const place = toPlace({
+      id: "p1",
+      properties: {
+        "장소명": { title: [{ plain_text: "가" }] },
+        "사진": { files: [{ type: "file", file: { url: "https://notion.so/a.jpg?sig=xxx" } }] },
+      },
+    });
+    expect(place.imageSource).toEqual({ url: "https://notion.so/a.jpg?sig=xxx", stable: false });
+  });
+
+  // 우리가 올린 사진은 이미 R2 외부 URL이라 손댈 게 없다.
+  it("외부 URL은 그대로 안정적으로 본다", () => {
+    const place = toPlace({
+      id: "p2",
+      properties: {
+        "장소명": { title: [{ plain_text: "나" }] },
+        "사진": { files: [{ type: "external", external: { url: "https://x/images/places/a.jpg" } }] },
+      },
+    });
+    expect(place.imageSource.stable).toBe(true);
+  });
+
+  it("사진이 없으면 null", () => {
+    const place = toPlace({ id: "p3", properties: { "장소명": { title: [{ plain_text: "다" }] } } });
+    expect(place.imageSource).toBeNull();
+  });
+});

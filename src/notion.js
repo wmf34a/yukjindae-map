@@ -55,6 +55,9 @@ export function toPlace(page) {
     lat: p["위도"] && p["위도"].number,
     lng: p["경도"] && p["경도"].number,
     image: firstFileUrl(p["사진"]),
+    // 노션에 직접 올린 사진은 한 시간쯤 지나면 만료되는 서명 URL이라 그대로 쓰면
+    // 화면에서 깨진다. 배너·코스·축제처럼 R2로 미러링하려면 원본 식별자가 필요하다.
+    imageSource: firstFileSource(p["사진"]),
     hours: text(p["운영시간"]),
     fee: text(p["입장료"]),
     reason: text(p["추천이유"]),

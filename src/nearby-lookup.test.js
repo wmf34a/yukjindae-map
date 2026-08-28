@@ -98,3 +98,21 @@ describe("응답에 내부 값이 새지 않는다", () => {
     expect(out).toMatchObject({ found: true, name: "가", distanceM: 500 });
   });
 });
+
+describe("좌표 파라미터가 없을 때", () => {
+  // Number(null)은 NaN이 아니라 0이다. 이걸 유효한 좌표로 통과시키면 아프리카
+  // 앞바다 근처를 검색하고 아무것도 못 찾았다고 답한다.
+  it("빈 값을 좌표로 인정하지 않는다", () => {
+    expect(isValidCoords({ lat: null, lng: null })).toBe(false);
+    expect(isValidCoords({ lat: undefined, lng: undefined })).toBe(false);
+    expect(isValidCoords({ lat: "", lng: "" })).toBe(false);
+  });
+
+  it("0,0은 좌표로 인정하지 않는다", () => {
+    expect(isValidCoords({ lat: 0, lng: 0 })).toBe(false);
+  });
+
+  it("실제 좌표는 그대로 통과시킨다", () => {
+    expect(isValidCoords({ lat: 36.3757, lng: 127.3757 })).toBe(true);
+  });
+});

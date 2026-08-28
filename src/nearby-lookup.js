@@ -16,12 +16,19 @@ export const NEARBY_SEARCH_RADIUS_M = 20000;
 // 좌표를 못 받아 이름만으로 찾았을 때, 결과가 이보다 멀면 다른 지점으로 본다.
 export const MAX_ACCEPT_KM = 30;
 
+// Number(null)은 NaN이 아니라 0이다. 쿼리에 lat/lng가 아예 없을 때 이걸 그냥
+// Number()로 감싸면 (0, 0)이 유효한 좌표로 통과해, 아프리카 앞바다 근처를
+// 검색하고는 아무것도 못 찾았다고 답한다.
 export function isValidCoords(coords) {
-  return Boolean(
-    coords &&
-    Number.isFinite(Number(coords.lat)) &&
-    Number.isFinite(Number(coords.lng))
-  );
+  if (!coords) return false;
+  for (const key of ["lat", "lng"]) {
+    const raw = coords[key];
+    if (raw === null || raw === undefined || raw === "") return false;
+    if (!Number.isFinite(Number(raw))) return false;
+  }
+  // 위경도 0은 한국이 아니다. 파라미터를 안 넘겼을 때의 기본값과 구분되지 않으므로
+  // 좌표로 인정하지 않는다.
+  return Number(coords.lat) !== 0 || Number(coords.lng) !== 0;
 }
 
 export function distanceKm(a, b) {

@@ -747,11 +747,15 @@ async function searchNearbyByCoords(env, query, origin) {
     const res = await fetchWithTimeout(`https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`, {
       headers: { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // 조용히 삼키면 키가 잘못됐을 때 "근처에 없음"으로만 보여 원인을 못 찾는다.
+      console.warn(`카카오 장소 검색 실패 ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return null;
+    }
     const data = await res.json();
-    return pickNearest(data.documents, origin);
-  } catch {
-    // 카카오가 죽어도 네이버 폴백이 있으므로 조용히 넘긴다.
+    return pickNearest(data.documents, { lat: Number(origin.lat), lng: Number(origin.lng) });
+  } catch (err) {
+    console.warn(`카카오 장소 검색 예외: ${err.message}`);
     return null;
   }
 }
@@ -775,13 +779,20 @@ async function handleNearbyPlace(env, url) {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "public, max-age=86400",
   };
-  const origin = { lat: Number(url.searchParams.get("lat")), lng: Number(url.searchParams.get("lng")) };
+  // searchParams.get은 없으면 null을 준다. Number(null)이 0이라 그대로 넘기면
+  // 좌표가 없는 요청이 (0, 0) 근처 검색으로 둔갑한다.
+  const origin = { lat: url.searchParams.get("lat"), lng: url.searchParams.get("lng") };
 
   // 좌표를 받았으면 그 근처에서만 찾는다. 못 찾았다고 네이버로 넘어가면 위치를
   // 안 보고 다시 검색해 엉뚱한 지점을 집어온다 — 300km 떨어진 핀을 찍느니
   // 아무것도 안 찍는 편이 낫다.
   if (isValidCoords(origin)) {
-    const hit = env.KAKAO_REST_API_KEY ? await searchNearbyByCoords(env, q, origin) : null;
+    if (!env.KAKAO_REST_API_KEY) {
+      // 조용히 넘어가면 코스 핀이 전부 사라진 채로도 아무 신호가 없다.
+      console.warn("KAKAO_REST_API_KEY가 없어 좌표 기반 장소 검색을 건너뜁니다.");
+      return new Response(JSON.stringify({ found: false }), { status: 200, headers });
+    }
+    const hit = await searchNearbyByCoords(env, q, origin);
     return new Response(JSON.stringify(hit || { found: false }), { status: 200, headers });
   }
 

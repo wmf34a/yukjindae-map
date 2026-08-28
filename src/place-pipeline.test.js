@@ -15,6 +15,7 @@ import {
   districtOf,
   collectFeeHints,
   sidoOf,
+  preferKidFriendly,
 } from "./place-pipeline.js";
 
 describe("isInKorea", () => {
@@ -389,5 +390,81 @@ describe("sidoOf", () => {
   it("못 찾으면 빈 문자열", () => {
     expect(sidoOf("")).toBe("");
     expect(sidoOf("어딘가")).toBe("");
+  });
+});
+
+describe("preferKidFriendly", () => {
+  // 200m 차이로 키즈카페를 놓치는 건 손해다.
+  it("가까운 범위 안에서는 아이 친화적인 곳을 앞으로 당긴다", () => {
+    const out = preferKidFriendly([
+      { title: "일반카페", dist: 300, kind: "cafe", category: "음식점 > 카페" },
+      { title: "우리끼리키즈카페", dist: 900, kind: "cafe", category: "음식점 > 카페 > 테마카페" },
+    ]);
+    expect(out[0].title).toBe("우리끼리키즈카페");
+  });
+
+  // 한없이 당기면 "근처"가 아니게 된다.
+  it("너무 멀면 당기지 않는다", () => {
+    const out = preferKidFriendly([
+      { title: "일반카페", dist: 300, kind: "cafe", category: "음식점 > 카페" },
+      { title: "키즈카페", dist: 5000, kind: "cafe", category: "음식점 > 카페" },
+    ]);
+    expect(out[0].title).toBe("일반카페");
+  });
+
+  it("카테고리로도 알아본다", () => {
+    const out = preferKidFriendly([
+      { title: "가게A", dist: 200, kind: "food", category: "음식점 > 한식" },
+      { title: "가게B", dist: 500, kind: "food", category: "음식점 > 분식" },
+    ]);
+    expect(out[0].title).toBe("가게B");
+  });
+
+  it("같은 조건이면 거리 순서를 지킨다", () => {
+    const out = preferKidFriendly([
+      { title: "가", dist: 100, kind: "food", category: "음식점 > 한식" },
+      { title: "나", dist: 200, kind: "food", category: "음식점 > 한식" },
+    ]);
+    expect(out.map((x) => x.title)).toEqual(["가", "나"]);
+  });
+
+  it("한 곳 이하면 그대로 둔다", () => {
+    expect(preferKidFriendly([])).toEqual([]);
+    const one = [{ title: "가", dist: 1, kind: "food" }];
+    expect(preferKidFriendly(one)).toEqual(one);
+  });
+});
+
+describe("pickNearby 아이 친화 우대", () => {
+  it("베이커리를 일반 카페보다 먼저 고른다", () => {
+    const { cafes } = pickNearby([
+      { title: "동네카페", dist: 400, kind: "cafe", category: "음식점 > 카페" },
+      { title: "성심당 베이커리", dist: 1200, kind: "cafe", category: "음식점 > 카페 > 베이커리" },
+    ], { maxEach: 1 });
+    expect(cafes[0].title).toBe("성심당 베이커리");
+  });
+});
+
+describe("관내 시설 판정은 양방향", () => {
+  // 노션은 "대전 국립중앙과학관", 카카오는 "국립중앙과학관 식당"으로 준다.
+  // 한쪽만 보면 지역 접두어 때문에 관내 식당을 못 걸러낸다.
+  it("지역 접두어가 붙어 있어도 관내 식당을 걸러낸다", () => {
+    const items = [
+      { title: "국립중앙과학관 식당", dist: 77, kind: "food" },
+      { title: "팔선생", dist: 511, kind: "food" },
+    ];
+    const { restaurants } = pickNearby(items, { placeName: "대전 국립중앙과학관" });
+    expect(restaurants.map((r) => r.title)).toEqual(["팔선생"]);
+  });
+
+  it("이름이 겹치지 않는 곳은 남긴다", () => {
+    const items = [{ title: "연희김밥 독립문점", dist: 241, kind: "food" }];
+    expect(pickNearby(items, { placeName: "서대문형무소역사관" }).restaurants).toHaveLength(1);
+  });
+
+  // 짧은 이름으로 넓게 걸러내면 멀쩡한 가게까지 사라진다.
+  it("장소 이름이 짧으면 걸러내지 않는다", () => {
+    const items = [{ title: "가나 식당", dist: 100, kind: "food" }];
+    expect(pickNearby(items, { placeName: "가나" }).restaurants).toHaveLength(1);
   });
 });

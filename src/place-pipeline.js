@@ -41,11 +41,47 @@ const EXCLUDE_NAME = /술집|호프|포차|주점|바비큐펍|와인|칵테일|
 // 어댑터가 { title, dist(m), kind: "cafe" | "food" } 로 맞춰서 넘긴다.
 // 지방은 반경 3km 안에 아무것도 없는 곳이 흔해 넉넉히 잡는다 — 차로 움직이는
 // 코스라 10분 거리면 "근처"로 친다.
+// 아이를 데려가기 좋다고 이름·분류만으로 말할 수 있는 곳들. 키즈카페는 말할 것도
+// 없고, 베이커리·디저트는 유아용 의자와 간식이 있을 확률이 눈에 띄게 높다.
+// 분식·패밀리레스토랑도 같은 이유로 우대한다.
+const KID_FRIENDLY = /키즈|베이커리|제과|디저트|아이스크림|빙수|분식|패밀리레스토랑|뷔페|샤브/;
+
+// 같은 조건이면 가까운 곳이 낫지만, 200m 차이로 키즈카페를 놓치는 건 손해다.
+// 가장 가까운 곳에서 이만큼 안이면 아이 친화 쪽을 먼저 고른다.
+export const KID_FRIENDLY_DETOUR_M = 2000;
+
+function kidFriendly(item) {
+  return KID_FRIENDLY.test(`${item.title || ""} ${item.category || ""}`);
+}
+
+// 가까운 순으로 정렬된 목록에서, 아이 친화적인 곳을 앞으로 당긴다. 다만 한없이
+// 당기지는 않는다 — 가장 가까운 곳 기준 일정 거리 안에 있을 때만이다.
+export function preferKidFriendly(sorted) {
+  if (sorted.length < 2) return sorted;
+  const nearest = Number(sorted[0].dist) || 0;
+  const limit = nearest + KID_FRIENDLY_DETOUR_M;
+
+  const near = sorted.filter((i) => (Number(i.dist) || 0) <= limit);
+  const far = sorted.filter((i) => (Number(i.dist) || 0) > limit);
+  // 거리 순서는 유지한 채 아이 친화 여부로만 나눈다.
+  return [...near.filter(kidFriendly), ...near.filter((i) => !kidFriendly(i)), ...far];
+}
+
 export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName = "" } = {}) {
   // 관내 식당은 "근처"가 아니다. 해남공룡박물관 반경 검색에 "해남공룡박물관 식당"이
   // 0m로 잡혔는데, 코스보기에서 장소와 핀이 겹쳐 따로 들를 곳이 되지 못한다.
+  //
+  // 한쪽만 보면 놓친다. 노션에는 "대전 국립중앙과학관"으로 적혀 있는데 카카오는
+  // "국립중앙과학관 식당"으로 주기 때문에, 지역 접두어가 붙은 쪽이 상대를 품는다.
+  // 그래서 양쪽 다 확인한다.
   const own = String(placeName).replace(/\s/g, "");
-  const isInside = (title) => own.length >= 3 && title.replace(/\s/g, "").includes(own);
+  const isInside = (title) => {
+    if (own.length < 4) return false;
+    const other = String(title).replace(/\s/g, "");
+    // 상호에서 업종 접미사를 떼면 시설 이름만 남는다.
+    const core = other.replace(/(식당|카페|매점|푸드코트|레스토랑|점)$/, "");
+    return other.includes(own) || (core.length >= 4 && own.includes(core));
+  };
 
   const clean = (items || [])
     .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title) && !isInside(i.title))
@@ -61,8 +97,8 @@ export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName =
   });
 
   return {
-    restaurants: unique.filter((i) => i.kind !== "cafe").slice(0, maxEach),
-    cafes: unique.filter((i) => i.kind === "cafe").slice(0, maxEach),
+    restaurants: preferKidFriendly(unique.filter((i) => i.kind !== "cafe")).slice(0, maxEach),
+    cafes: preferKidFriendly(unique.filter((i) => i.kind === "cafe")).slice(0, maxEach),
   };
 }
 

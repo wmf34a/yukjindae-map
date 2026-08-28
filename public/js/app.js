@@ -131,6 +131,41 @@ function renderRegionLegend() {
 
 // 검수 모드로 들어왔다는 걸 화면에 드러낸다. 아직 공개하지 않은 장소가 섞여 있어
 // 일반 화면과 다르다는 것을 모르면 "왜 이런 게 있지" 하게 된다.
+// 헤더의 공유 버튼. 아빠들끼리 알려서 퍼지는 것이 이 앱이 늘어나는 방식이라
+// 보내는 길이 눈에 보이는 자리에 있어야 한다.
+function initShareButton() {
+  const btn = document.getElementById("share-btn");
+  if (!btn) return;
+
+  btn.addEventListener("click", async () => {
+    // 검수 링크에는 토큰이 붙어 있다. 그대로 공유되면 검수 전 정보가 그대로
+    // 퍼지므로, 항상 깨끗한 주소만 내보낸다.
+    const url = `${location.origin}${location.pathname}`;
+    const share = {
+      title: "아빠, 어디가?",
+      text: "아빠들이 직접 다녀온, 아빠와 아이가 갈만한 곳",
+      url,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(share);
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      // 공유 시트가 없는 기기에서는 복사만 되고 화면이 그대로라 고장난 줄 안다.
+      btn.classList.add("is-copied");
+      btn.setAttribute("aria-label", "주소를 복사했어요");
+      setTimeout(() => {
+        btn.classList.remove("is-copied");
+        btn.setAttribute("aria-label", "친구에게 공유하기");
+      }, 1600);
+    } catch {
+      // 사용자가 공유 시트를 닫은 경우가 대부분이라 조용히 넘어간다.
+    }
+  });
+}
+
 function renderReviewBanner() {
   if (!window.reviewToken()) return;
   const bar = document.createElement("div");
@@ -691,6 +726,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderFestivals();
   renderCategoryFilter();
   initNoticesBell();
+  initShareButton();
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();

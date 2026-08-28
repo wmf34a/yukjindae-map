@@ -118,13 +118,27 @@ body {
   gap: 10px;
 }
 
-.header__bell {
+/* 공유·알림은 헤더에서 같은 무게로 보여야 한다 — 하나만 튀면 다른 하나를 못 본다. */
+.header__bell,
+.header__share {
   position: relative;
   border: none;
   background: transparent;
   padding: 4px;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.7);
+}
+
+.header__share svg {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+/* 눌렀다는 것이 보여야 한다 — 공유 시트가 안 뜨는 기기에서는 복사만 되고
+   화면이 그대로라 고장난 줄 안다. */
+.header__share.is-copied {
+  color: #fff;
 }
 
 .header__bell svg {

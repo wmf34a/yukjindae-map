@@ -580,30 +580,51 @@ body {
 
 /* 축제/코스 큐레이션 카드 */
 .curated-links {
-  display: flex;
-  gap: 10px;
   margin-top: 14px;
 }
 
+/* 카드 두 개를 반씩 나눠 놓으니 둘 다 눈에 안 들어왔다. 테마 코스를 탭바로
+   옮기고 축제만 전폭으로 남긴다. */
 .curated-links__item {
-  flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px;
+  gap: 12px;
+  padding: 16px;
   background: var(--color-white);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   text-decoration: none;
   color: var(--color-text);
-  font-size: 12px;
-  font-weight: 700;
   box-shadow: var(--shadow);
 }
 
+.curated-links__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.curated-links__label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.curated-links__sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.curated-links__arrow {
+  font-size: 22px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+}
+
 .curated-links__icon {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   flex-shrink: 0;
   display: flex;
   align-items: center;

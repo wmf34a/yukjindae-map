@@ -68,31 +68,20 @@ const state = {
 
 const NOTICES_SEEN_KEY = "yukjindae_notices_seen_at";
 
-// 지역 필터가 아니라 별도 페이지로 이동하는 큐레이션 카드. 지도 아래 가로형 카드
-// 2개로 고정 배치한다(REGION_GROUPS/필터링 로직과는 무관).
-const CURATED_LINKS = [
-  {
-    label: "축제·행사 TOP10",
-    href: "festival.html",
-    icon: `<svg width="22" height="22" viewBox="0 0 28 28">
-      <path d="M6 24l3-11 9 4z" fill="#2563EB"/>
-      <path d="M9 13l11-7-1 6z" fill="#4A90D9"/>
-      <circle cx="8" cy="6" r="1.4" fill="#F7B84B"/>
-      <circle cx="14" cy="4" r="1.1" fill="#F7B84B"/>
-      <circle cx="20" cy="8" r="1.1" fill="#F7B84B"/>
-    </svg>`,
-  },
-  {
-    label: "테마 코스 모음",
-    href: "courses.html",
-    icon: `<svg width="22" height="22" viewBox="0 0 28 28">
-      <path d="M6 22c4-8 4-12 0-16" stroke="#2563EB" stroke-width="2" fill="none" stroke-linecap="round" stroke-dasharray="1 4"/>
-      <circle cx="6" cy="22" r="2.2" fill="#1A2F6B"/>
-      <circle cx="6" cy="6" r="2.2" fill="#F7B84B"/>
-      <circle cx="15" cy="13" r="2" fill="#4A90D9"/>
-    </svg>`,
-  },
-];
+// 지도 아래 큐레이션 카드. 테마 코스는 탭바로 옮겼으므로 축제만 남기고 전폭으로
+// 키운다 — 카드 두 개를 반씩 나눠 놓으니 둘 다 눈에 안 들어왔다.
+const FESTIVAL_LINK = {
+  label: "축제·행사 TOP10",
+  sub: "이번 주말 아이와 갈 만한 행사",
+  href: "festival.html",
+  icon: `<svg width="26" height="26" viewBox="0 0 28 28">
+    <path d="M6 24l3-11 9 4z" fill="#2563EB"/>
+    <path d="M9 13l11-7-1 6z" fill="#4A90D9"/>
+    <circle cx="8" cy="6" r="1.4" fill="#F7B84B"/>
+    <circle cx="14" cy="4" r="1.1" fill="#F7B84B"/>
+    <circle cx="20" cy="8" r="1.1" fill="#F7B84B"/>
+  </svg>`,
+};
 
 function regionCount(region) {
   return state.places.filter((p) => REGION_GROUPS[region].includes(p.region)).length;
@@ -151,12 +140,28 @@ function renderRegionLegend() {
 
 function renderCuratedLinks() {
   const wrap = document.getElementById("curated-links");
-  wrap.innerHTML = CURATED_LINKS.map(
-    (link) => `<a class="curated-links__item" href="${link.href}">
-      <span class="curated-links__icon">${link.icon}</span>
-      <span class="curated-links__label">${link.label}</span>
-    </a>`
-  ).join("");
+  wrap.innerHTML = `<a class="curated-links__item" href="${FESTIVAL_LINK.href}">
+      <span class="curated-links__icon">${FESTIVAL_LINK.icon}</span>
+      <span class="curated-links__text">
+        <strong class="curated-links__label">${FESTIVAL_LINK.label}</strong>
+        <span class="curated-links__sub" id="festival-count">${FESTIVAL_LINK.sub}</span>
+      </span>
+      <span class="curated-links__arrow" aria-hidden="true">›</span>
+    </a>`;
+}
+
+// 진행 중인 축제 수를 카드에 채운다. 숫자가 있으면 "지금 볼 게 있다"는 게 드러나
+// 눌러볼 이유가 생긴다. 못 가져오면 기본 문구를 그대로 둔다.
+async function loadFestivalCount() {
+  try {
+    const data = await fetchJson("/api/festivals");
+    const count = (data.festivals || []).length;
+    if (!count) return;
+    const el = document.getElementById("festival-count");
+    if (el) el.textContent = `지금 열리는 행사 ${count}개`;
+  } catch {
+    // 기본 문구 유지 — 축제 수를 못 가져왔다고 카드를 숨길 이유는 없다.
+  }
 }
 
 function renderCategoryFilter() {
@@ -595,6 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
   renderCuratedLinks();
+  loadFestivalCount();
   renderCategoryFilter();
   initNoticesBell();
 

@@ -54,8 +54,10 @@ async function withEdgeCache(request, ctx, ttlSeconds, handler) {
 // 무거운 작업이 겹치지 않게 한다.
 const ENRICHMENT_CRON = "0 18 * * 6";
 const FESTIVAL_IMPORT_CRON = "0 19 * * 6";
-const STATION_GEOCODE_CRON = "0 20 * * 6";
-const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 6";
+// 수유실 좌표 보정과 장소 대조는 원래 순서대로 도는 한 쌍이라(뒤가 앞의 결과를
+// 쓴다) 크론 하나에서 이어 돌린다. 워커당 크론은 5개까지만 걸 수 있는데, 승인
+// 제보 반영을 추가하면서 자리가 필요해졌다.
+const NURSING_REFRESH_CRON = "0 20 * * 6";
 // 승인한 제보를 장소에 옮겨 적는다. 이것만 주 1회가 아니라 10분마다 도는데,
 // 운영자가 노션에서 "승인됨"으로 바꾼 뒤 앱에 반영되기까지 일주일을 기다리게
 // 할 수는 없기 때문이다.
@@ -1551,12 +1553,12 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    if (event.cron === STATION_GEOCODE_CRON) {
-      ctx.waitUntil(runStationNursingGeocodeRefresh(env));
-      return;
-    }
-    if (event.cron === PUBLIC_DATA_PLACE_MATCH_CRON) {
-      ctx.waitUntil(runPublicDataPlaceMatch(env));
+    if (event.cron === NURSING_REFRESH_CRON) {
+      // 좌표를 먼저 갱신하고 그 결과로 장소를 대조한다. 순서가 바뀌면 대조가
+      // 지난주 좌표를 쓰게 된다.
+      ctx.waitUntil(
+        runStationNursingGeocodeRefresh(env).then(() => runPublicDataPlaceMatch(env))
+      );
       return;
     }
     if (event.cron === FESTIVAL_IMPORT_CRON) {

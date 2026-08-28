@@ -58,8 +58,12 @@ const state = {
   banners: [],
   region: null,
   weather: null,
+  // 위치를 알려준 경우에만 채운다. 서울 기본 좌표는 넣지 않는다 — 지방 사용자에게
+  // 서울에서 가까운 순으로 보여주면 안 하느니만 못하다.
+  coords: null,
   category: null,
   query: "",
+  showAll: false,
 };
 
 const NOTICES_SEEN_KEY = "yukjindae_notices_seen_at";
@@ -97,6 +101,7 @@ function regionCount(region) {
 function selectRegion(region) {
   const isSelecting = state.region !== region;
   state.region = isSelecting ? region : null;
+  state.showAll = false;
   renderRegionMap();
   renderRegionLegend();
   renderPlaces();
@@ -165,6 +170,7 @@ function renderCategoryFilter() {
     btn.addEventListener("click", () => {
       const category = btn.dataset.category;
       state.category = state.category === category ? null : category;
+      state.showAll = false;
       renderCategoryFilter();
       renderPlaces();
     });
@@ -240,13 +246,47 @@ function renderPlaces() {
   // 지역을 고르면 그 지역 월간 Top 10이 주인공이고, 고르기 전 홈에서는 오늘
   // 날씨에 맞는 곳을 앞으로 당긴다. 둘을 겹치면 어느 기준으로 정렬됐는지
   // 알 수 없어져서 한 화면에는 하나만 적용한다.
+  // 지역을 고르면 그 지역 월간 Top 10이 주인공이다. 고르기 전 홈에서는 위치를
+  // 알려준 사람에게 가까운 곳부터, 아니면 오늘 날씨에 맞는 곳을 앞으로 당긴다.
   const showRank = Boolean(state.region);
   const matched = state.places.filter(matchesFilters);
-  const filtered = showRank ? sortByMonthlyRank(matched) : sortByWeather(matched, state.weather);
-  list.innerHTML = filtered.length
-    ? filtered.map((place) => placeCard(place, showRank)).join("")
-    : `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+  let filtered;
+  if (showRank) filtered = sortByMonthlyRank(matched);
+  else if (state.coords) filtered = sortByDistance(matched, state.coords);
+  else filtered = sortByWeather(matched, state.weather);
+
+  if (!filtered.length) {
+    list.innerHTML = `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
+    return;
+  }
+
+  // 지역을 고르지 않으면 전국이 다 걸려서, 다 그리면 화면을 끝까지 내려야
+  // 제보 버튼이 나온다. 첫 화면은 끊고 나머지는 "더보기"로 넘긴다.
+  const capped = showRank || state.showAll ? filtered : filtered.slice(0, HOME_PLACE_LIMIT);
+  const rest = filtered.length - capped.length;
+
+  list.innerHTML = capped.map((place) => placeCard(place, showRank)).join("");
   bindFavoriteButtons(list);
+  renderMoreButton(rest);
+}
+
+// "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해
+// 장소 카드처럼 보인다.
+function renderMoreButton(rest) {
+  const old = document.getElementById("place-more");
+  if (old) old.remove();
+  if (rest <= 0) return;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "place-more";
+  btn.className = "place-more";
+  btn.textContent = `${rest}곳 더보기`;
+  btn.addEventListener("click", () => {
+    state.showAll = true;
+    renderPlaces();
+  });
+  document.getElementById("place-list").after(btn);
 }
 
 function initHeroSlider() {
@@ -490,6 +530,10 @@ async function loadTodayWeather({ ask = false } = {}) {
   try {
     const coords = await currentCoords({ ask });
     const usingDefault = coords === DEFAULT_WEATHER_COORDS;
+    // 실제 내 위치를 받았을 때만 기억한다. 기본 좌표(서울)로 거리순 정렬을 하면
+    // 지방 사용자에게 서울 근처를 추천하게 된다.
+    state.coords = usingDefault ? null : coords;
+
     const data = await fetchJson(`/api/today?lat=${coords.lat}&lng=${coords.lng}`);
     if (!data.weather || !data.recommendation) return;
 
@@ -556,6 +600,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
+    state.showAll = false;
     updateSearchModeUI();
     renderPlaces();
   });

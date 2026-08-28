@@ -175,6 +175,38 @@ function fetchJson(url, options = {}) {
   );
 }
 
+// 홈은 지역을 고르기 전까지 전국 장소를 전부 그린다. 224곳이 되면서 화면을 끝까지
+// 내려야 제보 버튼이 나오는 지경이 됐다. 첫 화면에는 이만큼만 보여주고 나머지는
+// "더보기"로 넘긴다.
+const HOME_PLACE_LIMIT = 12;
+
+function distanceKm(a, b) {
+  const R = 6371;
+  const rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad;
+  const dLng = (b.lng - a.lng) * rad;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// 위치를 알려준 사람에게는 가까운 곳부터 보여준다. 전국 목록을 처음부터 훑게
+// 하는 것보다, 지금 갈 수 있는 곳을 먼저 보여주는 편이 맞다.
+// 좌표가 없는 장소는 거리를 알 수 없으므로 뒤로 보낸다.
+function sortByDistance(places, coords) {
+  if (!coords || typeof coords.lat !== "number" || typeof coords.lng !== "number") {
+    return places.slice();
+  }
+  return places
+    .map((place) => {
+      const hasCoords = typeof place.lat === "number" && typeof place.lng === "number";
+      return { place, dist: hasCoords ? distanceKm(coords, { lat: place.lat, lng: place.lng }) : Infinity };
+    })
+    .toSorted((a, b) => a.dist - b.dist)
+    .map((x) => x.place);
+}
+
 window.escapeHtml = escapeHtml;
 window.safeHref = safeHref;
 window.safeImageSrc = safeImageSrc;
@@ -187,3 +219,6 @@ window.sortByWeather = sortByWeather;
 window.activeEvent = activeEvent;
 window.fetchJson = fetchJson;
 window.apiUrl = apiUrl;
+window.sortByDistance = sortByDistance;
+window.distanceKm = distanceKm;
+window.HOME_PLACE_LIMIT = HOME_PLACE_LIMIT;

@@ -1461,6 +1461,35 @@ body {
 }
 
 /* 신규 장소 제보의 편의시설 선택. 고르지 않으면 "모름"이라 아무 표시도 남지 않는다. */
+/* 홈 추천장소 "더보기". 그리드 안에 넣으면 칸 하나를 차지해 장소 카드처럼 보여
+   목록 바로 아래에 따로 둔다. */
+.place-more {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.place-more:hover {
+  border-color: var(--color-primary);
+}
+
+.about-link {
+  display: block;
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+}
+
 .suggest-amenity {
   display: flex;
   flex-direction: column;

@@ -7,7 +7,7 @@ import vm from "node:vm";
 // 화면 XSS 방어의 마지막 관문이라 테스트는 반드시 있어야 해서, 파일을 그대로
 // 읽어 window를 흉내낸 컨텍스트에서 실행하고 노출된 함수를 꺼내 검증한다.
 let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
-let splitNearbyList, primaryNearby, activeEvent;
+let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
@@ -17,6 +17,7 @@ beforeAll(() => {
   vm.runInContext(source, sandbox);
   ({ escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank } = sandbox.window);
   ({ splitNearbyList, primaryNearby, activeEvent } = sandbox.window);
+  ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -285,5 +286,53 @@ describe("activeEvent", () => {
   it("출처가 있으면 함께 준다", () => {
     const e = activeEvent({ eventInfo: "할인", eventEndDate: shiftKst(1), eventSourceUrl: "https://x.com/a" });
     expect(e.source).toBe("https://x.com/a");
+  });
+});
+
+describe("sortByDistance", () => {
+  const seoul = { lat: 37.5665, lng: 126.978 };
+  const places = [
+    { name: "부산", lat: 35.1796, lng: 129.0756 },
+    { name: "광화문", lat: 37.5759, lng: 126.9769 },
+    { name: "수원", lat: 37.2636, lng: 127.0286 },
+  ];
+
+  it("가까운 순으로 정렬한다", () => {
+    expect(sortByDistance(places, seoul).map((p) => p.name)).toEqual(["광화문", "수원", "부산"]);
+  });
+
+  // 좌표가 없으면 거리를 알 수 없다. 앞에 두면 가까운 곳을 밀어낸다.
+  it("좌표 없는 장소는 뒤로 보낸다", () => {
+    const out = sortByDistance([{ name: "좌표없음" }, ...places], seoul);
+    expect(out.at(-1).name).toBe("좌표없음");
+  });
+
+  it("위치를 모르면 순서를 바꾸지 않는다", () => {
+    expect(sortByDistance(places, null).map((p) => p.name)).toEqual(["부산", "광화문", "수원"]);
+    expect(sortByDistance(places, {}).map((p) => p.name)).toEqual(["부산", "광화문", "수원"]);
+  });
+
+  // 정렬 때문에 원본이 바뀌면 다른 화면이 영향을 받는다.
+  it("원본 배열을 건드리지 않는다", () => {
+    const original = places.map((p) => p.name);
+    sortByDistance(places, seoul);
+    expect(places.map((p) => p.name)).toEqual(original);
+  });
+});
+
+describe("distanceKm", () => {
+  it("두 지점 거리를 km로 잰다", () => {
+    // 서울시청 ↔ 강남역, 실제 직선거리 약 8.5km
+    const d = distanceKm({ lat: 37.5665, lng: 126.978 }, { lat: 37.4979, lng: 127.0276 });
+    expect(d).toBeGreaterThan(7);
+    expect(d).toBeLessThan(10);
+  });
+});
+
+describe("HOME_PLACE_LIMIT", () => {
+  // 224곳을 다 그리면 제보 버튼이 스크롤 맨 끝에 묻힌다.
+  it("첫 화면 노출 개수를 정해 둔다", () => {
+    expect(HOME_PLACE_LIMIT).toBeGreaterThan(0);
+    expect(HOME_PLACE_LIMIT).toBeLessThan(30);
   });
 });

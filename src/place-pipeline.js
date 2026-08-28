@@ -141,6 +141,31 @@ export function sidoOf(address) {
   return hit ? hit[0] : "";
 }
 
+// 앱은 광역시를 따로 두지 않고 권역으로 묶어 보여준다(public/js/app.js REGION_GROUPS).
+// 노션에 TourAPI 기준 이름("충남")을 그대로 넣으면 지역 필터에 걸리지 않아 장소가
+// 앱에서 사라진다 — 실제로 50곳을 그렇게 등록했다가 고쳤다.
+const APP_REGION = {
+  인천: "인천", 제주: "제주", 강원: "강원도",
+  충남: "충청도", 충북: "충청도", 대전: "충청도", 세종: "충청도",
+  전남: "전라도", 전북: "전라도", 광주: "전라도",
+  경남: "경상도", 경북: "경상도", 대구: "경상도", 부산: "경상도", 울산: "경상도",
+};
+// 서울과 경기는 한강·남북으로 갈리므로 주소를 봐야 한다.
+const SEOUL_SOUTH = /영등포|강남|서초|송파|강동|관악|동작|금천|구로|양천|강서/;
+const GYEONGGI_NORTH = /파주|연천|고양|의정부|남양주|동두천|포천|가평|양주|구리/;
+
+export function appRegion(region, address = "") {
+  if (region === "서울") return SEOUL_SOUTH.test(address) ? "서울강남" : "서울강북";
+  if (region === "경기") return GYEONGGI_NORTH.test(address) ? "경기북부" : "경기남부";
+  return APP_REGION[region] || region;
+}
+
+// 주소만으로 앱 지역을 정한다. 제보로 들어온 장소는 어느 시·도인지 미리 알 수 없다.
+export function regionFromAddress(address) {
+  const sido = sidoOf(address);
+  return sido ? appRegion(sido, address) : "";
+}
+
 // ── 편의시설 ────────────────────────────────────────────
 // 최근 글만 본다. 편의시설은 리모델링으로 바뀌는데 오래된 글을 근거로 삼으면
 // 지금은 없는 시설을 있다고 표시하게 된다.

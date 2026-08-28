@@ -11,7 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  preparePlace, destinationScore, isRejected, MIN_BLOG_MENTIONS,
+  preparePlace, destinationScore, isRejected, MIN_BLOG_MENTIONS, appRegion,
 } from "../src/place-pipeline.js";
 import {
 
@@ -29,22 +29,6 @@ const REGION_AREA_CODE = {
 // 앱은 광역시를 따로 두지 않고 권역으로 묶어 보여준다(public/js/app.js REGION_GROUPS).
 // 노션에 TourAPI 기준 이름("충남")을 그대로 넣으면 지역 필터에 걸리지 않아 장소가
 // 앱에서 사라진다 — 실제로 50곳을 그렇게 등록했다가 고쳤다.
-const APP_REGION = {
-  인천: "인천", 제주: "제주", 강원: "강원도",
-  충남: "충청도", 충북: "충청도", 대전: "충청도", 세종: "충청도",
-  전남: "전라도", 전북: "전라도", 광주: "전라도",
-  경남: "경상도", 경북: "경상도", 대구: "경상도", 부산: "경상도", 울산: "경상도",
-};
-// 서울과 경기는 한강·남북으로 갈리므로 주소를 봐야 한다.
-const SEOUL_SOUTH = /영등포|강남|서초|송파|강동|관악|동작|금천|구로|양천|강서/;
-const GYEONGGI_NORTH = /파주|연천|고양|의정부|남양주|동두천|포천|가평|양주|구리/;
-
-export function appRegion(region, address = "") {
-  if (region === "서울") return SEOUL_SOUTH.test(address) ? "서울강남" : "서울강북";
-  if (region === "경기") return GYEONGGI_NORTH.test(address) ? "경기북부" : "경기남부";
-  return APP_REGION[region] || region;
-}
-
 // 아이 동반에 맞는 곳을 넓게 잡고, 최종 판단은 검수표를 보는 사람이 한다.
 const GOOD = /어린이|키즈|아동|유아|박물관|과학관|동물|수목원|식물원|체험|테마파크|놀이|공원|아쿠아|생태|숲|목장|농장|미술관|문화센터|천문|공룡|캠핑|수영장|물놀이|워터/;
 const BAD = /술|와인|카지노|골프|사격|낚시|성인|모텔|호텔|펜션|리조트|사찰|사우나|찜질|클럽|바[( ]|묘|릉|성당|교회|공동묘/;

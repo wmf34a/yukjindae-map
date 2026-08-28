@@ -10,7 +10,9 @@ import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties }
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import { pickNearest, isValidCoords, NEARBY_SEARCH_RADIUS_M } from "./nearby-lookup.js";
-import { applyApprovedReports, APPROVED } from "./report-apply.js";
+import { applyApprovedReports, APPROVED, APPLIED } from "./report-apply.js";
+import { prepareUserPlace } from "./new-place.js";
+import { makeKakaoNearby } from "./place-sources.js";
 import {
   consumeRateLimit,
   hashIp,
@@ -1283,6 +1285,90 @@ async function askClaude(env, prompt) {
 // 갈 만한 곳은 달마다 다르다. 지역별로 Claude를 한 번씩 불러 순위를 다시 매긴다.
 // 노션 제보함에서 "승인됨"으로 바꾼 건을 장소 DB에 옮겨 적는다.
 // 운영자는 상태만 바꾸면 되고, 같은 값을 두 번 입력하지 않아도 된다.
+// 승인된 "신규장소" 추천을 실제 장소로 만든다.
+//
+// 추천 폼은 이름과 이유, 편의시설만 받는다. 나머지(좌표·주소·운영시간·근처 맛집)는
+// 여기서 API로 채운다 — 제보자에게 물어봐야 아는 것과, 기계가 찾을 수 있는 것을
+// 나눈 결과다. 편의시설은 제보자 값이 언제나 이긴다.
+//
+// 만든 장소는 공개여부를 꺼 둔다. 사람이 추천한 곳이라도 기계가 채운 값이 섞여
+// 있어 한 번은 눈으로 봐야 한다.
+async function createPlacesFromReports(env, notionHeaders, reports) {
+  if (reports.length === 0) return;
+
+  const kakao = env.KAKAO_REST_API_KEY;
+  const findNearby = kakao ? makeKakaoNearby(kakao) : async () => [];
+  const searchPlace = async (name) => {
+    if (!kakao) return [];
+    const qs = new URLSearchParams({ query: name, size: "5" });
+    const res = await fetchWithTimeout(`https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`, {
+      headers: { Authorization: `KakaoAK ${kakao}` },
+    });
+    if (!res.ok) return [];
+    return (await res.json()).documents || [];
+  };
+
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const made = [];
+  const failed = [];
+
+  for (const report of reports) {
+    /* oxlint-disable no-await-in-loop */
+    const prepared = await prepareUserPlace({
+      placeName: report.placeName,
+      reportValue: report.value,
+      searchPlace,
+      findNearby,
+      today,
+    });
+
+    if (!prepared.ok) {
+      failed.push({ ...report, reason: prepared.error });
+      continue;
+    }
+
+    const created = await fetchWithTimeout("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        parent: { database_id: env.NOTION_DATABASE_ID },
+        properties: prepared.properties,
+      }),
+    });
+
+    if (!created.ok) {
+      failed.push({ ...report, reason: (await created.text()).slice(0, 120) });
+      continue;
+    }
+
+    // 제보를 만든 장소에 연결해 두면, 나중에 이 장소가 어디서 왔는지 알 수 있다.
+    const page = await created.json();
+    await fetchWithTimeout(`https://api.notion.com/v1/pages/${report.id}`, {
+      method: "PATCH",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        properties: {
+          "상태": { select: { name: APPLIED } },
+          "장소": { relation: [{ id: page.id }] },
+        },
+      }),
+    });
+    made.push({ ...report, created: prepared.candidate });
+    /* oxlint-enable no-await-in-loop */
+  }
+
+  const lines = [];
+  if (made.length) {
+    lines.push(`🆕 추천받은 장소 ${made.length}곳을 등록했습니다. 확인 후 공개여부를 켜주세요.`);
+    for (const r of made) lines.push(`• ${r.created.name} — ${r.created.address}`);
+  }
+  if (failed.length) {
+    lines.push(`\n⚠️ 등록하지 못한 ${failed.length}곳 — 직접 확인이 필요합니다.`);
+    for (const r of failed) lines.push(`• ${r.placeName}: ${r.reason}`);
+  }
+  if (lines.length) await notifySlack(env, lines.join("\n"));
+}
+
 async function runScheduledReportApply(env) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.NOTION_REPORTS_DATABASE_ID) return;
 
@@ -1315,6 +1401,11 @@ async function runScheduledReportApply(env) {
   }));
   if (reports.length === 0) return;
 
+  // 신규 장소 추천은 고칠 장소가 없다. 대신 장소를 새로 만들어야 하므로 따로 뗀다.
+  const newPlaces = reports.filter((r) => r.field === NEW_PLACE_FIELD);
+  const edits = reports.filter((r) => r.field !== NEW_PLACE_FIELD);
+  await createPlacesFromReports(env, notionHeaders, newPlaces);
+
   const patch = (id, properties) =>
     fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
       method: "PATCH",
@@ -1324,9 +1415,11 @@ async function runScheduledReportApply(env) {
       if (!r.ok) throw new Error((await r.text()).slice(0, 150));
     });
 
+  if (edits.length === 0) return;
+
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const result = await applyApprovedReports({
-    reports,
+    reports: edits,
     patchPlace: (id, properties) => patch(id, properties),
     patchReport: (id, properties) => patch(id, properties),
     today,

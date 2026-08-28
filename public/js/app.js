@@ -551,13 +551,14 @@ async function loadTodayWeather({ ask = false } = {}) {
     state.weather = data.recommendation;
     const temp = typeof data.weather.maxTemp === "number" ? `${Math.round(data.weather.maxTemp)}°` : "";
 
-    // 서울 기준으로 보여주는 중이고 아직 거부하지 않았으면 내 위치로 바꿀 버튼을
-    // 같이 띄운다. 지방 사용자에게 서울 날씨만 보여주면 안 맞는다.
+    // 서울 기준으로 보여주는 중이면 내 위치로 바꿀 버튼을 늘 띄운다. 지방
+    // 사용자에게 서울 날씨만 보여주고 목록도 서울 기준으로 정렬하면 안 맞는다.
     //
-    // 사파리(iOS)는 permissions.query에 geolocation을 지원하지 않아 "unsupported"가
-    // 온다. 예전에는 그걸 "못 쓴다"로 보고 버튼을 숨겼는데, 정작 위치 기능 자체는
-    // 멀쩡히 동작한다 — 아이폰에서만 이 기능이 통째로 막혀 있었다.
-    const canAsk = usingDefault && (await geolocationState()) !== "denied";
+    // 권한 상태로 버튼을 숨기지 않는다. 사파리(iOS)는 permissions.query에
+    // geolocation을 지원하지 않아 "unsupported"가 오고, 한 번 거부한 사람은
+    // "denied"로 굳는다. 둘 다 버튼이 사라져 되돌릴 방법이 없었다 — 거부한
+    // 사람에게는 눌렀을 때 어떻게 푸는지 알려주는 편이 낫다.
+    const canAsk = usingDefault && Boolean(navigator.geolocation);
 
     box.innerHTML = `
       <span class="today-weather__icon">${weatherIcon(data.recommendation.tone, data.weather.kind)}</span>
@@ -569,7 +570,14 @@ async function loadTodayWeather({ ask = false } = {}) {
 
     const locate = document.getElementById("weather-locate");
     if (locate) {
-      locate.addEventListener("click", () => {
+      locate.addEventListener("click", async () => {
+        if ((await geolocationState()) === "denied") {
+          // 브라우저가 이미 막아둔 상태라 다시 물어볼 수 없다. 어디서 푸는지
+          // 알려주지 않으면 사용자는 버튼이 고장난 줄 안다.
+          locate.textContent = "브라우저 설정에서 위치 허용 필요";
+          locate.disabled = true;
+          return;
+        }
         locate.disabled = true;
         locate.textContent = "확인 중...";
         loadTodayWeather({ ask: true });

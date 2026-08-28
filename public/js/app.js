@@ -518,9 +518,15 @@ function readPosition() {
 }
 
 async function currentCoords({ ask = false } = {}) {
+  if (!navigator.geolocation) return DEFAULT_WEATHER_COORDS;
+
   const permission = await geolocationState();
-  if (permission === "unsupported" || permission === "denied") return DEFAULT_WEATHER_COORDS;
-  if (permission === "prompt" && !ask) return DEFAULT_WEATHER_COORDS;
+  // 거부한 사람에게 다시 묻지 않는다.
+  if (permission === "denied") return DEFAULT_WEATHER_COORDS;
+  // 아직 안 물어본 상태라면 사용자가 직접 요청했을 때만 묻는다. 들어오자마자
+  // 위치 권한창을 띄우면 대부분 거부하고, 그러면 영영 못 쓴다.
+  if (permission !== "granted" && !ask) return DEFAULT_WEATHER_COORDS;
+
   try {
     return await readPosition();
   } catch {
@@ -545,15 +551,19 @@ async function loadTodayWeather({ ask = false } = {}) {
     state.weather = data.recommendation;
     const temp = typeof data.weather.maxTemp === "number" ? `${Math.round(data.weather.maxTemp)}°` : "";
 
-    // 서울 기준으로 보여주는 중이고 아직 물어볼 여지가 있으면, 내 위치로 바꿀
-    // 버튼을 같이 띄운다. 지방 사용자에게 서울 날씨만 보여주면 안 맞는다.
-    const canAsk = usingDefault && (await geolocationState()) === "prompt";
+    // 서울 기준으로 보여주는 중이고 아직 거부하지 않았으면 내 위치로 바꿀 버튼을
+    // 같이 띄운다. 지방 사용자에게 서울 날씨만 보여주면 안 맞는다.
+    //
+    // 사파리(iOS)는 permissions.query에 geolocation을 지원하지 않아 "unsupported"가
+    // 온다. 예전에는 그걸 "못 쓴다"로 보고 버튼을 숨겼는데, 정작 위치 기능 자체는
+    // 멀쩡히 동작한다 — 아이폰에서만 이 기능이 통째로 막혀 있었다.
+    const canAsk = usingDefault && (await geolocationState()) !== "denied";
 
     box.innerHTML = `
       <span class="today-weather__icon">${weatherIcon(data.recommendation.tone, data.weather.kind)}</span>
       <span class="today-weather__text">${escapeHtml(data.recommendation.headline)}</span>
       ${temp ? `<span class="today-weather__temp">${escapeHtml(temp)}</span>` : ""}
-      ${canAsk ? `<button type="button" class="today-weather__locate" id="weather-locate">📍 내 위치</button>` : ""}
+      ${canAsk ? `<button type="button" class="today-weather__locate" id="weather-locate">📍 내 주변부터</button>` : ""}
     `;
     box.hidden = false;
 

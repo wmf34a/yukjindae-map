@@ -10,12 +10,14 @@ import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties }
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import { pickNearest, isValidCoords, NEARBY_SEARCH_RADIUS_M } from "./nearby-lookup.js";
+import { applyApprovedReports, APPROVED } from "./report-apply.js";
 import {
   consumeRateLimit,
   hashIp,
   tooManyRequestsResponse,
   PROXY_RATE_LIMIT_PER_MINUTE,
   REPORT_RATE_LIMIT_PER_HOUR,
+  UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
 } from "./rate-limit.js";
 
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
@@ -54,6 +56,10 @@ const ENRICHMENT_CRON = "0 18 * * 6";
 const FESTIVAL_IMPORT_CRON = "0 19 * * 6";
 const STATION_GEOCODE_CRON = "0 20 * * 6";
 const PUBLIC_DATA_PLACE_MATCH_CRON = "0 21 * * 6";
+// 승인한 제보를 장소에 옮겨 적는다. 이것만 주 1회가 아니라 10분마다 도는데,
+// 운영자가 노션에서 "승인됨"으로 바꾼 뒤 앱에 반영되기까지 일주일을 기다리게
+// 할 수는 없기 때문이다.
+const REPORT_APPLY_CRON = "*/10 * * * *";
 // 매월 1일 09:00 KST(= 1일 00:00 UTC). 지역별 Top 10을 그 달 계절에 맞게 다시 매긴다.
 // 다른 크론들처럼 새벽에 돌리려면 UTC 기준 "전달 말일 19시"여야 하는데 말일은
 // 28~31일로 달마다 달라 크론으로 표현할 수 없다. 그래서 1일이 확실히 보장되는
@@ -1011,22 +1017,30 @@ async function handleReport(request, env, ctx, url) {
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
+  // 사람 확인은 되면 좋지만, 안 된다고 제보를 막지는 않는다.
+  //
+  // 광고 차단이 challenges.cloudflare.com을 막으면 Turnstile이 아예 안 실린다.
+  // 홈 화면에 설치해 쓰는 사람은 브라우저 설정을 바꾸기도 어려운데, 그 때문에
+  // "광고 차단을 꺼주세요"를 만나면 대부분 그냥 포기한다.
+  //
+  // 제보는 장소 DB가 아니라 승인 큐로만 들어가고 사람이 다 읽는다. 그래서 여기서
+  // 막아 얻는 것보다 잃는 것이 크다. 대신 확인이 안 된 제보는 시간당 허용량을
+  // 좁히고, 알림에 표시해 운영자가 더 살펴보게 한다.
+  const verified = reviewer || (await verifyTurnstile(env, turnstileToken, ip));
+
   const allowed = await consumeRateLimit(env, {
-    scope: "report",
+    scope: verified ? "report" : "report-unverified",
     ip,
-    limit: REPORT_RATE_LIMIT_PER_HOUR,
+    limit: verified ? REPORT_RATE_LIMIT_PER_HOUR : UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
     windowSeconds: 3600,
   });
   if (!allowed) {
     return new Response(JSON.stringify({ error: "잠시 후 다시 시도해주세요." }), { status: 429, headers });
   }
 
-  if (!reviewer) {
-    const isHuman = await verifyTurnstile(env, turnstileToken, ip);
-    if (!isHuman) {
-      return new Response(JSON.stringify({ error: "사람인지 확인에 실패했습니다." }), { status: 400, headers });
-    }
-  }
+  // 사람 확인을 못 거친 제보라는 것을 알림에 남긴다. 조용히 섞이면 운영자가
+  // 스팸을 사실로 받아들일 수 있다.
+  const unverifiedNote = verified ? "" : " ⚠️ 사람 확인 없이 접수됨";
 
   const notionHeaders = {
     Authorization: `Bearer ${env.NOTION_API_KEY}`,
@@ -1063,7 +1077,7 @@ async function handleReport(request, env, ctx, url) {
     ctx.waitUntil(
       notifySlack(
         env,
-        `📍 새 장소 추천이 들어왔습니다\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
+        `📍 새 장소 추천이 들어왔습니다${unverifiedNote}\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
       )
     );
     ctx.waitUntil(
@@ -1117,7 +1131,7 @@ async function handleReport(request, env, ctx, url) {
   const createdReport = await createRes.json();
   const reportsDbUrl = `https://www.notion.so/${env.NOTION_REPORTS_DATABASE_ID.replace(/-/g, "")}`;
   ctx.waitUntil(
-    notifySlack(env, `📝 새 제보가 도착했어요\n• ${place.name} — ${field}: ${value.trim().slice(0, REPORT_VALUE_MAX_LENGTH)}\n${reportsDbUrl}`)
+    notifySlack(env, `📝 새 제보가 도착했어요${unverifiedNote}\n• ${place.name} — ${field}: ${value.trim().slice(0, REPORT_VALUE_MAX_LENGTH)}\n${reportsDbUrl}`)
   );
   ctx.waitUntil(
     notifyNotionMention(env, createdReport.id, { placeName: place.name, field, value: value.trim() })
@@ -1265,6 +1279,66 @@ async function askClaude(env, prompt) {
 
 // Cron Trigger(매월 1일)로 실행 — 장소 풀은 계절을 안 가리고 쌓이지만 그 달에
 // 갈 만한 곳은 달마다 다르다. 지역별로 Claude를 한 번씩 불러 순위를 다시 매긴다.
+// 노션 제보함에서 "승인됨"으로 바꾼 건을 장소 DB에 옮겨 적는다.
+// 운영자는 상태만 바꾸면 되고, 같은 값을 두 번 입력하지 않아도 된다.
+async function runScheduledReportApply(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.NOTION_REPORTS_DATABASE_ID) return;
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  const res = await fetchWithTimeout(
+    `https://api.notion.com/v1/databases/${env.NOTION_REPORTS_DATABASE_ID}/query`,
+    {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        page_size: 50,
+        filter: { property: "상태", select: { equals: APPROVED } },
+      }),
+    }
+  );
+  if (!res.ok) return;
+
+  const data = await res.json();
+  const reports = data.results.map((page) => ({
+    id: page.id,
+    placeId: page.properties["장소"]?.relation?.[0]?.id || "",
+    field: page.properties["필드명"]?.select?.name || "",
+    value: page.properties["제안값"]?.rich_text?.[0]?.plain_text || "",
+    placeName: page.properties["장소명"]?.title?.[0]?.plain_text || "",
+  }));
+  if (reports.length === 0) return;
+
+  const patch = (id, properties) =>
+    fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
+      method: "PATCH",
+      headers: notionHeaders,
+      body: JSON.stringify({ properties }),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error((await r.text()).slice(0, 150));
+    });
+
+  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const result = await applyApprovedReports({
+    reports,
+    patchPlace: (id, properties) => patch(id, properties),
+    patchReport: (id, properties) => patch(id, properties),
+    today,
+  });
+
+  const lines = [`✅ 승인된 제보 ${result.applied.length}건을 장소에 반영했습니다.`];
+  for (const r of result.applied) lines.push(`• ${r.placeName} — ${r.field}: ${r.value}`);
+  if (result.skipped.length) {
+    lines.push(`\n⚠️ 반영하지 못한 ${result.skipped.length}건 — 노션에서 확인이 필요합니다.`);
+    for (const r of result.skipped) lines.push(`• ${r.placeName} — ${r.field}: ${r.reason}`);
+  }
+  await notifySlack(env, lines.join("\n"));
+}
+
 async function runScheduledMonthlyTop10(env) {
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.ANTHROPIC_API_KEY) {
     await notifySlack(env, "⚠️ 월간 Top10 갱신을 건너뛰었습니다 — 환경변수가 설정되지 않았습니다.");
@@ -1494,6 +1568,10 @@ export default {
       if (isFirstDayInKst(event.scheduledTime || Date.now())) {
         ctx.waitUntil(runScheduledMonthlyTop10(env));
       }
+      return;
+    }
+    if (event.cron === REPORT_APPLY_CRON) {
+      ctx.waitUntil(runScheduledReportApply(env));
       return;
     }
     if (event.cron === ENRICHMENT_CRON) {

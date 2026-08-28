@@ -17,6 +17,9 @@ const REPORT_FIELDS = [
 let turnstileWidgetId = null;
 let turnstileToken = "";
 let selectedValue = "";
+// 광고 차단 등으로 Turnstile을 끝내 못 불러온 상태. 그래도 제보는 보낼 수 있어야
+// 한다 — 서버가 확인 없는 제보를 좁은 허용량으로 따로 받는다.
+let turnstileUnavailable = false;
 
 // 자유서술 필드는 무엇을 적어야 할지 감이 안 오면 빈 채로 닫힌다. 필드마다
 // 실제 데이터에 가까운 예시를 보여준다.
@@ -49,19 +52,23 @@ function updateSubmitState() {
   const btn = document.getElementById("report-submit-btn");
   if (!btn) return;
   const ready = isReviewMode() || hasTurnstileSiteKey();
-  const verified = isReviewMode() || Boolean(turnstileToken);
-  btn.disabled = !selectedValue || !ready || !verified;
+  // 사람 확인이 끝났거나, 끝낼 방법이 없는 것이 확인된 경우 둘 다 보낼 수 있다.
+  const canSend = isReviewMode() || Boolean(turnstileToken) || turnstileUnavailable;
+  btn.disabled = !selectedValue || !ready || !canSend;
   btn.textContent = ready ? "제보하기" : "제보 기능을 준비 중이에요";
 }
 
 function showTurnstileLoadError() {
   const errorEl = document.getElementById("report-error");
   if (!errorEl) return;
-  // 원인을 안 알려주면 사용자는 앱이 고장난 줄 안다. 실제로는 브라우저의 광고
-  // 차단이 challenges.cloudflare.com을 막는 경우가 대부분이다.
+  // 예전에는 여기서 제보가 통째로 막혔다. 홈 화면에 설치해 쓰는 사람은 브라우저
+  // 설정을 바꾸기도 어려운데, 그 때문에 포기하게 만들 이유가 없다. 이제 그냥
+  // 보낼 수 있고, 서버가 확인 없는 제보를 좁은 허용량으로 따로 받는다.
+  turnstileUnavailable = true;
+  updateSubmitState();
   errorEl.innerHTML =
-    '보안 인증을 불러오지 못했어요. <a href="#" id="report-turnstile-retry">다시 시도</a>' +
-    '<br><span class="report-modal__hint">계속 안 되면 브라우저의 광고 차단을 끄거나 크롬에서 열어주세요.</span>';
+    '<span class="report-modal__hint">보안 인증을 불러오지 못했지만 제보는 보내실 수 있어요. ' +
+    '<a href="#" id="report-turnstile-retry">다시 시도</a></span>';
   errorEl.hidden = false;
   const retryLink = document.getElementById("report-turnstile-retry");
   if (retryLink) {
@@ -71,6 +78,9 @@ function showTurnstileLoadError() {
     retryLink.onclick = (e) => {
       e.preventDefault();
       errorEl.hidden = true;
+      // 다시 불러보는 동안에는 확인이 될 수도 있으므로 포기 표시를 되돌린다.
+      turnstileUnavailable = false;
+      updateSubmitState();
       renderTurnstile();
     };
   }

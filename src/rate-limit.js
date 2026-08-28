@@ -9,6 +9,11 @@
 export const PROXY_RATE_LIMIT_PER_MINUTE = 30;
 export const REPORT_RATE_LIMIT_PER_HOUR = 5;
 
+// 사람 확인(Turnstile)을 못 거친 제보. 광고 차단으로 스크립트가 안 실리는 브라우저가
+// 있어 아예 막지는 않되, 확인된 제보보다는 좁게 받는다. 제보는 승인 큐로만 들어가고
+// 사람이 다 읽으므로 여기서 새는 비용은 "운영자가 스팸을 몇 건 더 본다" 정도다.
+export const UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR = 2;
+
 async function shortHash(text) {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0"))

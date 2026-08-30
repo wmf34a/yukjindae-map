@@ -257,6 +257,8 @@ describe("toBanner", () => {
       tagline: "아이와 함께 떠나는 여름 나들이",
       link: "https://example.com/summer",
       order: 1,
+      startDate: "",
+      endDate: "",
       imageSource: { url: "https://x.com/banner.jpg", stable: true },
     });
   });
@@ -281,6 +283,8 @@ describe("toBanner", () => {
       tagline: "",
       link: "",
       order: 0,
+      startDate: "",
+      endDate: "",
       imageSource: null,
     });
   });

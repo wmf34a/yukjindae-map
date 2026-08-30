@@ -102,6 +102,10 @@ export function toBanner(page) {
     tagline: text(p["문구"]),
     link: (p["링크"] && p["링크"].url) || "",
     order: (p["순서"] && p["순서"].number) ?? 0,
+    // 노출기간. 시작일만 있으면 그날부터, 종료일만 있으면 그날까지, 둘 다 없으면
+    // 기간 제한이 없다.
+    startDate: (p["노출기간"] && p["노출기간"].date && p["노출기간"].date.start) || "",
+    endDate: (p["노출기간"] && p["노출기간"].date && p["노출기간"].date.end) || "",
     imageSource: firstFileSource(p["이미지"]),
   };
 }

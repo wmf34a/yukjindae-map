@@ -278,6 +278,60 @@ function pickRegionTops(places, recommendation) {
   return [...best.values()];
 }
 
+// 네이버 지도 길찾기 주소를 만든다.
+//
+// 예전에는 주소로 검색만 시켰다(/p/search/{주소}). 그랬더니 그 주소에 있는 업소가
+// 줄줄이 나오고 정작 목적지는 두 번째였다 — 한성백제박물관을 누르면 같은 건물의
+// 비샵 레스토랑이 먼저 떴다. 버튼 이름은 "길찾기"인데 검색 결과 목록이 열린 셈이다.
+//
+// 좌표가 있으면 길찾기 화면을 자동차 모드로 바로 연다. 칸 순서는 정해져 있다:
+//   /p/directions/{출발}/{도착}/{경유지}/{모드}
+// 출발을 "-"로 비우면 네이버가 내 위치를 묻는다.
+function toWebMercator(lat, lng) {
+  const R = 20037508.34;
+  return {
+    x: (lng * R) / 180,
+    y: (Math.log(Math.tan(((90 + lat) * Math.PI) / 360)) / (Math.PI / 180)) * (R / 180),
+  };
+}
+
+function naverDirectionsUrl({ lat, lng, name, address }) {
+  const label = String(name || address || "").trim();
+  const hasCoords = Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))
+    && (Number(lat) !== 0 || Number(lng) !== 0);
+
+  if (!hasCoords) {
+    // 좌표를 모르면 검색으로 넘긴다. 주소보다 이름이 낫다 — 주소로 찾으면
+    // 같은 건물의 다른 가게가 먼저 나온다.
+    return `https://map.naver.com/p/search/${encodeURIComponent(label)}`;
+  }
+  const { x, y } = toWebMercator(Number(lat), Number(lng));
+  const goal = `${x},${y},${encodeURIComponent(label)}`;
+  return `https://map.naver.com/p/directions/-/${goal}/-/car`;
+}
+
+// 이 기기를 가리키는 임의의 ID. 방문자를 하루 한 번만 세기 위한 것이고
+// 개인을 알아볼 수 있는 값은 담지 않는다.
+//
+// 시크릿 창이나 저장이 막힌 브라우저에서는 빈 문자열을 준다 — 그때는 서버가
+// IP 해시로 대신 센다.
+function deviceId() {
+  const KEY = "yukjindae-device";
+  try {
+    let id = localStorage.getItem(KEY);
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2))
+        .replace(/[^A-Za-z0-9-]/g, "");
+      localStorage.setItem(KEY, id);
+    }
+    return id;
+  } catch {
+    return "";
+  }
+}
+
+window.deviceId = deviceId;
+window.naverDirectionsUrl = naverDirectionsUrl;
 window.escapeHtml = escapeHtml;
 window.safeHref = safeHref;
 window.safeImageSrc = safeImageSrc;

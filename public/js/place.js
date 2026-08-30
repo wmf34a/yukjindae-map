@@ -88,8 +88,10 @@ async function loadNearbyNav(slot) {
       slot.remove();
       return;
     }
-    const query = encodeURIComponent(data.name || data.address);
-    slot.outerHTML = `<a class="place-detail__nav-btn" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">길찾기</a>`;
+    const href = naverDirectionsUrl({
+      lat: data.lat, lng: data.lng, name: data.name, address: data.address,
+    });
+    slot.outerHTML = `<a class="place-detail__nav-btn" target="_blank" rel="noopener" href="${escapeHtml(href)}">길찾기</a>`;
   } catch (err) {
     console.error(err);
     slot.remove();
@@ -145,8 +147,6 @@ function render(place) {
     parking = [place.parkingAvailable, place.parkingDetail].filter(Boolean).join(" · ");
   }
 
-  const query = encodeURIComponent(place.address || place.name);
-
   el.innerHTML = `
     ${hero}
     <div class="place-detail__body">
@@ -168,7 +168,7 @@ function render(place) {
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
 
       <div class="place-detail__actions">
-        <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
+        <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(place))}">네이버지도 길찾기</a>
         <button type="button" class="btn-secondary" id="course-btn">코스보기</button>
       </div>
       <button type="button" class="place-detail__report-link" id="report-btn">잘못된 정보가 있나요? 제보하기</button>

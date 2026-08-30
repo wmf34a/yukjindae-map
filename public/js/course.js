@@ -336,14 +336,27 @@ function toWebMercator(lat, lng) {
   return { x, y };
 }
 
-// 좌표 뒤에 이름을 붙인 지점을 순서대로 이어 붙이면 그대로 경유지가 되고,
-// 끝의 모드값을 car로 주면 자동차 탭이 기본으로 열린다.
+// 네이버 새 지도 길찾기 주소는 칸 순서가 정해져 있다.
+//
+//   /p/directions/{출발}/{도착}/{경유지}/{모드}
+//
+// 정차지를 순서대로 이어 붙였더니 2번 정차지가 "도착"으로 들어가고, 모드 칸에
+// "-"가 놓여 네이버가 못 알아듣고 대중교통으로 떨어졌다. 코스보기에서 길찾기를
+// 누르면 자동차가 아니라 대중교통이 열리고 "대중교통 길찾기에서는 경유지가
+// 포함되지 않습니다" 경고가 뜨던 원인이다.
+//
+// 도착은 마지막 정차지, 가운데 정차지들이 경유지다.
+function directionsPoint(stop) {
+  const { x, y } = toWebMercator(stop.lat, stop.lng);
+  return `${x},${y},${encodeURIComponent(stop.name)}`;
+}
+
 function buildWebDirectionsUrl(stops) {
-  const points = stops.map((s) => {
-    const { x, y } = toWebMercator(s.lat, s.lng);
-    return `${x},${y},${encodeURIComponent(s.name)}`;
-  });
-  return `https://map.naver.com/p/directions/${points.join("/")}/-/car`;
+  const start = directionsPoint(stops[0]);
+  const goal = directionsPoint(stops[stops.length - 1]);
+  // 경유지가 없으면 빈 칸을 "-"로 채운다. 칸 수가 어긋나면 모드를 못 읽는다.
+  const vias = stops.slice(1, -1).map(directionsPoint).join(":") || "-";
+  return `https://map.naver.com/p/directions/${start}/${goal}/${vias}/car`;
 }
 
 // 네이버 지도 앱 URL 스킴(nmap://route/car) — 출발/도착 외 경유지는 v1lat/v1lng/v1name,

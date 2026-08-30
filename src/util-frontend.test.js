@@ -8,16 +8,18 @@ import vm from "node:vm";
 // 읽어 window를 흉내낸 컨텍스트에서 실행하고 노출된 함수를 꺼내 검증한다.
 let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
 let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore;
+let naverDirectionsUrl;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
-  const sandbox = { window: {}, URL, AbortSignal, fetch: () => {}, Date, Math, JSON, String };
+  const sandbox = { window: {}, URL, AbortSignal, fetch: () => {}, Date, Math, JSON, String, Number, encodeURIComponent };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
   ({ escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank } = sandbox.window);
   ({ splitNearbyList, primaryNearby, activeEvent } = sandbox.window);
   ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore } = sandbox.window);
+  ({ naverDirectionsUrl } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -465,5 +467,32 @@ describe("weatherScore 우선순위", () => {
 
   it("날씨 정보가 없으면 모두 같게 본다", () => {
     expect(weatherScore({ categories: ["자연·공원"] }, null)).toBe(1);
+  });
+});
+
+describe("naverDirectionsUrl", () => {
+  // 주소로 검색하면 그 주소에 있는 업소가 줄줄이 나오고 목적지가 뒤로 밀린다.
+  // 한성백제박물관을 눌렀는데 같은 건물 비샵 레스토랑이 먼저 떴다.
+  it("좌표가 있으면 자동차 길찾기로 바로 보낸다", () => {
+    const url = naverDirectionsUrl({
+      lat: 37.5154988428, lng: 127.1206650789, name: "한성백제박물관",
+      address: "서울특별시 송파구 위례성대로 71",
+    });
+    expect(url.startsWith("https://map.naver.com/p/directions/-/")).toBe(true);
+    expect(url.endsWith("/-/car")).toBe(true);
+    expect(url).toContain(encodeURIComponent("한성백제박물관"));
+    // 주소는 길찾기 주소에 들어가지 않는다 — 좌표가 대신한다.
+    expect(url).not.toContain("%EC%9C%84%EB%A1%80%EC%84%B1");
+  });
+
+  it("좌표가 없으면 주소가 아니라 이름으로 검색한다", () => {
+    const url = naverDirectionsUrl({ name: "전주한옥마을", address: "전북 전주시 태조로 44" });
+    expect(url).toBe(`https://map.naver.com/p/search/${encodeURIComponent("전주한옥마을")}`);
+  });
+
+  // Number(null)이 0이라 (0, 0)이 좌표로 통과하면 기니만으로 길을 안내한다.
+  it("0,0은 좌표로 보지 않는다", () => {
+    const url = naverDirectionsUrl({ lat: 0, lng: 0, name: "어딘가" });
+    expect(url).toContain("/p/search/");
   });
 });

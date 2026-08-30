@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   isApplicableField,
+  isClearRequest,
   buildPlacePatch,
   buildPlaceProperties,
   buildReportProperties,
@@ -131,5 +132,34 @@ describe("applyApprovedReports", () => {
   it("빈 목록도 죽지 않는다", async () => {
     expect(await applyApprovedReports({ reports: [], patchPlace: async () => {}, patchReport: async () => {} }))
       .toEqual({ applied: [], skipped: [] });
+  });
+});
+
+describe("값을 지워 달라는 제보", () => {
+  // 폼에 빈칸을 내면 접수가 안 되니 지역장은 "(삭제요망)"이라고 적어 보낸다.
+  // 예전에는 그 말을 그대로 값에 써넣어서, 승인하면 화면에
+  // "무료입장 연령: (삭제요망)" 이 떴을 것이다.
+  it("삭제 요청을 알아본다", () => {
+    for (const v of ["(삭제요망)", "삭제요망", "삭제", "삭제 요청", "(빈칸)", " 공백 "]) {
+      expect(isClearRequest(v)).toBe(true);
+    }
+  });
+
+  it("보통 값은 삭제 요청이 아니다", () => {
+    for (const v of ["36개월 미만 무료", "무료", "", "삭제된 시설 있음"]) {
+      expect(isClearRequest(v)).toBe(false);
+    }
+  });
+
+  it("삭제 요청이면 빈 값으로 덮는다", () => {
+    expect(buildPlacePatch("무료입장연령", "(삭제요망)")).toEqual({
+      "무료입장연령": { rich_text: [] },
+    });
+  });
+
+  it("보통 값은 그대로 쓴다", () => {
+    expect(buildPlacePatch("무료입장연령", "24개월 미만 무료")).toEqual({
+      "무료입장연령": { rich_text: [{ text: { content: "24개월 미만 무료" } }] },
+    });
   });
 });

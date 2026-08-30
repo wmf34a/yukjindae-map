@@ -4,6 +4,10 @@ import {
   hashIp,
   tooManyRequestsResponse,
   PROXY_RATE_LIMIT_PER_MINUTE,
+  reportQuota,
+  REPORT_RATE_LIMIT_PER_HOUR,
+  UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
+  REVIEWER_REPORT_RATE_LIMIT_PER_HOUR,
 } from "./rate-limit.js";
 
 // KV 바인딩을 흉내내는 최소 구현 — put/get만 쓰므로 TTL은 기록만 해둔다.
@@ -106,5 +110,35 @@ describe("기본 한도값", () => {
   // 정상 사용이 걸리지 않을 만큼은 넉넉해야 한다.
   it("프록시 분당 한도가 코스 하나 열기보다 충분히 크다", () => {
     expect(PROXY_RATE_LIMIT_PER_MINUTE).toBeGreaterThanOrEqual(20);
+  });
+});
+
+describe("reportQuota", () => {
+  // 검수 중인 지역장이 한 장소에서 다섯 건을 이어 보내다 막혔다. 화면에는
+  // "잠시 후 다시 시도해주세요"만 떠서 고장인지 제한인지 알 수 없었다.
+  it("지역장은 넉넉히 받는다", () => {
+    expect(reportQuota({ reviewer: true, verified: true }))
+      .toEqual({ scope: "report-reviewer", limit: REVIEWER_REPORT_RATE_LIMIT_PER_HOUR });
+    expect(REVIEWER_REPORT_RATE_LIMIT_PER_HOUR).toBeGreaterThan(REPORT_RATE_LIMIT_PER_HOUR);
+  });
+
+  it("사람 확인을 거친 익명 제보는 보통", () => {
+    expect(reportQuota({ reviewer: false, verified: true }))
+      .toEqual({ scope: "report", limit: REPORT_RATE_LIMIT_PER_HOUR });
+  });
+
+  it("확인을 못 거친 제보는 좁게", () => {
+    expect(reportQuota({ reviewer: false, verified: false }))
+      .toEqual({ scope: "report-unverified", limit: UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR });
+  });
+
+  // 카운터를 나누지 않으면 지역장이 쓴 건수가 익명 제보 몫까지 깎는다.
+  it("세 종류가 서로 다른 카운터를 쓴다", () => {
+    const scopes = [
+      reportQuota({ reviewer: true, verified: true }).scope,
+      reportQuota({ reviewer: false, verified: true }).scope,
+      reportQuota({ reviewer: false, verified: false }).scope,
+    ];
+    expect(new Set(scopes).size).toBe(3);
   });
 });

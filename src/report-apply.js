@@ -26,14 +26,31 @@ export function isApplicableField(field) {
   return BOOLEAN_FIELDS.has(field) || TEXT_FIELDS.has(field);
 }
 
+// 값을 지워 달라는 제보. 폼에 빈칸을 내면 접수 자체가 안 되니 이렇게 적어 보낸다.
+//
+// 일산호수공원의 무료입장연령에 "36개월 미만 무료"가 적혀 있었는데, 애초에
+// 입장료를 받지 않는 공원이라 그 줄 자체가 사람을 헷갈리게 했다. 지역장이
+// "(삭제요망)"이라고 보내 주셨고, 그때는 이 말을 그대로 값으로 써넣는 코드였다.
+// 승인했으면 화면에 "무료입장 연령: (삭제요망)"이 떴을 것이다.
+const CLEAR_REQUESTS = [/^\(?\s*삭제\s*(요망|요청|해주세요|바랍니다)?\s*\)?$/, /^\(?\s*(빈칸|공백|없음으로)\s*\)?$/];
+
+export function isClearRequest(value) {
+  const text = String(value || "").trim();
+  return CLEAR_REQUESTS.some((re) => re.test(text));
+}
+
 // 신규 장소 제보는 여기서 다루지 않는다. 장소를 새로 만드는 일은 좌표·사진·근처
 // 맛집까지 함께 채워야 해서 발굴 파이프라인의 몫이다.
 export function buildPlacePatch(field, value) {
   if (BOOLEAN_FIELDS.has(field)) {
+    // 체크박스는 "없음"으로 끌 수 있으니 따로 지울 길이 필요 없다.
     if (value !== "있음" && value !== "없음") return null;
     return { [field]: { checkbox: value === "있음" } };
   }
   if (!TEXT_FIELDS.has(field)) return null;
+  // 지워 달라는 요청이면 빈 값으로 덮는다. 노션에서 rich_text를 비우려면
+  // 빈 배열을 보내야 한다.
+  if (isClearRequest(value)) return { [field]: { rich_text: [] } };
   const text = String(value || "").trim();
   if (!text) return null;
   return { [field]: { rich_text: [{ text: { content: text.slice(0, 2000) } }] } };

@@ -104,12 +104,23 @@ export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName =
 
 // 노션 "근처맛집"/"근처카페"는 자유 텍스트다. 상세페이지가 괄호 앞부분을 상호로
 // 읽어 지도 검색에 쓰므로, 상호를 맨 앞에 두고 거리만 괄호에 넣는다.
+// 카카오가 주는 dist는 직선거리다. 그걸 그대로 적었더니 실제와 크게 어긋났다 —
+// 대전 국립중앙과학관에서 팔선생까지 직선 511m인데 차로는 1,687m다. 강을 건너거나
+// 산을 돌면 세 배까지 벌어진다. 지도 앱과 대조한 지역장이 바로 알아챘다.
+//
+// roadDist(도로 거리)가 있으면 그것을 쓰고, 없으면 거리를 아예 적지 않는다.
+// 틀린 숫자를 적는 것보다 안 적는 편이 낫다.
+// 가게가 시설 안에 있으면 길찾기가 0m를 준다(율곡수목원의 율곡식당, 코엑스의
+// 카페드리옹). "약 0m"는 읽는 사람에게 아무 뜻이 아니라 상호만 남긴다.
+const SAME_SPOT_M = 100;
+
 export function formatNearby(list) {
   return (list || [])
     .map((i) => {
-      const km = Number(i.dist) / 1000;
-      const dist = Number.isFinite(km) ? ` (약 ${km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)}km`})` : "";
-      return `${i.title}${dist}`;
+      const meters = Number(i.roadDist);
+      if (!Number.isFinite(meters) || meters < SAME_SPOT_M) return i.title;
+      const km = meters / 1000;
+      return `${i.title} (약 ${km < 1 ? `${Math.round(meters / 10) * 10}m` : `${km.toFixed(1)}km`})`;
     })
     .join(" / ");
 }
@@ -289,8 +300,9 @@ export function buildPlaceRecord({ base, coords, nearby, photoUrl, photoCredit, 
  * @param {(address: string) => Promise<{lat:number,lng:number}|null>} deps.geocode
  * @param {(coords: {lat:number,lng:number}) => Promise<Array>} deps.findNearby
  * @param {(placeName: string, keyword: string) => Promise<Array>} deps.searchPosts
+ * @param {(from, to) => Promise<number|null>} [deps.roadDistance] 없으면 거리를 안 적는다
  */
-export async function preparePlace({ base, geocode, findNearby, searchPosts, today }) {
+export async function preparePlace({ base, geocode, findNearby, searchPosts, roadDistance, today }) {
   const warnings = [];
 
   // 1) 좌표 — 주어진 값이 한국 밖이면 주소로 다시 받는다.
@@ -311,6 +323,17 @@ export async function preparePlace({ base, geocode, findNearby, searchPosts, tod
   const nearby = pickNearby(nearbyRaw, { placeName: base.name });
   if (!nearby.restaurants.length) warnings.push("근처 맛집을 찾지 못했습니다");
   if (!nearby.cafes.length) warnings.push("근처 카페를 찾지 못했습니다");
+
+  // 고른 몇 곳만 도로 거리를 잰다. 카카오가 준 직선거리를 그대로 적었다가
+  // 실제와 세 배까지 어긋났다. 길찾기는 호출이 비싸서 후보 전체가 아니라
+  // 최종 선택분에만 부른다.
+  if (roadDistance) {
+    for (const item of [...nearby.restaurants, ...nearby.cafes]) {
+      if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) continue;
+      /* oxlint-disable no-await-in-loop -- 네이버 길찾기는 초당 제한이 있어 순차로 돈다. */
+      item.roadDist = await roadDistance(coords, { lat: item.lat, lng: item.lng }).catch(() => null);
+    }
+  }
 
   // 3) 편의시설 — 자동으로 체크하지 않고 근거만 모은다.
   const amenityHints = {};

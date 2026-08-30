@@ -94,18 +94,24 @@ describe("pickNearby", () => {
 });
 
 describe("formatNearby", () => {
-  // 상세페이지가 괄호 앞부분을 상호로 읽어 지도 검색에 쓴다. 상호가 맨 앞이어야 한다.
-  it("상호를 앞에 두고 거리를 괄호에 넣는다", () => {
-    expect(formatNearby([{ title: "고메돈까스", dist: 736 }])).toBe("고메돈까스 (약 736m)");
+  // 직선거리를 적었다가 실제와 세 배까지 어긋났다. 이제 도로 거리만 적는다.
+  it("도로 거리를 상호 뒤에 붙인다", () => {
+    expect(formatNearby([{ title: "고메돈까스", roadDist: 736 }])).toBe("고메돈까스 (약 740m)");
   });
 
   it("1km 이상은 km로 쓴다", () => {
-    expect(formatNearby([{ title: "국밥집", dist: 1422 }])).toBe("국밥집 (약 1.4km)");
+    expect(formatNearby([{ title: "국밥집", roadDist: 1687 }])).toBe("국밥집 (약 1.7km)");
+  });
+
+  // 도로 거리를 못 구했으면 직선거리로 때우지 않는다 — 틀린 숫자보다 없는 편이 낫다.
+  it("도로 거리가 없으면 거리를 안 적는다", () => {
+    expect(formatNearby([{ title: "고메돈까스", dist: 736 }])).toBe("고메돈까스");
+    expect(formatNearby([{ title: "고메돈까스" }])).toBe("고메돈까스");
   });
 
   it("여러 곳은 슬래시로 잇는다", () => {
-    const out = formatNearby([{ title: "가", dist: 100 }, { title: "나", dist: 200 }]);
-    expect(out).toBe("가 (약 100m) / 나 (약 200m)");
+    expect(formatNearby([{ title: "가", roadDist: 100 }, { title: "나", roadDist: 200 }]))
+      .toBe("가 (약 100m) / 나 (약 200m)");
   });
 
   it("빈 목록은 빈 문자열", () => {
@@ -243,7 +249,7 @@ describe("buildPlaceRecord", () => {
     const r = buildPlaceRecord({
       base: { name: "가", region: "인천", categories: ["무료"], address: "주소" },
       coords: { lat: 37, lng: 127 },
-      nearby: { restaurants: [{ title: "밥집", dist: 500 }], cafes: [] },
+      nearby: { restaurants: [{ title: "밥집", roadDist: 500 }], cafes: [] },
       photoUrl: "https://x/a.jpg", photoCredit: "한국관광공사", today: "2026-08-27",
     });
     expect(r["장소명"]).toBe("가");
@@ -466,5 +472,18 @@ describe("관내 시설 판정은 양방향", () => {
   it("장소 이름이 짧으면 걸러내지 않는다", () => {
     const items = [{ title: "가나 식당", dist: 100, kind: "food" }];
     expect(pickNearby(items, { placeName: "가나" }).restaurants).toHaveLength(1);
+  });
+});
+
+describe("formatNearby 시설 안 가게", () => {
+  // 길찾기가 0m를 주는 경우가 있다 — 율곡수목원의 율곡식당처럼 시설 안에 있을 때다.
+  // "약 0m"는 읽는 사람에게 아무 뜻이 아니다.
+  it("100m 미만이면 거리를 안 적는다", () => {
+    expect(formatNearby([{ title: "율곡식당", roadDist: 0 }])).toBe("율곡식당");
+    expect(formatNearby([{ title: "카페드리옹", roadDist: 60 }])).toBe("카페드리옹");
+  });
+
+  it("100m 이상은 그대로 적는다", () => {
+    expect(formatNearby([{ title: "밥집", roadDist: 120 }])).toBe("밥집 (약 120m)");
   });
 });

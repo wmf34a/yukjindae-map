@@ -70,6 +70,10 @@ export function makeKakaoNearby(key, { radius = 5000 } = {}) {
     return (data.documents || []).map((p) => ({
       title: p.place_name,
       dist: Number(p.distance),
+      // 카카오가 주는 dist는 직선거리다. 실제로 적을 거리는 도로 거리라
+      // 좌표를 같이 들고 나간다 — 고른 뒤에 길찾기로 다시 잰다.
+      lat: Number(p.y),
+      lng: Number(p.x),
       kind: code === KAKAO_CAFE ? "cafe" : "food",
       category: p.category_name || "",
       url: p.place_url || "",
@@ -118,6 +122,42 @@ export function makeGeocode(vars) {
     const data = await res.json().catch(() => ({}));
     const hit = data?.addresses?.[0];
     return hit ? { lat: Number(hit.y), lng: Number(hit.x) } : null;
+  };
+}
+
+// 두 좌표 사이 실제 도로 거리(m). 판단 기준은 src/place-sources.js 의
+// makeRoadDistance 와 같다 — 그쪽 주석에 왜 이렇게 자르는지 적어 두었다.
+const DETOUR_MIN_M = 10000;
+const DETOUR_RATIO = 3;
+
+function straightKm(a, b) {
+  const R = 6371;
+  const rad = (x) => (x * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export function makeRoadDistance(vars) {
+  return async (from, to) => {
+    const res = await fetch(
+      "https://maps.apigw.ntruss.com/map-direction/v1/driving"
+      + `?start=${from.lng},${from.lat}&goal=${to.lng},${to.lat}&option=trafast`,
+      {
+        headers: {
+          "x-ncp-apigw-api-key-id": vars.NAVER_MAP_CLIENT_ID,
+          "x-ncp-apigw-api-key": vars.NAVER_MAP_CLIENT_SECRET,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const meters = data?.route?.trafast?.[0]?.summary?.distance;
+    if (!Number.isFinite(meters)) return null;
+    if (meters > DETOUR_MIN_M && meters / 1000 > straightKm(from, to) * DETOUR_RATIO) return null;
+    return meters;
   };
 }
 

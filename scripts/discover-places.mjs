@@ -13,11 +13,15 @@ import path from "node:path";
 import {
   preparePlace, destinationScore, isRejected, MIN_BLOG_MENTIONS, appRegion,
 } from "../src/place-pipeline.js";
+// 카테고리를 빈 배열로 넘기고 있었다. 그 바람에 공공데이터로 등록한 56곳이
+// 카테고리 없이 쌓였고, 그대로 공개했으면 카테고리 필터에도 안 걸리고
+// 비 오는 날 실내 추천에서도 빠졌을 것이다.
+import { inferCategories } from "../src/category-infer.js";
 import {
 
 /* oxlint-disable no-await-in-loop -- TourAPI·네이버 모두 초당 호출 제한이 있어 일부러 순차로 돈다. */
   loadVars, sleep, clean, tourApi, makeKakaoNearby, fetchDetail,
-  makeGeocode, makeSearchPosts,
+  makeGeocode, makeSearchPosts, makeRoadDistance,
 } from "./lib/sources.mjs";
 
 const REGION_AREA_CODE = {
@@ -46,6 +50,7 @@ const tour = tourApi(vars.TOUR_API_KEY);
 const geocode = makeGeocode(vars);
 const searchPosts = makeSearchPosts(vars);
 const findNearby = makeKakaoNearby(vars.KAKAO_REST_API_KEY);
+const roadDistance = makeRoadDistance(vars);
 const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 
 // 이미 등록된 곳은 다시 발굴하지 않는다.
@@ -124,7 +129,8 @@ for (const c of picks) {
 
   const out = await preparePlace({
     base: {
-      name: c.title, region: appRegion(region, c.addr), categories: [], address: c.addr,
+      name: c.title, region: appRegion(region, c.addr),
+      categories: inferCategories({ name: c.title, fee: detail.fee }), address: c.addr,
       lat: c.lat, lng: c.lng,
       hours: [detail.hours, detail.rest && `휴무 ${detail.rest}`].filter(Boolean).join(" / "),
       fee: detail.fee, parking: detail.parking ? "무료" : "확인 필요",
@@ -132,7 +138,7 @@ for (const c of picks) {
       sourceUrl: detail.homepage,
       photoUrl: c.image, photoCredit: c.image ? "한국관광공사" : "",
     },
-    geocode, findNearby, searchPosts, today,
+    geocode, findNearby, searchPosts, roadDistance, today,
   });
   await sleep(300);
 

@@ -96,6 +96,10 @@ export function makeKakaoNearby(key, { radius = 5000 } = {}) {
     return (data.documents || []).map((p) => ({
       title: p.place_name,
       dist: Number(p.distance),
+      // 카카오가 주는 dist는 직선거리다. 실제로 적을 거리는 도로 거리라
+      // 좌표를 같이 들고 나간다 — 고른 뒤에 길찾기로 다시 잰다.
+      lat: Number(p.y),
+      lng: Number(p.x),
       kind: code === KAKAO_CAFE ? "cafe" : "food",
       category: p.category_name || "",
     }));
@@ -119,6 +123,46 @@ export function makeGeocode({ mapClientId, mapClientSecret }) {
     const data = await res.json().catch(() => ({}));
     const hit = data && data.addresses && data.addresses[0];
     return hit ? { lat: Number(hit.y), lng: Number(hit.x) } : null;
+  };
+}
+
+// 두 좌표 사이 실제 도로 거리(m). 직선거리를 적었더니 지역장이 지도와 대조해
+// 바로 알아챘다 — 대전 국립중앙과학관에서 팔선생까지 직선 511m인데 차로는 1,687m다.
+//
+// 저장된 좌표가 차가 못 다니는 지점에 찍혀 있으면(환선굴은 동굴 자체, 농다리는
+// 돌다리 위) 네이버가 산을 통째로 도는 경로를 내놓는다. 직선 2.9km인 환선굴에서
+// 35.5km가 그렇게 나왔다. 그런 경로는 믿지 않고 null을 준다 — 그러면 거리를
+// 아예 안 적는다. 틀린 숫자보다 없는 편이 낫다.
+//
+// 배수만 보고 자르면 안 된다. 도심에서 일방통행 때문에 직선 200m가 700m가 되는 건
+// 정상이고, 율곡수목원에서 율곡식당도 직선 1.4km에 도로 5.2km(3.6배)인데 그 5.2km가
+// 지역장이 확인해준 맞는 값이었다. 그래서 절대 거리도 같이 본다.
+const DETOUR_MIN_M = 10000;
+const DETOUR_RATIO = 3;
+
+export function straightKm(a, b) {
+  const R = 6371;
+  const rad = (x) => (x * Math.PI) / 180;
+  const dLat = rad(b.lat - a.lat);
+  const dLng = rad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+export function makeRoadDistance({ mapClientId, mapClientSecret }) {
+  return async (from, to) => {
+    const res = await fetchWithTimeout(
+      "https://maps.apigw.ntruss.com/map-direction/v1/driving"
+      + `?start=${from.lng},${from.lat}&goal=${to.lng},${to.lat}&option=trafast`,
+      { headers: { "x-ncp-apigw-api-key-id": mapClientId, "x-ncp-apigw-api-key": mapClientSecret } }
+    );
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const meters = data?.route?.trafast?.[0]?.summary?.distance;
+    if (!Number.isFinite(meters)) return null;
+    if (meters > DETOUR_MIN_M && meters / 1000 > straightKm(from, to) * DETOUR_RATIO) return null;
+    return meters;
   };
 }
 

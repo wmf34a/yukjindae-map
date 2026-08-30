@@ -10,6 +10,7 @@
 // 순수 함수만 담고 네트워크는 인자로 주입받는다.
 
 import { pickNearby, formatNearby, regionFromAddress } from "./place-pipeline.js";
+import { inferCategories } from "./category-infer.js";
 
 // 제보 저장 형식: 본문 + "\n[편의시설] 수유실:있음 / 주차:무료"
 const AMENITY_LINE = /\[편의시설\]\s*(.+)$/m;
@@ -88,6 +89,11 @@ export function buildNewPlaceProperties({ candidate, reason, amenities, nearby, 
 
   const region = regionFromAddress(candidate.address);
   if (region) props["지역"] = { select: { name: region } };
+
+  // 카테고리가 비면 카테고리 필터에도 안 걸리고 비 오는 날 실내 추천에서도 빠진다.
+  // 이름으로 짐작해 채워 두고, 공개 전에 사람이 한 번 본다.
+  const categories = inferCategories({ name: candidate.name, fee: detail?.fee || "" });
+  if (categories.length) props["카테고리"] = { multi_select: categories.map((n) => ({ name: n })) };
   if (today) props["정보확인일"] = { date: { start: today } };
 
   // 편의시설은 제보자가 알려준 것만 쓴다. "없음"이라고 한 것도 그대로 존중한다 —
@@ -113,9 +119,10 @@ export function buildNewPlaceProperties({ candidate, reason, amenities, nearby, 
  * @param {(name: string) => Promise<Array>} deps.searchPlace 카카오 키워드 검색
  * @param {(coords: object) => Promise<Array>} deps.findNearby 근처 맛집·카페
  * @param {(candidate: object) => Promise<object|null>} deps.fetchDetail 운영시간 등
+ * @param {(from, to) => Promise<number|null>} [deps.roadDistance] 없으면 거리를 안 적는다
  */
 export async function prepareUserPlace({
-  placeName, reportValue, searchPlace, findNearby, fetchDetail, today,
+  placeName, reportValue, searchPlace, findNearby, fetchDetail, roadDistance, today,
 }) {
   const { reason, amenities } = parseReportValue(reportValue);
 
@@ -127,6 +134,18 @@ export async function prepareUserPlace({
 
   const nearbyRaw = await findNearby({ lat: candidate.lat, lng: candidate.lng }).catch(() => []);
   const nearby = pickNearby(nearbyRaw, { placeName: candidate.name });
+
+  // 고른 몇 곳만 도로 거리를 잰다. 카카오가 주는 거리는 직선이라 실제와 세 배까지
+  // 어긋난다 — 대전 국립중앙과학관에서 팔선생까지 직선 511m, 차로 1,687m다.
+  if (roadDistance) {
+    const origin = { lat: candidate.lat, lng: candidate.lng };
+    for (const item of [...nearby.restaurants, ...nearby.cafes]) {
+      if (!Number.isFinite(item.lat) || !Number.isFinite(item.lng)) continue;
+      /* oxlint-disable no-await-in-loop -- 네이버 길찾기는 초당 제한이 있어 순차로 돈다. */
+      item.roadDist = await roadDistance(origin, { lat: item.lat, lng: item.lng }).catch(() => null);
+    }
+  }
+
   const detail = fetchDetail ? await fetchDetail(candidate).catch(() => null) : null;
 
   return {

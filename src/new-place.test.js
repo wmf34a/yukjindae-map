@@ -144,3 +144,21 @@ describe("prepareUserPlace", () => {
     expect(out.properties["근처맛집"].rich_text).toEqual([]);
   });
 });
+
+describe("buildNewPlaceProperties 카테고리", () => {
+  const base = {
+    candidate: { name: "율곡수목원", address: "경기도 파주시 파평면 장승배기로 392", lat: 37.9, lng: 126.8 },
+    reason: "", amenities: {}, nearby: { restaurants: [], cafes: [] },
+  };
+
+  // 카테고리가 비면 필터에도 안 걸리고 비 오는 날 실내 추천에서도 빠진다.
+  it("이름으로 카테고리를 채운다", () => {
+    const props = buildNewPlaceProperties(base);
+    expect(props["카테고리"].multi_select.map((x) => x.name)).toContain("자연·공원");
+  });
+
+  it("이름으로 못 정하면 아예 넣지 않는다", () => {
+    const props = buildNewPlaceProperties({ ...base, candidate: { ...base.candidate, name: "이름없는곳" } });
+    expect(props["카테고리"]).toBeUndefined();
+  });
+});

@@ -1820,3 +1820,45 @@ body {
   font-size: 12px;
   color: var(--color-text-muted, #9aa0a6);
 }
+
+/* 제보 모달 — 목록 칸(근처맛집·근처카페)의 반영 방식 선택 */
+.report-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.report-modal__list-current {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-sub, #6b7280);
+  word-break: keep-all;
+}
+
+.report-modal__list-current span {
+  color: var(--text-main, #111827);
+}
+
+.report-modal__list-modes {
+  display: flex;
+  gap: 6px;
+}
+
+.report-modal__mode-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+  color: var(--text-sub, #6b7280);
+  cursor: pointer;
+}
+
+.report-modal__mode-btn.is-selected {
+  border-color: var(--point, #2f6fed);
+  color: var(--point, #2f6fed);
+  font-weight: 600;
+}

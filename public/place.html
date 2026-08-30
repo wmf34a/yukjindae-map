@@ -74,6 +74,17 @@
           <button type="button" class="report-modal__value-btn" data-value="있음">있어요</button>
           <button type="button" class="report-modal__value-btn" data-value="없음">없어요</button>
         </div>
+        <!-- 근처맛집·근처카페처럼 여러 가게를 이어 적는 칸에만 보인다.
+             지금 적혀 있는 가게를 보여주고, 더할지 갈아 끼울지 고르게 한다. -->
+        <div id="report-list-mode" class="report-modal__list" hidden>
+          <p class="report-modal__list-current">
+            지금 적혀 있어요 — <span id="report-list-current-text"></span>
+          </p>
+          <div class="report-modal__list-modes" role="radiogroup" aria-label="반영 방식">
+            <button type="button" class="report-modal__mode-btn is-selected" data-mode="추가">여기에 더하기</button>
+            <button type="button" class="report-modal__mode-btn" data-mode="교체">전부 바꾸기</button>
+          </div>
+        </div>
         <input type="text" id="report-value-text" class="report-modal__value-input" placeholder="예: 36개월 미만 무료" hidden maxlength="200" />
 
         <div id="report-turnstile" class="report-modal__turnstile"></div>

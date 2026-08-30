@@ -17,6 +17,8 @@ const REPORT_FIELDS = [
 let turnstileWidgetId = null;
 let turnstileToken = "";
 let selectedValue = "";
+// 목록 칸을 지금 값에 더할지("추가"), 통째로 갈아 끼울지("교체").
+let listMode = "추가";
 // 모달을 연 장소. 지금 값을 미리 채워 주려면 필요하다.
 let reportPlace = null;
 // 광고 차단 등으로 Turnstile을 끝내 못 불러온 상태. 그래도 제보는 보낼 수 있어야
@@ -34,6 +36,20 @@ const PLACEHOLDERS = {
   "근처맛집": "예: 고메돈까스 (유아의자 있어요)",
   "근처카페": "예: 모모아트 (기저귀갈이대 있음)",
 };
+
+// 목록 칸은 "더하기"가 기본이라 빈 칸에서 시작한다. 무엇을 적어야 하는지
+// 다른 칸보다 더 분명히 말해 준다.
+const LIST_PLACEHOLDERS = {
+  "근처맛집": "추가할 맛집만 적어주세요 — 예: 고메돈까스",
+  "근처카페": "추가할 카페만 적어주세요 — 예: 모모아트",
+};
+
+// 여러 가게를 이어 적는 칸. 서버의 report-apply.js와 같은 목록이다.
+const LIST_FIELDS = new Set(["근처맛집", "근처카페"]);
+
+function isListField(field) {
+  return LIST_FIELDS.has(field);
+}
 
 function fieldType(field) {
   const found = REPORT_FIELDS.find((f) => f.value === field);
@@ -145,10 +161,32 @@ function currentValue(field) {
   return key && reportPlace ? String(reportPlace[key] || "") : "";
 }
 
+// 목록 칸의 반영 방식에 맞춰 입력칸을 다시 세팅한다.
+//
+// "더하기"에서는 빈 칸으로 시작한다. 지금 값을 미리 채워 두면 확인한 가게만
+// 남기고 지워서 보내게 되고, 승인하는 순간 나머지가 사라진다 — 실제로 그렇게
+// 34번 날아갔다.
+function applyListMode(field) {
+  const textInput = document.getElementById("report-value-text");
+  const replacing = listMode === "교체";
+  textInput.value = replacing ? currentValue(field) : "";
+  textInput.placeholder = replacing
+    ? (PLACEHOLDERS[field] || "")
+    : (LIST_PLACEHOLDERS[field] || PLACEHOLDERS[field] || "");
+  selectedValue = textInput.value.trim();
+  document.querySelectorAll(".report-modal__mode-btn").forEach((b) => {
+    b.classList.toggle("is-selected", b.dataset.mode === listMode);
+  });
+  updateSubmitState();
+}
+
 function setField(field) {
   const boolGroup = document.getElementById("report-value-boolean");
   const textInput = document.getElementById("report-value-text");
+  const listBox = document.getElementById("report-list-mode");
   selectedValue = "";
+  listMode = "추가";
+  if (listBox) listBox.hidden = !isListField(field);
 
   if (fieldType(field) === "boolean") {
     boolGroup.hidden = false;
@@ -160,6 +198,12 @@ function setField(field) {
     // 제보는 그 칸을 통째로 덮어쓴다. 빈 칸에서 시작하면 "월요일 휴관"만 적어
     // 보내게 되고, 원래 있던 "09:30~17:30"이 사라진다. 지금 값을 채워 두면
     // 고칠 부분만 손보게 된다.
+    if (isListField(field)) {
+      const currentEl = document.getElementById("report-list-current-text");
+      if (currentEl) currentEl.textContent = currentValue(field) || "아직 없어요";
+      applyListMode(field);
+      return;
+    }
     textInput.value = currentValue(field);
     selectedValue = textInput.value;
     textInput.placeholder = PLACEHOLDERS[field] || "";
@@ -180,7 +224,10 @@ async function submitReport(placeId) {
     const res = await fetch(window.apiUrl(window.withReview("/api/reports")), {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ placeId, field, value: selectedValue, turnstileToken }),
+      body: JSON.stringify({
+        placeId, field, value: selectedValue, turnstileToken,
+        ...(isListField(field) ? { mode: listMode } : {}),
+      }),
       signal: AbortSignal.timeout(10000),
     });
     const data = await res.json().catch(() => ({}));
@@ -233,6 +280,12 @@ window.openReportModal = function openReportModal(place) {
       document.querySelectorAll(".report-modal__value-btn").forEach((x) => x.classList.remove("is-selected"));
       b.classList.add("is-selected");
       updateSubmitState();
+    };
+  });
+  document.querySelectorAll(".report-modal__mode-btn").forEach((b) => {
+    b.onclick = () => {
+      listMode = b.dataset.mode === "교체" ? "교체" : "추가";
+      applyListMode(select.value);
     };
   });
   document.getElementById("report-value-text").oninput = (e) => {

@@ -14,7 +14,9 @@ import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./
 import {
   pickNearest, isValidCoords, nameMatches, distanceKm, MAX_ACCEPT_KM, NEARBY_SEARCH_RADIUS_M,
 } from "./nearby-lookup.js";
-import { applyApprovedReports, APPROVED, APPLIED } from "./report-apply.js";
+import {
+  applyApprovedReports, isListField, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
+} from "./report-apply.js";
 import { prepareUserPlace } from "./new-place.js";
 import { makeKakaoNearby, makeRoadDistance } from "./place-sources.js";
 import {
@@ -165,6 +167,13 @@ export function validateReportPayload({ placeId, field, value, turnstileToken },
     return "제안값이 너무 깁니다.";
   }
   return null;
+}
+
+// 목록 칸을 통째로 갈아 끼울지, 지금 값에 더할지. 안 보내면 더하는 쪽이다 —
+// 덮어쓰기가 기본이던 시절에 근처 가게 데이터가 34번 지워졌다.
+export function reportMode(field, mode) {
+  if (!isListField(field)) return "";
+  return mode === MODE_REPLACE ? MODE_REPLACE : MODE_ADD;
 }
 
 export function matchesQuery(place, { region, category, q }) {
@@ -1089,7 +1098,7 @@ async function handleReport(request, env, ctx, url) {
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
-  const { placeId, field, value, turnstileToken, placeName, amenities } = body;
+  const { placeId, field, value, turnstileToken, placeName, amenities, mode } = body;
 
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
@@ -1201,6 +1210,7 @@ async function handleReport(request, env, ctx, url) {
         "장소": { relation: [{ id: placeId }] },
         "필드명": { select: { name: field } },
         "제안값": { rich_text: [{ text: { content: value.trim().slice(0, REPORT_VALUE_MAX_LENGTH) } }] },
+        ...(reportMode(field, mode) ? { "반영방식": { select: { name: reportMode(field, mode) } } } : {}),
         "상태": { select: { name: "대기중" } },
         "제보자IP해시": { rich_text: [{ text: { content: ipHash } }] },
       },
@@ -1556,6 +1566,8 @@ async function runScheduledReportApply(env) {
     placeId: page.properties["장소"]?.relation?.[0]?.id || "",
     field: page.properties["필드명"]?.select?.name || "",
     value: page.properties["제안값"]?.rich_text?.[0]?.plain_text || "",
+    // 예전 제보에는 이 칸이 없다. 없으면 더하는 쪽으로 본다.
+    mode: page.properties["반영방식"]?.select?.name || MODE_ADD,
     placeName: page.properties["장소명"]?.title?.[0]?.plain_text || "",
   }));
   if (reports.length === 0) return;
@@ -1581,6 +1593,12 @@ async function runScheduledReportApply(env) {
     reports: edits,
     patchPlace: (id, properties) => patch(id, properties),
     patchReport: (id, properties) => patch(id, properties),
+    readPlaceField: async (id, name) => {
+      const pageRes = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, { headers: notionHeaders });
+      if (!pageRes.ok) throw new Error((await pageRes.text()).slice(0, 150));
+      const page = await pageRes.json();
+      return page.properties[name]?.rich_text?.map((t) => t.plain_text).join("") || "";
+    },
     today,
   });
 

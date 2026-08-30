@@ -7,6 +7,10 @@ import {
   buildReportProperties,
   applyApprovedReports,
   APPLIED,
+  mergeList,
+  splitList,
+  MODE_REPLACE,
+  MODE_ADD,
 } from "./report-apply.js";
 
 describe("isApplicableField", () => {
@@ -161,5 +165,97 @@ describe("값을 지워 달라는 제보", () => {
     expect(buildPlacePatch("무료입장연령", "24개월 미만 무료")).toEqual({
       "무료입장연령": { rich_text: [{ text: { content: "24개월 미만 무료" } }] },
     });
+  });
+});
+
+describe("목록 필드 병합", () => {
+  it("제보에 빠진 가게를 지우지 않는다", async () => {
+    // 검수자는 자기가 확인한 가게만 적어 보낸다. 통째로 덮어쓰면 나머지가 사라진다.
+    const merged = mergeList(
+      "비금도 (약 2.2km) / 메이플라운지 (약 2.3km) / 속초항찜 (약 4.2km)",
+      "비금도 (약 2.2km) / 속초항찜 (약 4.2km)"
+    );
+    expect(merged).toContain("메이플라운지");
+  });
+
+  it("같은 가게의 거리를 고쳐 주면 중복 없이 갈아 낀다", () => {
+    const merged = mergeList("토담숯불닭갈비 (약 5.7km)", "토담숯불닭갈비 (약 5.5km)");
+    expect(merged).toBe("토담숯불닭갈비 (약 5.5km)");
+  });
+
+  it("띄어쓰기만 다른 상호를 같은 가게로 본다", () => {
+    const merged = mergeList("스테이오롯이 (약 3.0km)", "스테이 오롯이 (약 3km)");
+    expect(merged).toBe("스테이 오롯이 (약 3km)");
+  });
+
+  it("우리가 짧게 잡아 둔 상호를 정확한 이름으로 고쳐 준다", () => {
+    // "미륵산돌담"으로 검색해 3.3km를 적었는데 실제 가게는 "미륵산돌담 한정식"이다.
+    const merged = mergeList("미륵산돌담 (약 3.3km)", "미륵산돌담 한정식 (약 2.2km)");
+    expect(merged).toBe("미륵산돌담 한정식 (약 2.2km)");
+  });
+
+  it("새 가게는 뒤에 붙인다", () => {
+    const merged = mergeList("등촌샤브칼국수 (약 830m)", "한식레스토랑 여믐 (약 1.3km)");
+    expect(merged).toBe("등촌샤브칼국수 (약 830m) / 한식레스토랑 여믐 (약 1.3km)");
+  });
+
+  it("쉼표로 이어 적은 목록도 가른다", () => {
+    // 프론트는 "/"와 "," 를 모두 구분자로 쓴다.
+    expect(splitList("가게 하나, 가게 둘 / 가게 셋")).toHaveLength(3);
+  });
+
+  it("교체를 고르면 지금 값을 버린다", () => {
+    const patch = buildPlacePatch("근처맛집", "새 가게", { mode: MODE_REPLACE, current: "옛 가게" });
+    expect(patch["근처맛집"].rich_text[0].text.content).toBe("새 가게");
+  });
+
+  it("기본은 더하기다 — 방식을 안 보내도 지금 값이 살아 있다", () => {
+    const patch = buildPlacePatch("근처맛집", "새 가게", { current: "옛 가게" });
+    expect(patch["근처맛집"].rich_text[0].text.content).toBe("옛 가게 / 새 가게");
+  });
+
+  it("목록이 아닌 칸은 그대로 덮어쓴다", () => {
+    const patch = buildPlacePatch("운영시간", "10:00~18:00", { current: "09:00~17:00" });
+    expect(patch["운영시간"].rich_text[0].text.content).toBe("10:00~18:00");
+  });
+});
+
+describe("applyApprovedReports 목록 반영", () => {
+  const base = { id: "r1", placeId: "p1", field: "근처맛집", placeName: "가나다" };
+
+  it("지금 값을 읽어 더한다", async () => {
+    const patched = [];
+    const out = await applyApprovedReports({
+      reports: [{ ...base, value: "새 가게", mode: MODE_ADD }],
+      readPlaceField: async () => "옛 가게 (약 100m)",
+      patchPlace: (id, props) => { patched.push(props); },
+      patchReport: () => {},
+      today: "2026-08-31",
+    });
+    expect(out.applied).toHaveLength(1);
+    expect(patched[0]["근처맛집"].rich_text[0].text.content).toBe("옛 가게 (약 100m) / 새 가게");
+  });
+
+  it("지금 값을 못 읽으면 덮어쓰지 않고 건너뛴다", async () => {
+    // 못 읽었는데 그대로 쓰면 이 칸이 통째로 날아간다.
+    const out = await applyApprovedReports({
+      reports: [{ ...base, value: "새 가게", mode: MODE_ADD }],
+      readPlaceField: async () => { throw new Error("노션 오류"); },
+      patchPlace: () => { throw new Error("여기 오면 안 된다"); },
+      patchReport: () => {},
+      today: "2026-08-31",
+    });
+    expect(out.applied).toHaveLength(0);
+    expect(out.skipped[0].reason).toContain("지금 값을 읽지 못했습니다");
+  });
+
+  it("읽을 방법 자체가 없으면 건너뛴다", async () => {
+    const out = await applyApprovedReports({
+      reports: [{ ...base, value: "새 가게" }],
+      patchPlace: () => { throw new Error("여기 오면 안 된다"); },
+      patchReport: () => {},
+      today: "2026-08-31",
+    });
+    expect(out.skipped[0].reason).toContain("읽을 수 없어");
   });
 });

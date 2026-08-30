@@ -20,8 +20,9 @@ function render(festival) {
   const el = document.getElementById("festival-detail");
   document.title = `${festival.title} | 육진대`;
 
+  // 축제 이미지는 /images/... 루트 상대경로다. safeImageSrc를 거쳐야 미니앱에서도 뜬다.
   const hero = festival.image
-    ? `<img class="place-detail__hero" src="${escapeHtml(festival.image)}" alt="${escapeHtml(festival.title)}" />`
+    ? `<img class="place-detail__hero" src="${escapeHtml(safeImageSrc(festival.image))}" alt="${escapeHtml(festival.title)}" />`
     : "";
 
   const dday = festivalDday(festival);
@@ -33,7 +34,6 @@ function render(festival) {
     .join("");
 
   const officialHref = safeHref(festival.link);
-  const mapQuery = encodeURIComponent(festival.address || festival.placeName || festival.title);
 
   el.innerHTML = `
     ${hero}
@@ -47,7 +47,7 @@ function render(festival) {
       ${row("✏️ 소개", festival.description)}
 
       <div class="place-detail__actions">
-        <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${mapQuery}">네이버지도 길찾기</a>
+        <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl({ name: festival.placeName || festival.title, address: festival.address }))}">네이버지도 길찾기</a>
         ${officialHref ? `<a class="btn-secondary" target="_blank" rel="noopener" href="${escapeHtml(officialHref)}">공식 사이트</a>` : ""}
       </div>
     </div>

@@ -34,6 +34,53 @@ function formatDistance(km) {
   return `${km.toFixed(1)}km`;
 }
 
+// 직선거리는 실제와 크게 어긋난다 — 대전 국립중앙과학관에서 팔선생까지 직선
+// 511m인데 차로는 1,687m다. 근처 맛집 거리를 직선으로 적었다가 지역장이 지도
+// 앱과 대조하고 바로 알아챘고, 여기도 같은 문제였다.
+//
+// 사용자 위치는 매번 달라서 미리 계산해 둘 수가 없다. 그래서 목록에 실제로
+// 보여줄 10곳만 길찾기를 부른다. 정렬은 직선거리로 먼저 해도 된다 — 순서가
+// 조금 바뀔 수는 있어도 "가까운 열 곳"이라는 묶음 자체는 거의 같다.
+// 위치를 조금 움직였다고 같은 구간을 다시 묻지 않는다. 프록시가 IP당 분당 30건이라
+// 지도를 몇 번 다시 그리면 금방 막힌다. 좌표는 소수점 세 자리(약 100m)로 뭉갠다 —
+// 그만큼 움직여도 "여기서 몇 km"는 사실상 같은 답이다.
+const roadCache = new Map();
+const cacheKey = (from, to) =>
+  `${from.lat.toFixed(3)},${from.lng.toFixed(3)}>${to.lat.toFixed(3)},${to.lng.toFixed(3)}`;
+
+async function roadDistanceKm(from, to) {
+  const key = cacheKey(from, to);
+  if (roadCache.has(key)) return roadCache.get(key);
+  const km = await requestRoadDistanceKm(from, to);
+  // 실패도 기억한다. 안 그러면 못 찾는 구간을 다시 그릴 때마다 계속 두드린다.
+  roadCache.set(key, km);
+  return km;
+}
+
+async function requestRoadDistanceKm(from, to) {
+  try {
+    const data = await fetchJson(
+      `/api/directions?start=${encodeURIComponent(`${from.lng},${from.lat}`)}`
+      + `&goal=${encodeURIComponent(`${to.lng},${to.lat}`)}`
+    );
+    return data.found && Number.isFinite(data.distance) ? data.distance / 1000 : null;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+// 길찾기가 실패하거나 아직 안 왔으면 직선거리라고 밝히고 보여준다.
+// 숫자를 감추는 것보다, 무슨 숫자인지 말해 주는 편이 낫다.
+function distanceLabel(place) {
+  if (Number.isFinite(place.roadKm)) return `차로 ${formatDistance(place.roadKm)}`;
+  return `직선 ${formatDistance(place.distanceKm)}`;
+}
+
+// 위치가 바뀌면 이 함수가 다시 불린다. 앞선 길찾기 응답이 늦게 도착해 새 목록을
+// 덮어쓰지 않도록 요청마다 번호를 매긴다.
+let nearbyRequestId = 0;
+
 // 내 위치를 알고 있고 장소 목록도 불러온 상태여야 렌더링한다 — 둘 다
 // 비동기라 어느 쪽이 먼저 끝나든 이 함수가 호출되면 조건을 다시 확인한다.
 function renderNearbyList() {
@@ -49,6 +96,22 @@ function renderNearbyList() {
     .toSorted((a, b) => a.distanceKm - b.distanceKm)
     .slice(0, 10);
 
+  // 직선거리로 먼저 그려 두고, 도로 거리가 오는 대로 그 칸만 바꾼다. 열 번의
+  // 길찾기를 기다리느라 목록이 빈 채로 있는 것보다 낫다.
+  const requestId = (nearbyRequestId += 1);
+  Promise.all(
+    nearest.map(async (p) => {
+      p.roadKm = await roadDistanceKm(myLocation, { lat: p.lat, lng: p.lng });
+    })
+  ).then(() => {
+    // 그 사이 위치가 바뀌어 다시 그렸으면 지난 응답은 버린다.
+    if (requestId !== nearbyRequestId) return;
+    nearest.forEach((p) => {
+      const cell = wrap.querySelector(`[data-id="${CSS.escape(p.id)}"] .map-nearby__dist`);
+      if (cell) cell.textContent = distanceLabel(p);
+    });
+  });
+
   wrap.hidden = false;
   wrap.innerHTML = `
     <p class="map-nearby__title">내 위치에서 가까운 순</p>
@@ -59,7 +122,7 @@ function renderNearbyList() {
         <button class="map-nearby__card" data-id="${p.id}">
           <img class="map-nearby__thumb" src="${escapeHtml(safeImageSrc(p.image))}" alt="" />
           <span class="map-nearby__name">${escapeHtml(p.name)}</span>
-          <span class="map-nearby__dist">${formatDistance(p.distanceKm)}</span>
+          <span class="map-nearby__dist">${distanceLabel(p)}</span>
         </button>`
         )
         .join("")}
@@ -115,7 +178,7 @@ function openSheet(place) {
       ${place.fee ? `<p class="map-sheet__row">💰 ${escapeHtml(place.fee)}</p>` : ""}
       ${place.reason ? `<p class="map-sheet__row">✏️ ${escapeHtml(place.reason)}</p>` : ""}
       <div class="map-sheet__actions">
-        <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
+        <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(place))}">네이버지도 길찾기</a>
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
       </div>
     </div>
@@ -136,7 +199,7 @@ function openNursingSheet(room) {
       ${room.address ? `<p class="map-sheet__row">${escapeHtml(room.address)}</p>` : ""}
       ${room.tel ? `<p class="map-sheet__row">☎️ ${escapeHtml(room.tel)}</p>` : ""}
       <div class="map-sheet__actions">
-        <a class="btn-primary" target="_blank" rel="noopener" href="https://map.naver.com/p/search/${query}">네이버지도 길찾기</a>
+        <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(room))}">네이버지도 길찾기</a>
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
       </div>
     </div>

@@ -474,6 +474,9 @@ async function loadBanners() {
   try {
     const data = await fetchJson("/api/banners");
     const banners = data.banners || [];
+    // 내용이 그대로면 다시 그리지 않는다. 화면이 다시 보일 때마다 새로 그리면
+    // 슬라이드가 첫 장으로 튀고 화면이 한 번 깜빡인다.
+    if (JSON.stringify(banners) === JSON.stringify(state.banners)) return;
     state.banners = banners;
     if (banners.length) {
       document.getElementById("hero-track").innerHTML = banners.map(bannerSlide).join("");
@@ -582,7 +585,10 @@ function initNoticesBell() {
 async function loadPlaces() {
   try {
     const data = await fetchJson(window.withReview("/api/places"));
-    state.places = data.places || [];
+    const places = data.places || [];
+    // 바뀐 게 없으면 그대로 둔다 — 목록을 다시 그리면 보고 있던 자리가 흔들린다.
+    if (state.places.length && JSON.stringify(places) === JSON.stringify(state.places)) return;
+    state.places = places;
   } catch (err) {
     console.error(err);
     document.getElementById("place-list").innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
@@ -656,6 +662,23 @@ async function loadTodayWeather({ ask = false } = {}) {
     state.weather = data.recommendation;
     const temp = typeof data.weather.maxTemp === "number" ? `${Math.round(data.weather.maxTemp)}°` : "";
 
+    // 어디 기준인지 밝힌다. "비 소식이 있어요"만 떠 있으면, 위치를 허용하지 않아
+    // 서울 날씨를 보고 있는 사람이 자기 동네 얘기인 줄 안다 — 의정부에 비 소식이
+    // 없는데 왜 비라고 하냐는 물음이 실제로 나왔다.
+    //
+    // 서버가 역지오코딩으로 "의정부시"를 준다. 못 가져오면 이름 없이 기준만 밝힌다.
+    const area = String(data.area || "").trim();
+    const basis = area
+      ? (usingDefault ? `${area} 기준` : area)
+      : (usingDefault ? "서울 기준" : "내 위치 기준");
+
+    // 강수확률을 함께 보여준다. 하루 중 최대값이라 낮에는 맑을 수도 있어서,
+    // 숫자를 보여주면 사람이 스스로 판단할 수 있다.
+    const rain = Number(data.weather.rainProbability);
+    const rainText = data.recommendation.tone === "rain" && Number.isFinite(rain)
+      ? ` · 강수 ${rain}%`
+      : "";
+
     // 서울 기준으로 보여주는 중이면 내 위치로 바꿀 버튼을 늘 띄운다. 지방
     // 사용자에게 서울 날씨만 보여주고 목록도 서울 기준으로 정렬하면 안 맞는다.
     //
@@ -668,6 +691,7 @@ async function loadTodayWeather({ ask = false } = {}) {
     box.innerHTML = `
       <span class="today-weather__icon">${weatherIcon(data.recommendation.tone, data.weather.kind)}</span>
       <span class="today-weather__text">${escapeHtml(data.recommendation.headline)}</span>
+      <span class="today-weather__basis">${escapeHtml(basis)}${escapeHtml(rainText)}</span>
       ${temp ? `<span class="today-weather__temp">${escapeHtml(temp)}</span>` : ""}
       ${canAsk ? `<button type="button" class="today-weather__locate" id="weather-locate">📍 내 주변부터</button>` : ""}
     `;
@@ -719,7 +743,38 @@ function updateSearchModeUI() {
   document.getElementById("region-section").hidden = searching;
 }
 
+// 홈은 페이지가 뜰 때 한 번만 데이터를 부른다. 그래서 앱을 백그라운드에 두었다가
+// 다시 열면 어제 배너와 어제 목록이 그대로 보였다 — 배너를 갈아끼우거나 장소를
+// 공개해도 사용자가 직접 새로고침해야 반영됐다.
+//
+// 화면이 다시 보이는 순간 다시 부른다. 엣지 캐시가 60초라 서버 부담은 거의 없지만,
+// 탭을 자주 오가는 사람이 매번 네 개를 부르지 않도록 최소 간격을 둔다.
+const REFRESH_MIN_GAP_MS = 30000;
+let lastLoadedAt = 0;
+
+// 방문자 집계. 화면에 보이는 것은 없고, 소개 페이지에서 숫자를 읽어 보여준다.
+// 실패해도 아무 일도 일어나지 않아야 하므로 결과를 기다리지 않는다.
+function countVisit() {
+  const id = window.deviceId();
+  fetchJson(`/api/visit?d=${encodeURIComponent(id)}`, { method: "POST" })
+    .catch(() => {});
+}
+
+function loadHomeData() {
+  lastLoadedAt = Date.now();
+  Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
+  // 장소 로딩과 독립적으로 돈다 — 날씨가 늦거나 실패해도 목록은 그대로 뜬다.
+  loadTodayWeather();
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  if (Date.now() - lastLoadedAt < REFRESH_MIN_GAP_MS) return;
+  loadHomeData();
+});
+
 document.addEventListener("DOMContentLoaded", () => {
+  countVisit();
   renderRegionMap();
   renderRegionLegend();
   renderReviewBanner();
@@ -735,7 +790,5 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPlaces();
   });
 
-  Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
-  // 장소 로딩과 독립적으로 돈다 — 날씨가 늦거나 실패해도 목록은 그대로 뜬다.
-  loadTodayWeather();
+  loadHomeData();
 });

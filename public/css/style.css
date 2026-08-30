@@ -1286,6 +1286,14 @@ body {
   color: var(--color-text);
 }
 
+/* 어디 기준 날씨인지 밝히는 잔글씨. 본문보다 확실히 물러나 있어야 헤드라인을
+   가리지 않는다. */
+.today-weather__basis {
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+  white-space: nowrap;
+}
+
 .today-weather__temp {
   font-size: 13px;
   font-weight: 700;
@@ -1803,4 +1811,12 @@ body {
   font-size: 12px;
   color: var(--color-text-secondary);
   line-height: 1.5;
+}
+
+/* 소개 페이지 맨 아래 방문자 수. 자랑처럼 보이지 않게 본문보다 확실히 물러나 있다. */
+.visit-stats {
+  margin: 26px 18px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--color-text-muted, #9aa0a6);
 }

@@ -1,4 +1,6 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
+import { filterByWindow } from "./banner-window.js";
+import { countVisit, readStats, todayInKst as visitToday } from "./visit-counter.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
@@ -9,17 +11,18 @@ import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
-import { pickNearest, isValidCoords, NEARBY_SEARCH_RADIUS_M } from "./nearby-lookup.js";
+import {
+  pickNearest, isValidCoords, nameMatches, distanceKm, MAX_ACCEPT_KM, NEARBY_SEARCH_RADIUS_M,
+} from "./nearby-lookup.js";
 import { applyApprovedReports, APPROVED, APPLIED } from "./report-apply.js";
 import { prepareUserPlace } from "./new-place.js";
-import { makeKakaoNearby } from "./place-sources.js";
+import { makeKakaoNearby, makeRoadDistance } from "./place-sources.js";
 import {
   consumeRateLimit,
   hashIp,
   tooManyRequestsResponse,
   PROXY_RATE_LIMIT_PER_MINUTE,
-  REPORT_RATE_LIMIT_PER_HOUR,
-  UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
+  reportQuota,
 } from "./rate-limit.js";
 
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
@@ -359,9 +362,11 @@ async function handleBanners(env) {
     }
 
     const data = await res.json();
+    // 노출기간이 지난 배너를 걸러낸다. 이미지 미러링 전에 걸러야 지난 배너 때문에
+    // 쓸데없이 R2를 두드리지 않는다. 기간이 비어 있으면 예전처럼 체크박스만 본다.
+    const inWindow = filterByWindow(data.results.map(toBanner));
     const banners = await Promise.all(
-      data.results.map(async (page) => {
-        const banner = toBanner(page);
+      inWindow.map(async (banner) => {
         const image = await ensureMirroredImage(env, "banners", banner.id, banner.imageSource);
         return {
           id: banner.id,
@@ -798,7 +803,7 @@ async function searchNearbyByCoords(env, query, origin) {
       return null;
     }
     const data = await res.json();
-    return pickNearest(data.documents, { lat: Number(origin.lat), lng: Number(origin.lng) });
+    return pickNearest(data.documents, { lat: Number(origin.lat), lng: Number(origin.lng) }, query);
   } catch (err) {
     console.warn(`카카오 장소 검색 예외: ${err.message}`);
     return null;
@@ -811,6 +816,69 @@ async function searchNearbyByCoords(env, query, origin) {
 // "신세계백화점 푸드코트"가 서울 강남점으로 잡혀 총 거리 306km짜리 코스가
 // 나왔다. 장소 좌표(lat/lng)를 함께 받으면 카카오 반경 검색으로 가장 가까운
 // 지점을 고른다. 좌표가 없거나 카카오가 비면 예전처럼 네이버로 찾는다.
+async function geocodeAddress(env, address) {
+  try {
+    const res = await fetchWithTimeout(
+      `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(address)}`,
+      {
+        headers: {
+          "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
+          "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const hit = (await res.json().catch(() => ({})))?.addresses?.[0];
+    if (!hit) return null;
+    const lat = Number(hit.y);
+    const lng = Number(hit.x);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+  } catch {
+    return null;
+  }
+}
+
+// 네이버 지역검색은 좌표로 범위를 좁힐 수 없다. 주소를 지오코딩해 장소에서
+// 얼마나 떨어졌는지 재고, 너무 멀면 같은 상호의 다른 지점으로 보고 버린다.
+async function searchNearbyByNaver(env, query, origin) {
+  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return null;
+  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) return null;
+  try {
+    const res = await fetchWithTimeout(
+      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5`,
+      {
+        headers: {
+          "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
+          "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
+        },
+      }
+    );
+    if (!res.ok) return null;
+    const here = { lat: Number(origin.lat), lng: Number(origin.lng) };
+    for (const item of (await res.json()).items || []) {
+      const name = decodeNaverHtml(item.title);
+      if (!nameMatches(query, name)) continue;
+      const address = item.roadAddress || item.address;
+      if (!address) continue;
+      const coords = await geocodeAddress(env, address);
+      if (!coords) continue;
+      if (distanceKm(here, coords) > MAX_ACCEPT_KM) continue;
+      return {
+        found: true,
+        name,
+        address,
+        lat: coords.lat,
+        lng: coords.lng,
+        distanceM: Math.round(distanceKm(here, coords) * 1000),
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn(`네이버 장소 검색 예외: ${err.message}`);
+    return null;
+  }
+}
+
 async function handleNearbyPlace(env, url) {
   const q = url.searchParams.get("q");
   if (!q) {
@@ -837,7 +905,11 @@ async function handleNearbyPlace(env, url) {
       console.warn("KAKAO_REST_API_KEY가 없어 좌표 기반 장소 검색을 건너뜁니다.");
       return new Response(JSON.stringify({ found: false }), { status: 200, headers });
     }
-    const hit = await searchNearbyByCoords(env, q, origin);
+    const hit = await searchNearbyByCoords(env, q, origin)
+      // 카카오에 없는 가게가 있다. 일산호수공원의 "일산칼국수본점"이 그렇다 —
+      // 네이버 지역검색에만 있어서, 이름을 맞춰 찾으면 카카오 쪽은 빈손이다.
+      // 그대로 두면 코스 핀이 사라지므로 네이버로 한 번 더 찾는다.
+      || await searchNearbyByNaver(env, q, origin);
     return new Response(JSON.stringify(hit || { found: false }), { status: 200, headers });
   }
 
@@ -1032,14 +1104,21 @@ async function handleReport(request, env, ctx, url) {
   // 좁히고, 알림에 표시해 운영자가 더 살펴보게 한다.
   const verified = reviewer || (await verifyTurnstile(env, turnstileToken, ip));
 
+  // 검수 중인 지역장은 한 장소에서 여러 건을 이어 보내는 게 정상이라 따로 센다.
+  const quota = reportQuota({ reviewer, verified });
   const allowed = await consumeRateLimit(env, {
-    scope: verified ? "report" : "report-unverified",
+    scope: quota.scope,
     ip,
-    limit: verified ? REPORT_RATE_LIMIT_PER_HOUR : UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
+    limit: quota.limit,
     windowSeconds: 3600,
   });
   if (!allowed) {
-    return new Response(JSON.stringify({ error: "잠시 후 다시 시도해주세요." }), { status: 429, headers });
+    // 무엇에 걸렸는지 알려준다. "잠시 후"만 보면 고장인지 제한인지 알 수 없어
+    // 대부분 그냥 포기한다.
+    return new Response(
+      JSON.stringify({ error: `제보는 한 시간에 ${quota.limit}건까지 받아요. 잠시 뒤에 다시 보내주세요.` }),
+      { status: 429, headers }
+    );
   }
 
   // 사람 확인을 못 거친 제보라는 것을 알림에 남긴다. 조용히 섞이면 운영자가
@@ -1144,6 +1223,32 @@ async function handleReport(request, env, ctx, url) {
   return new Response(JSON.stringify({ ok: true }), { status: 201, headers });
 }
 
+// 방문자 수. POST는 오늘 처음 온 사람만 세고, GET은 숫자만 읽는다.
+//
+// 홈에서 POST를 부르고(화면에는 아무것도 안 보인다) 소개 페이지에서 GET으로 보여준다.
+// 소개 페이지만 세면 대부분의 사용자가 빠져 숫자가 뜻을 잃는다.
+async function handleVisit(request, env, url) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+  const today = visitToday();
+
+  if (request.method !== "POST") {
+    return new Response(JSON.stringify(await readStats(env.RATE_LIMIT, today)), { status: 200, headers });
+  }
+
+  // 기기 ID가 없으면(시크릿 창 등) IP 해시로 대신한다. 같은 와이파이를 쓰는 가족이
+  // 한 명으로 잡히지만, 아무도 안 세는 것보다는 낫다.
+  const device = String(url.searchParams.get("d") || "").slice(0, 64).replace(/[^A-Za-z0-9-]/g, "");
+  const id = device || (await hashIp(request.headers.get("cf-connecting-ip") || "unknown"));
+
+  try {
+    await countVisit(env.RATE_LIMIT, id, today);
+  } catch (err) {
+    // 숫자를 못 세는 것 때문에 화면이 막히면 안 된다.
+    console.warn(`방문자 집계 실패: ${err.message}`);
+  }
+  return new Response(JSON.stringify(await readStats(env.RATE_LIMIT, today)), { status: 200, headers });
+}
+
 function handleNaverConfig(env) {
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
@@ -1225,12 +1330,54 @@ async function runScheduledEnrichment(env) {
 // 오늘 날씨를 보고 어떤 장소를 위로 올릴지 알려준다. Open-Meteo는 키가 필요 없어서
 // 환경변수 없이 동작하고, 실패하면 추천 없이 조용히 비운다 — 날씨를 못 가져왔다고
 // 홈 화면이 깨지면 안 된다.
-async function handleToday(url) {
+// 좌표를 "의정부시" 같은 이름으로 바꾼다.
+//
+// 화면에 "비 소식이 있어요"만 떠 있으면 어디 날씨인지 알 수 없다. 위치를
+// 허용하지 않아 서울 기준으로 보고 있는 사람은 자기 동네 얘기인 줄 안다.
+//
+// 이름을 못 가져와도 날씨는 보여야 하므로 실패하면 빈 문자열을 준다.
+async function reverseGeocodeArea(env, { lat, lng }) {
+  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) return "";
+  try {
+    const qs = new URLSearchParams({
+      coords: `${lng},${lat}`, output: "json", orders: "legalcode",
+    });
+    const res = await fetchWithTimeout(
+      `https://maps.apigw.ntruss.com/map-reversegeocode/v2/gc?${qs}`,
+      {
+        headers: {
+          "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
+          "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
+        },
+      }
+    );
+    if (!res.ok) return "";
+    const region = (await res.json().catch(() => ({})))?.results?.[0]?.region;
+    if (!region) return "";
+    // area2가 시·군·구다. 세종처럼 area2가 비는 광역시는 area1(시·도)을 쓴다.
+    return region.area2?.name || region.area1?.name || "";
+  } catch {
+    return "";
+  }
+}
+
+// 한국 기준 "YYYY-MM-DD-HH". 캐시 키에 붙여 시각이 바뀌면 새 예보를 받게 한다.
+function kstStamp(now = new Date()) {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().slice(0, 13);
+}
+
+async function handleToday(url, env) {
   const headers = { "content-type": "application/json; charset=utf-8" };
+  // Number(null)은 NaN이 아니라 0이다. lat/lng를 아예 안 넘기면 (0, 0)이 유효한
+  // 좌표로 통과해 기니만 앞바다 날씨를 한국 날씨라고 답했다. /api/nearby-place
+  // 에서 한 번 고친 것과 같은 함정이 여기 남아 있었다.
+  if (!isValidCoords({ lat: url.searchParams.get("lat"), lng: url.searchParams.get("lng") })) {
+    return new Response(JSON.stringify({ error: "좌표가 필요합니다." }), { status: 400, headers });
+  }
   const lat = Number(url.searchParams.get("lat"));
   const lng = Number(url.searchParams.get("lng"));
-
-  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     return new Response(JSON.stringify({ error: "좌표가 필요합니다." }), { status: 400, headers });
   }
 
@@ -1241,8 +1388,11 @@ async function handleToday(url) {
     const forecast = parseForecast(await res.json());
     if (!forecast) return new Response(JSON.stringify({ weather: null }), { status: 200, headers });
 
+    // 이름 조회가 늦어도 날씨는 나와야 한다. 실패하면 빈 값으로 넘어간다.
+    const area = await reverseGeocodeArea(env, { lat, lng });
+
     return new Response(
-      JSON.stringify({ weather: forecast, recommendation: recommendationFor(forecast) }),
+      JSON.stringify({ weather: forecast, area, recommendation: recommendationFor(forecast) }),
       { status: 200, headers }
     );
   } catch {
@@ -1298,6 +1448,14 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
 
   const kakao = env.KAKAO_REST_API_KEY;
   const findNearby = kakao ? makeKakaoNearby(kakao) : async () => [];
+  // 근처 맛집·카페 거리는 도로 거리로 적는다. 직선거리를 적었더니 지역장이
+  // 지도와 대조해 몇 km씩 틀렸다고 바로 알아챘다.
+  const roadDistance = env.NAVER_MAP_CLIENT_ID
+    ? makeRoadDistance({
+      mapClientId: env.NAVER_MAP_CLIENT_ID,
+      mapClientSecret: env.NAVER_MAP_CLIENT_SECRET,
+    })
+    : null;
   const searchPlace = async (name) => {
     if (!kakao) return [];
     const qs = new URLSearchParams({ query: name, size: "5" });
@@ -1319,6 +1477,7 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
       reportValue: report.value,
       searchPlace,
       findNearby,
+      roadDistance,
       today,
     });
 
@@ -1610,9 +1769,32 @@ async function handleRequest(request, env, ctx) {
     return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env));
   }
   if (url.pathname === "/api/today") {
-    // 하루 단위 예보라 자주 바뀌지 않는다. 좌표를 소수점 1자리로 뭉개서 캐시
-    // 키를 만들기 때문에(약 11km) 같은 동네 사용자는 캐시를 함께 쓴다.
-    return withEdgeCache(request, ctx, 1800, () => handleToday(url));
+    // 좌표를 소수점 2자리(약 1.1km)로 뭉갠다. 같은 동네 사용자가 캐시를 함께
+    // 쓰기 위해서다. 뭉개는 코드 없이 주석만 있던 시절에는 사용자마다 GPS
+    // 소수점이 달라 캐시가 사실상 한 번도 맞지 않았다.
+    //
+    // 처음에는 1자리(약 11km)로 뭉갰는데 지역 이름이 어긋났다 — 의정부가
+    // 양주시로, 서울시청이 성북구로 나왔다. 날씨는 11km쯤 움직여도 같지만
+    // 시·군·구 경계는 그 안에서 여러 번 바뀐다.
+    //
+    // 캐시 키에 "몇 시인지"를 함께 넣는다. 나들이 시간대가 시각에 따라 달라진다.
+    // (원래 주석) 이 응답은 지금부터 남은 시간의
+    // 예보를 담고 있어서, 시간이 바뀌면 값도 달라져야 한다. 시각을 안 넣으면
+    // 오전에 채운 캐시가 오후까지 살아남아 지나간 비를 계속 알린다.
+    // 날짜도 함께 넣어 자정을 넘겼는데 어제 예보가 남는 일을 막는다.
+    const rounded = new URL(url);
+    for (const key of ["lat", "lng"]) {
+      const raw = Number(rounded.searchParams.get(key));
+      if (Number.isFinite(raw)) rounded.searchParams.set(key, raw.toFixed(2));
+    }
+    const cacheKeyUrl = new URL(rounded);
+    cacheKeyUrl.searchParams.set("h", kstStamp());
+    const cacheKeyRequest = new Request(cacheKeyUrl.toString(), request);
+    // 같은 시각 안에서만 재사용한다. 한 시간이 지나면 키가 바뀌어 새로 받는다.
+    return withEdgeCache(cacheKeyRequest, ctx, 3600, () => handleToday(rounded, env));
+  }
+  if (url.pathname === "/api/visit") {
+    return handleVisit(request, env, url);
   }
   if (url.pathname === "/naver-config") {
     return handleNaverConfig(env);

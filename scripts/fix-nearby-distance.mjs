@@ -41,13 +41,18 @@ const H = {
 // 붙였고, 화면에서는 쉼표로 다시 갈라져 "카페 두촌리 (약 690m)" 로 보였다.
 // 실제로는 디프랑까지의 거리였다.
 function splitNearbyList(value) {
+  const text = String(value || "");
+  // 쉼표가 상호의 일부인 가게가 있다 — 평창 "쉴, 바위길". 거리 표기가 신호다:
+  // 슬래시로 가른 조각 안에 "(약 …)"가 딱 하나면 가게 하나이고 쉼표는 상호의
+  // 일부다. 없거나 둘 이상이면 쉼표도 구분자로 쓴다.
+  const hasSlash = text.split("/").some((part) => part.includes(",") && (part.match(/\(약\s/g) || []).length === 1);
   const items = [];
   let depth = 0;
   let buffer = "";
-  for (const ch of String(value || "")) {
+  for (const ch of text) {
     if (ch === "(" || ch === "（") depth += 1;
     else if (ch === ")" || ch === "）") depth = Math.max(0, depth - 1);
-    if (depth === 0 && (ch === "," || ch === "/")) {
+    if (depth === 0 && (ch === "/" || (ch === "," && !hasSlash))) {
       items.push(buffer);
       buffer = "";
       continue;

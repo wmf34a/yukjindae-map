@@ -259,3 +259,20 @@ describe("applyApprovedReports 목록 반영", () => {
     expect(out.skipped[0].reason).toContain("읽을 수 없어");
   });
 });
+
+describe("splitList — 상호 안의 쉼표", () => {
+  it("슬래시가 있으면 상호 안의 쉼표를 구분자로 보지 않는다", () => {
+    // 평창 "쉴, 바위길"은 쉼표까지가 상호다. 쪼개면 없는 가게 둘이 된다.
+    expect(splitList("쉴, 바위길 (약 14.7km) / 파인리프 (약 19.2km)"))
+      .toEqual(["쉴, 바위길 (약 14.7km)", "파인리프 (약 19.2km)"]);
+  });
+
+  it("슬래시가 없는 옛 값은 쉼표로 가른다", () => {
+    expect(splitList("디프랑, 카페 두촌리")).toEqual(["디프랑", "카페 두촌리"]);
+  });
+
+  it("구분자 없이 이어 적은 제보는 그대로 갈린다", () => {
+    expect(splitList("사니다 (약 6.8km) 목수의 진달래 (약 5.8km)"))
+      .toEqual(["사니다 (약 6.8km)", "목수의 진달래 (약 5.8km)"]);
+  });
+});

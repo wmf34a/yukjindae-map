@@ -36,11 +36,20 @@ export function isListField(field) {
 }
 
 export function splitList(value) {
-  return String(value || "")
+  const text = String(value || "")
     // 구분자를 안 쓰고 이어 적은 제보를 가른다. "사니다 (약 6.8km) 목수의 진달래
     // (약 5.8km)" 처럼 거리 괄호 뒤에 바로 다음 가게가 오는 형태가 흔하다.
-    .replace(/(\(약\s*[^)]*\))\s+(?=[^/,\s])/g, "$1 / ")
-    .split(/\s*[/,]\s*/)
+    .replace(/(\(약\s*[^)]*\))\s+(?=[^/,\s])/g, "$1 / ");
+
+  // 쉼표가 상호의 일부인 가게가 있다 — 평창 "쉴, 바위길". 쉼표만 보고 가르면
+  // 없는 가게 둘로 쪼개져 지도에 핀이 안 찍힌다. 그렇다고 쉼표를 아예 무시하면
+  // "가게 하나, 가게 둘" 처럼 쉼표로만 이어 적은 목록을 못 가른다.
+  //
+  // 거리 표기가 신호다. 슬래시로 먼저 가른 뒤, 조각 안에 "(약 …)"가 딱 하나면
+  // 그 조각은 가게 하나이고 쉼표는 상호의 일부다. 없거나 둘 이상이면 가른다.
+  return text
+    .split("/")
+    .flatMap((part) => ((part.match(/\(약\s/g) || []).length === 1 ? [part] : part.split(",")))
     .map((s) => s.trim())
     .filter(Boolean);
 }

@@ -94,6 +94,21 @@ node scripts/register-places.mjs tmp/<지역>-후보.json  # 공개여부=false 
 필요한 값만 골라 넘기는 구조다. 제보(`/api/reports`)는 Turnstile 사람 확인 +
 `rate-limit.js` 를 통과해야 Notion에 쓰인다 — 스팸 때문에 넣은 것이니 우회로를 만들지 말 것.
 
+## 장소 사진 규칙
+
+**사진에는 반드시 `사진출처`를 함께 적는다.** 출처를 안 적고 넣은 사진 무리에서
+언론사 사진이 여럿 나왔다 — YONHAP NEWS·NEWSIS·SBN NEWS 워터마크가 그대로 박힌
+채였고, 개관식 테이프커팅처럼 얼굴이 정면으로 식별되는 사진과 사진이 아닌
+안내도 일러스트도 섞여 있었다. 저작권·초상권 문제라 오픈 전에 정리해야 한다.
+
+- 발굴 파이프라인(`discover-*.mjs` → `register-places.mjs`)은 출처를 자동으로
+  채운다. 손으로 넣을 때만 빠진다.
+- 쓸 수 있는 출처: 한국관광공사(TourAPI), 지자체·시설 공식 제공, 지역장 촬영본.
+  뉴스 기사 사진은 쓰지 않는다.
+- `node scripts/audit-photos.mjs --no-credit` 로 워터마크·얼굴·안내도를 걸러낸다.
+  `scripts/replace-photos.mjs` 가 공공 API 에서 대체를 찾고, 못 찾은 곳은
+  `tmp/사진필요.md` 에 남긴다 — **사진을 지우지는 않는다.**
+
 ## 배포 후 필수 작업
 
 프로덕션에 배포할 때마다(직접 `wrangler deploy` 든, `git push origin main` 으로 GitHub Actions CI가 배포하든) 아래 두 가지를 반드시 같이 한다:

@@ -558,7 +558,17 @@ async function runReservationImport(env) {
     "content-type": "application/json",
   };
 
-  const picked = pickReservations(await fetchSeoulReservations(env), { limit: RESERVATION_IMPORT_MAX });
+  let rows;
+  try {
+    rows = await fetchSeoulReservations(env);
+  } catch (err) {
+    // 주 1회만 도는 작업이라 조용히 실패하면 다음 주까지 아무도 모른다.
+    console.error("[reservations] 서울시 API 호출 실패:", err);
+    return;
+  }
+
+  const picked = pickReservations(rows, { limit: RESERVATION_IMPORT_MAX });
+  console.log(`[reservations] 서울시 ${rows.length}건 조회 · 아이 대상 ${picked.length}건`);
   if (picked.length === 0) return;
 
   // 서울시가 같은 프로그램을 회차마다 새 SVCID로 올리므로 제목이 아니라 ID로 본다.
@@ -610,6 +620,7 @@ async function runReservationImport(env) {
     else console.error(`[reservations] ${p.title} 등록 실패:`, (await res.text()).slice(0, 160));
   }
 
+  console.log(`[reservations] 이미 있는 것 ${picked.length - fresh.length}건 · 새로 넣은 것 ${added.length}건`);
   await notifyReservationCandidates(env, added);
 }
 

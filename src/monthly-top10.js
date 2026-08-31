@@ -66,6 +66,7 @@ export function buildCandidates(places) {
     hours: place.hours || "",
     reason: place.reason || "",
     pinned: Boolean(place.rankPinned),
+    autumnSpot: Boolean(place.autumnSpot),
   }));
 }
 
@@ -75,6 +76,9 @@ function candidateLine(c) {
   if (c.fee) parts.push(`입장료: ${truncate(c.fee, 60)}`);
   if (c.freeAgePolicy) parts.push(`무료: ${truncate(c.freeAgePolicy, 30)}`);
   if (c.hours) parts.push(`운영: ${truncate(c.hours, 50)}`);
+  // 가을 신호는 이름이나 설명으로는 안 드러난다. 물맑음수목원이 단풍 명소라는
+  // 걸 모델이 알 도리가 없어서, 측정한 사실을 그대로 알려준다.
+  if (c.autumnSpot) parts.push("가을: 단풍 명소로 알려진 곳");
   if (c.reason) parts.push(`설명: ${truncate(c.reason, 120)}`);
   return parts.join(" / ");
 }
@@ -97,6 +101,7 @@ export function buildPrompt({ monthKey, region, candidates }) {
     ``,
     `기준`,
     `- 그 달의 날씨와 계절에 실제로 어울리는지를 가장 먼저 본다.`,
+    `- 10~11월에는 "가을: 단풍 명소" 표시가 있는 곳을 위로 올린다. 그 표시는 짐작이 아니라 블로그 언급을 세어 붙인 것이다.`,
     `- 아이를 데리고 가는 부모가 독자다. 무료이거나 영유아 입장이 무료면 가산점.`,
     `- 실내/야외 균형을 고려한다. 한 종류로만 채우지 않는다.`,
     `- 목록에 없는 장소는 절대 만들어내지 않는다. 반드시 주어진 번호 중에서만 고른다.`,

@@ -73,6 +73,9 @@ export function toPlace(page) {
     // 정보출처는 우리가 값을 어디서 얻었는지다 — 절반 이상이 블로그 글이라
     // 사용자에게 "공식 사이트"로 내보낼 수 없다. 그래서 칸을 따로 둔다.
     officialUrl: urlValue(p["공식사이트"]),
+    // 블로그에서 "○○ 단풍" 언급이 실제로 쌓인 곳. 이름에 단풍이 들어가는지로는
+    // 알 수 없다 — 화담숲·푸른수목원처럼 이름에 없는 곳이 진짜 명소다.
+    autumnSpot: p["가을명소"]?.checkbox === true,
     verifiedAt: dateValue(p["정보확인일"]),
     verifiedStatus: selectName(p["확인상태"]),
     nearbyRestaurant: text(p["근처맛집"]),

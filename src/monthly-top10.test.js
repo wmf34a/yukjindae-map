@@ -360,3 +360,24 @@ describe("runMonthlyTop10", () => {
     expect(called).toBe(false);
   });
 });
+
+describe("가을 명소 신호", () => {
+  it("표시가 있으면 후보 줄에 적어 모델에게 알린다", () => {
+    // 물맑음수목원이 단풍 명소라는 걸 이름이나 카테고리로는 알 수 없다.
+    const prompt = buildPrompt({
+      monthKey: "2026-10",
+      region: "경기북부",
+      candidates: [{ no: 1, name: "물맑음수목원", categories: ["자연·공원"], autumnSpot: true }],
+    });
+    expect(prompt).toContain("가을: 단풍 명소로 알려진 곳");
+  });
+
+  it("표시가 없으면 적지 않는다", () => {
+    const prompt = buildPrompt({
+      monthKey: "2026-10",
+      region: "경기북부",
+      candidates: [{ no: 1, name: "실내놀이터", categories: ["실내놀이"] }],
+    });
+    expect(prompt).not.toContain("단풍 명소로 알려진 곳");
+  });
+});

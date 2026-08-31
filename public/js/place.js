@@ -196,6 +196,22 @@ function render(place) {
   });
 }
 
+// 한 곳을 보려고 목록 전체(195곳·69KB)를 받던 자리다. 이제 그 장소만 읽는다.
+//
+// 목록으로 되돌아가는 길은 남겨 둔다 — 앱인토스 미니앱은 public/ 의 스냅샷을
+// 올리는 구조라, 새 엔드포인트를 모르는 옛 번들이 한동안 돌아다닌다. 반대로
+// 워커가 먼저 바뀌어도 옛 번들이 깨지면 안 되므로 양쪽을 다 살려 둔다.
+async function loadPlace(id) {
+  try {
+    const data = await fetchJson(window.withReview(`/api/places/${encodeURIComponent(id)}`));
+    if (data && data.place) return data.place;
+  } catch {
+    // 아래 목록 조회로 넘어간다.
+  }
+  const data = await fetchJson(window.withReview("/api/places"));
+  return (data.places || []).find((p) => p.id === id) || null;
+}
+
 async function init() {
   const id = new URLSearchParams(location.search).get("id");
   const el = document.getElementById("place-detail");
@@ -204,8 +220,7 @@ async function init() {
     return;
   }
   try {
-    const data = await fetchJson(window.withReview("/api/places"));
-    const place = (data.places || []).find((p) => p.id === id);
+    const place = await loadPlace(id);
     if (!place) {
       el.innerHTML = `<p class="place-list__empty">장소 정보를 찾을 수 없어요.</p>`;
       return;

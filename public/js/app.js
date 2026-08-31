@@ -440,7 +440,7 @@ function writePlaceListTitle(title, text, info) {
   title.appendChild(dot);
 }
 
-const MONTHLY_INFO = "매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 여름엔 물놀이터가, 가을엔 단풍 명소가 위로 올라와요.";
+const MONTHLY_INFO = "매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 한여름엔 물놀이와 실내가, 선선해지면 야외와 체험이 위로 올라와요.";
 const WEATHER_INFO = "순위는 매달 1일에 계절에 맞춰 다시 매겨요. 여기에 더해 그날 날씨를 보고, 비 오는 날엔 실내를 앞으로 당겨 보여줘요.";
 
 function setPlaceListTitle(showRank, regionDigest) {

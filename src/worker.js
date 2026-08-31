@@ -12,13 +12,15 @@ import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties }
 import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
-  pickNearest, isValidCoords, nameMatches, distanceKm, MAX_ACCEPT_KM, NEARBY_SEARCH_RADIUS_M,
-} from "./nearby-lookup.js";
-import {
   applyApprovedReports, isListField, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
 } from "./report-apply.js";
+import { isValidCoords } from "./nearby-lookup.js";
+import { notifySlack } from "./notify.js";
+// 주간 수집(runReservationImport)은 홈 띠를 내린 동안 꺼 두었다. 다시 켤 때
+// 여기 import 에 되살리고 아래 크론에서 호출하면 된다.
+import { handleReservations } from "./reservation-service.js";
 import { prepareUserPlace } from "./new-place.js";
-import { RESERVATION_SERVICES, pickReservations, formatOpenAt } from "./reservation-open.js";
+import { handleNearbyPlace, handleGeocode, handleDirections } from "./naver-proxy.js";
 import { makeKakaoNearby, makeRoadDistance } from "./place-sources.js";
 import {
   consumeRateLimit,
@@ -251,6 +253,51 @@ async function withMirroredPlacePhotos(env, places) {
   );
 
   return places.map((p) => (mirrored.has(p.id) ? { ...p, image: mirrored.get(p.id) } : p));
+}
+
+// 상세 화면은 한 곳만 필요한데 목록 전체(195곳·69KB)를 받아 그 안에서 찾고
+// 있었다. 노션은 페이지 하나를 바로 줄 수 있으므로 그것만 읽는다.
+//
+// 공개여부는 여기서 다시 본다 — 아직 검수 중인 장소의 id를 주소창에 넣으면
+// 목록에 없는 곳이 상세로 열려 버린다.
+async function handlePlaceById(env, url, id) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
+    return new Response(JSON.stringify({ error: "Notion 환경변수가 설정되지 않았습니다." }), { status: 500, headers });
+  }
+  if (!isNotionId(id)) {
+    return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
+  }
+
+  try {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
+      headers: {
+        Authorization: `Bearer ${env.NOTION_API_KEY}`,
+        "Notion-Version": "2022-06-28",
+      },
+    });
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
+    }
+
+    const page = await res.json();
+    // 다른 데이터베이스의 페이지 id를 넣어도 장소처럼 열리면 안 된다.
+    const parent = page.parent?.database_id?.replace(/-/g, "");
+    if (parent !== env.NOTION_DATABASE_ID.replace(/-/g, "")) {
+      return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
+    }
+
+    const place = toPlace(page);
+    if (!place.published && !isReviewer(env, url)) {
+      return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
+    }
+
+    const [mirrored] = await withMirroredPlacePhotos(env, [place]);
+    return new Response(JSON.stringify({ place: mirrored }), { status: 200, headers });
+  } catch (err) {
+    return serverErrorResponse(err);
+  }
 }
 
 async function handlePlaces(env, url) {
@@ -515,214 +562,6 @@ async function handleFestivals(env) {
   }
 }
 
-// 서울시 공공서비스예약에서 아이 대상 프로그램을 주 1회 긁어 노션에 쌓는다.
-// 이 정보는 주마다 통째로 갈린다 — 사람이 손으로 돌리는 한 앱에는 지난주 목록이
-// 계속 걸려 있게 된다.
-//
-// 서울시 API는 8088 포트라 wrangler.jsonc 에 allow_custom_ports 플래그가 있어야
-// Worker에서 부를 수 있다. 한 번에 1,000건까지 준다.
-const SEOUL_RESERVATION_PAGE = 1000;
-const RESERVATION_IMPORT_MAX = 30;
-
-async function fetchSeoulReservations(env) {
-  const rows = [];
-  for (const service of RESERVATION_SERVICES) {
-    /* oxlint-disable-next-line no-await-in-loop -- 서울시 API 호출량 때문에 순차로 돈다. */
-    const res = await fetchWithTimeout(
-      `http://openapi.seoul.go.kr:8088/${env.SEOUL_API_KEY}/json/${service}/1/${SEOUL_RESERVATION_PAGE}/`,
-      {},
-      20_000
-    );
-    /* oxlint-disable-next-line no-await-in-loop */
-    const text = await res.text();
-    try {
-      // 오류는 JSON이 아니라 XML로 온다. 한 서비스가 실패해도 나머지는 살린다.
-      const box = JSON.parse(text)[service];
-      if (box?.row?.length) rows.push(...box.row);
-    } catch {
-      console.error(`[reservations] ${service} 응답을 못 읽었습니다:`, text.slice(0, 160));
-    }
-  }
-  return rows;
-}
-
-/* oxlint-disable-next-line no-unused-vars -- 홈 띠를 내린 동안만 호출을 뺐다. 위 크론에서 되살린다. */
-async function runReservationImport(env) {
-  if (!env.SEOUL_API_KEY || !env.NOTION_API_KEY || !env.NOTION_RESERVATION_DATABASE_ID) {
-    console.error("[reservations] 자동 수집 설정이 없어 건너뜁니다.");
-    return;
-  }
-
-  const notionHeaders = {
-    Authorization: `Bearer ${env.NOTION_API_KEY}`,
-    "Notion-Version": "2022-06-28",
-    "content-type": "application/json",
-  };
-
-  let rows;
-  try {
-    rows = await fetchSeoulReservations(env);
-  } catch (err) {
-    // 주 1회만 도는 작업이라 조용히 실패하면 다음 주까지 아무도 모른다.
-    console.error("[reservations] 서울시 API 호출 실패:", err);
-    return;
-  }
-
-  const picked = pickReservations(rows, { limit: RESERVATION_IMPORT_MAX });
-  console.log(`[reservations] 서울시 ${rows.length}건 조회 · 아이 대상 ${picked.length}건`);
-  if (picked.length === 0) return;
-
-  // 서울시가 같은 프로그램을 회차마다 새 SVCID로 올리므로 제목이 아니라 ID로 본다.
-  const known = new Set();
-  let cursor;
-  do {
-    const body = { page_size: 100 };
-    if (cursor) body.start_cursor = cursor;
-    /* oxlint-disable-next-line no-await-in-loop */
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_RESERVATION_DATABASE_ID}/query`, {
-      method: "POST", headers: notionHeaders, body: JSON.stringify(body),
-    });
-    if (!res.ok) break;
-    /* oxlint-disable-next-line no-await-in-loop */
-    const data = await res.json();
-    for (const page of data.results || []) {
-      const id = plainText(page.properties["서비스ID"]);
-      if (id) known.add(id);
-    }
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
-
-  const fresh = picked.filter((p) => !known.has(p.id));
-  const added = [];
-  for (const p of fresh) {
-    const properties = {
-      "제목": { title: [{ text: { content: p.title.slice(0, 200) } }] },
-      "서비스ID": { rich_text: [{ text: { content: p.id } }] },
-      "시설명": { rich_text: [{ text: { content: p.place } }] },
-      "대상": { rich_text: [{ text: { content: p.target } }] },
-      "요금": { select: { name: p.fee || "무료" } },
-      "예약오픈": { date: { start: p.openAt } },
-      "접수마감": { date: { start: p.closeAt } },
-      "자치구": { rich_text: [{ text: { content: p.area } }] },
-      "신청링크": { url: p.url || null },
-      // 축제와 같은 규칙이다 — 기계가 넣은 것은 사람이 확인해야 앱에 뜬다.
-      "공개여부": { checkbox: false },
-      // 서울 밖 시설(서울농장 등)은 자치구가 비어 있어 권역을 못 정한다.
-      // 모르면 비워 둔다 — 아무 권역이나 찍으면 지역 필터가 거짓말을 한다.
-      ...(p.region ? { "지역": { select: { name: p.region } } } : {}),
-    };
-    /* oxlint-disable-next-line no-await-in-loop */
-    const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
-      method: "POST", headers: notionHeaders,
-      body: JSON.stringify({ parent: { database_id: env.NOTION_RESERVATION_DATABASE_ID }, properties }),
-    });
-    if (res.ok) added.push(p);
-    /* oxlint-disable-next-line no-await-in-loop */
-    else console.error(`[reservations] ${p.title} 등록 실패:`, (await res.text()).slice(0, 160));
-  }
-
-  console.log(`[reservations] 이미 있는 것 ${picked.length - fresh.length}건 · 새로 넣은 것 ${added.length}건`);
-  await notifyReservationCandidates(env, added);
-}
-
-// 새로 들어온 것은 공개여부=false 라 사람이 노션을 열지 않으면 계속 묻힌다.
-// 축제 후보와 같은 방식으로 매주 슬랙에 알린다.
-async function notifyReservationCandidates(env, items) {
-  if (items.length === 0) return;
-
-  const dbUrl = `https://www.notion.so/${env.NOTION_RESERVATION_DATABASE_ID.replace(/-/g, "")}`;
-  const lines = items.slice(0, 10).map((item) => {
-    const when = item.status === "오픈예정" ? `오픈 ${formatOpenAt(item.openAt)}` : `마감 ${formatOpenAt(item.closeAt)}`;
-    return `• [${when}] ${item.title} — ${item.area || item.place}`;
-  });
-  const more = items.length > lines.length ? `\n… 그 밖에 ${items.length - lines.length}건` : "";
-  const text = `🎟️ 새 예약 오픈 후보 ${items.length}건이 노션에 추가됐어요 (검토 대기)\n${lines.join("\n")}${more}\n${dbUrl}`;
-  await notifySlack(env, text);
-}
-
-function plainText(prop) {
-  return prop?.rich_text?.map((t) => t.plain_text).join("") || "";
-}
-
-// 예약 오픈은 축제와 성질이 다르다. 축제는 "기간 중이면 계속 유효"하지만
-// 예약은 오픈 시각이 지나면 알림으로서 가치가 없다 — 접수마감이 지난 것은
-// 담당자가 체크를 안 풀어도 여기서 걸러 낸다.
-async function handleReservations(env) {
-  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
-
-  if (!env.NOTION_API_KEY || !env.NOTION_RESERVATION_DATABASE_ID) {
-    // 조용히 빈 배열을 주면 "노션에 데이터가 없다"와 "설정이 빠졌다"가 구별되지
-    // 않는다. 실제로 시크릿이 안 들어간 걸 데이터 문제로 한참 찾았다.
-    console.error("[reservations] 설정 없음:", {
-      apiKey: Boolean(env.NOTION_API_KEY),
-      dbId: Boolean(env.NOTION_RESERVATION_DATABASE_ID),
-    });
-    return new Response(JSON.stringify({ reservations: [] }), { status: 200, headers });
-  }
-
-  const notionHeaders = {
-    Authorization: `Bearer ${env.NOTION_API_KEY}`,
-    "Notion-Version": "2022-06-28",
-    "content-type": "application/json",
-  };
-
-  try {
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_RESERVATION_DATABASE_ID}/query`, {
-      method: "POST",
-      headers: notionHeaders,
-      body: JSON.stringify({
-        filter: { property: "공개여부", checkbox: { equals: true } },
-        sorts: [{ property: "예약오픈", direction: "ascending" }],
-      }),
-    });
-
-    if (!res.ok) {
-      return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
-    }
-
-    const data = await res.json();
-    if (!data.results?.length) console.error("[reservations] 노션 결과 0건 — 공개여부 체크를 확인하세요");
-    const now = Date.now();
-    const reservations = (data.results || [])
-      .map((page) => {
-        const p = page.properties;
-        const openAt = p["예약오픈"]?.date?.start || "";
-        const closeAt = p["접수마감"]?.date?.start || "";
-        return {
-          id: page.id,
-          title: p["제목"]?.title?.map((t) => t.plain_text).join("") || "",
-          place: plainText(p["시설명"]),
-          target: plainText(p["대상"]),
-          fee: p["요금"]?.select?.name || "",
-          region: p["지역"]?.select?.name || "",
-          area: plainText(p["자치구"]),
-          url: p["신청링크"]?.url || "",
-          note: plainText(p["메모"]),
-          openAt,
-          closeAt,
-          // 아직 안 열린 것과 지금 신청 가능한 것을 화면에서 다르게 보여준다.
-          status: openAt && Date.parse(openAt) > now ? "오픈예정" : "접수중",
-        };
-      })
-      .filter((r) => r.title && (!r.closeAt || Date.parse(r.closeAt) >= now));
-
-    // 노션 정렬(예약오픈 오름차순)만으로는 오래전에 열린 "접수중"이 앞을 다 먹고
-    // 정작 알려야 할 "오픈 예정"이 뒤로 밀린다. 아직 안 열린 것을 먼저, 그 안에서는
-    // 빨리 열리는 순으로. 이미 열린 것은 마감이 임박한 순으로 뒤에 붙인다.
-    const soon = reservations
-      .filter((r) => r.status === "오픈예정")
-      .toSorted((a, b) => a.openAt.localeCompare(b.openAt));
-    const open = reservations
-      .filter((r) => r.status !== "오픈예정")
-      .toSorted((a, b) => (a.closeAt || "").localeCompare(b.closeAt || ""));
-    const ordered = [...soon, ...open].slice(0, 12);
-
-    return new Response(JSON.stringify({ reservations: ordered }), { status: 200, headers });
-  } catch (err) {
-    return serverErrorResponse(err);
-  }
-}
-
 // runFestivalImport(중복 검사)와 fetchFestivalsForAutoImport가 함께 쓰는, 공개
 // 여부와 무관하게 전체 축제 페이지를 순회하는 헬퍼.
 async function fetchAllFestivalPages(env) {
@@ -844,20 +683,6 @@ async function notifyNotionMention(env, pageId, { placeName, field, value }) {
   }
 }
 
-// SLACK_WEBHOOK_URL이 없으면(로컬 등) 조용히 건너뛴다. 알림 실패가 원래 하려던
-// 작업(노션 등록 등)을 막을 이유는 없으므로 에러도 조용히 무시한다.
-async function notifySlack(env, text) {
-  if (!env.SLACK_WEBHOOK_URL) return;
-  try {
-    await fetchWithTimeout(env.SLACK_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text }),
-    });
-  } catch {
-    // 무시 — 위 주석 참고.
-  }
-}
 
 // 새로 등록된 축제 후보는 항상 공개여부=false(검토 대기)로 들어가므로, 사람이
 // 노션을 열어 확인하지 않으면 계속 묻힌다 — 매주 슬랙으로 리마인드한다.
@@ -1002,265 +827,6 @@ async function handleNursingRooms(env) {
 
 // 카카오 키워드 검색은 기준 좌표와 반경을 받아 가까운 순으로 준다. 좌표까지 함께
 // 주므로 주소를 다시 지오코딩할 필요가 없다.
-async function searchNearbyByCoords(env, query, origin) {
-  const qs = new URLSearchParams({
-    query,
-    x: String(origin.lng),
-    y: String(origin.lat),
-    radius: String(NEARBY_SEARCH_RADIUS_M),
-    size: "10",
-    sort: "distance",
-  });
-  try {
-    const res = await fetchWithTimeout(`https://dapi.kakao.com/v2/local/search/keyword.json?${qs}`, {
-      headers: { Authorization: `KakaoAK ${env.KAKAO_REST_API_KEY}` },
-    });
-    if (!res.ok) {
-      // 조용히 삼키면 키가 잘못됐을 때 "근처에 없음"으로만 보여 원인을 못 찾는다.
-      console.warn(`카카오 장소 검색 실패 ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      return null;
-    }
-    const data = await res.json();
-    return pickNearest(data.documents, { lat: Number(origin.lat), lng: Number(origin.lng) }, query);
-  } catch (err) {
-    console.warn(`카카오 장소 검색 예외: ${err.message}`);
-    return null;
-  }
-}
-
-// 상호 텍스트로 실제 가게를 찾는다.
-//
-// 이름만으로 찾으면 같은 상호의 다른 지점이 걸린다 — 대전 국립중앙과학관의
-// "신세계백화점 푸드코트"가 서울 강남점으로 잡혀 총 거리 306km짜리 코스가
-// 나왔다. 장소 좌표(lat/lng)를 함께 받으면 카카오 반경 검색으로 가장 가까운
-// 지점을 고른다. 좌표가 없거나 카카오가 비면 예전처럼 네이버로 찾는다.
-async function geocodeAddress(env, address) {
-  try {
-    const res = await fetchWithTimeout(
-      `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(address)}`,
-      {
-        headers: {
-          "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
-          "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
-        },
-      }
-    );
-    if (!res.ok) return null;
-    const hit = (await res.json().catch(() => ({})))?.addresses?.[0];
-    if (!hit) return null;
-    const lat = Number(hit.y);
-    const lng = Number(hit.x);
-    return Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
-  } catch {
-    return null;
-  }
-}
-
-// 네이버 지역검색은 좌표로 범위를 좁힐 수 없다. 주소를 지오코딩해 장소에서
-// 얼마나 떨어졌는지 재고, 너무 멀면 같은 상호의 다른 지점으로 보고 버린다.
-async function searchNearbyByNaver(env, query, origin) {
-  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return null;
-  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) return null;
-  try {
-    const res = await fetchWithTimeout(
-      `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(query)}&display=5`,
-      {
-        headers: {
-          "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
-          "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
-        },
-      }
-    );
-    if (!res.ok) return null;
-    const here = { lat: Number(origin.lat), lng: Number(origin.lng) };
-    for (const item of (await res.json()).items || []) {
-      const name = decodeNaverHtml(item.title);
-      if (!nameMatches(query, name)) continue;
-      const address = item.roadAddress || item.address;
-      if (!address) continue;
-      const coords = await geocodeAddress(env, address);
-      if (!coords) continue;
-      if (distanceKm(here, coords) > MAX_ACCEPT_KM) continue;
-      return {
-        found: true,
-        name,
-        address,
-        lat: coords.lat,
-        lng: coords.lng,
-        distanceM: Math.round(distanceKm(here, coords) * 1000),
-      };
-    }
-    return null;
-  } catch (err) {
-    console.warn(`네이버 장소 검색 예외: ${err.message}`);
-    return null;
-  }
-}
-
-async function handleNearbyPlace(env, url) {
-  const q = url.searchParams.get("q");
-  if (!q) {
-    return new Response(JSON.stringify({ error: "q 파라미터가 필요합니다." }), {
-      status: 400,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  const headers = {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=86400",
-  };
-  // searchParams.get은 없으면 null을 준다. Number(null)이 0이라 그대로 넘기면
-  // 좌표가 없는 요청이 (0, 0) 근처 검색으로 둔갑한다.
-  const origin = { lat: url.searchParams.get("lat"), lng: url.searchParams.get("lng") };
-
-  // 좌표를 받았으면 그 근처에서만 찾는다. 못 찾았다고 네이버로 넘어가면 위치를
-  // 안 보고 다시 검색해 엉뚱한 지점을 집어온다 — 300km 떨어진 핀을 찍느니
-  // 아무것도 안 찍는 편이 낫다.
-  if (isValidCoords(origin)) {
-    if (!env.KAKAO_REST_API_KEY) {
-      // 조용히 넘어가면 코스 핀이 전부 사라진 채로도 아무 신호가 없다.
-      console.warn("KAKAO_REST_API_KEY가 없어 좌표 기반 장소 검색을 건너뜁니다.");
-      return new Response(JSON.stringify({ found: false }), { status: 200, headers });
-    }
-    const hit = await searchNearbyByCoords(env, q, origin)
-      // 카카오에 없는 가게가 있다. 일산호수공원의 "일산칼국수본점"이 그렇다 —
-      // 네이버 지역검색에만 있어서, 이름을 맞춰 찾으면 카카오 쪽은 빈손이다.
-      // 그대로 두면 코스 핀이 사라지므로 네이버로 한 번 더 찾는다.
-      || await searchNearbyByNaver(env, q, origin);
-    return new Response(JSON.stringify(hit || { found: false }), { status: 200, headers });
-  }
-
-  if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) {
-    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
-  }
-
-  const res = await fetchWithTimeout(
-    `https://openapi.naver.com/v1/search/local.json?query=${encodeURIComponent(q)}&display=1`,
-    {
-      headers: {
-        "X-Naver-Client-Id": env.NAVER_SEARCH_CLIENT_ID,
-        "X-Naver-Client-Secret": env.NAVER_SEARCH_CLIENT_SECRET,
-      },
-    }
-  );
-
-  if (!res.ok) {
-    return upstreamErrorResponse("장소 검색에 실패했습니다.", await res.text());
-  }
-
-  const data = await res.json();
-  const item = data.items && data.items[0];
-
-  if (!item) {
-    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
-  }
-
-  return new Response(
-    JSON.stringify({
-      found: true,
-      name: decodeNaverHtml(item.title),
-      address: item.roadAddress || item.address || "",
-    }),
-    { status: 200, headers }
-  );
-}
-
-async function handleGeocode(env, url) {
-  const query = url.searchParams.get("query");
-  if (!query) {
-    return new Response(JSON.stringify({ error: "query 파라미터가 필요합니다." }), {
-      status: 400,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) {
-    return new Response(JSON.stringify({ error: "네이버 지도 API 환경변수가 설정되지 않았습니다." }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  const res = await fetchWithTimeout(
-    `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(query)}`,
-    {
-      headers: {
-        "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
-        "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
-      },
-    }
-  );
-
-  const headers = {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=86400",
-  };
-
-  if (!res.ok) {
-    return upstreamErrorResponse("주소를 찾지 못했습니다.", await res.text());
-  }
-
-  const data = await res.json();
-  const item = data.addresses && data.addresses[0];
-
-  if (!item) {
-    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
-  }
-
-  return new Response(
-    JSON.stringify({ found: true, lat: Number(item.y), lng: Number(item.x) }),
-    { status: 200, headers }
-  );
-}
-
-// 네이버 클라우드에는 도보 길찾기 API가 따로 없어서, 자동차 길찾기(Direction 5)의
-// 도로 기반 거리값만 가져다 쓴다. 소요 시간은 이 거리에 도보 속도(4km/h)를 적용해
-// 프론트에서 직접 계산 — 자동차 소요시간을 "도보 시간"으로 보여주면 안 되기 때문.
-async function handleDirections(env, url) {
-  const start = url.searchParams.get("start");
-  const goal = url.searchParams.get("goal");
-  if (!start || !goal) {
-    return new Response(JSON.stringify({ error: "start/goal 파라미터가 필요합니다." }), {
-      status: 400,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-  if (!env.NAVER_MAP_CLIENT_ID || !env.NAVER_MAP_CLIENT_SECRET) {
-    return new Response(JSON.stringify({ error: "네이버 지도 API 환경변수가 설정되지 않았습니다." }), {
-      status: 500,
-      headers: { "content-type": "application/json; charset=utf-8" },
-    });
-  }
-
-  const headers = {
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "public, max-age=86400",
-  };
-
-  const res = await fetchWithTimeout(
-    `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}&option=trafast`,
-    {
-      headers: {
-        "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
-        "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
-      },
-    }
-  );
-
-  if (!res.ok) {
-    return upstreamErrorResponse("경로를 계산하지 못했습니다.", await res.text());
-  }
-
-  const data = await res.json();
-  const summary = data.route && data.route.trafast && data.route.trafast[0] && data.route.trafast[0].summary;
-
-  if (data.code !== 0 || !summary) {
-    return new Response(JSON.stringify({ found: false }), { status: 200, headers });
-  }
-
-  return new Response(JSON.stringify({ found: true, distance: summary.distance }), { status: 200, headers });
-}
-
 async function verifyTurnstile(env, token, ip) {
   const res = await fetchWithTimeout("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
     method: "POST",
@@ -1964,6 +1530,10 @@ function handlePreflight(request, origin) {
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
 
+  if (url.pathname.startsWith("/api/places/")) {
+    const id = url.pathname.slice("/api/places/".length);
+    return withEdgeCache(request, ctx, 60, () => handlePlaceById(env, url, id));
+  }
   if (url.pathname === "/api/places") {
     if (request.method === "GET" && !url.search) {
       return withEdgeCache(request, ctx, 60, () => handlePlaces(env, url));
@@ -2071,8 +1641,8 @@ export default {
       // 외부 API에서 후보를 긁어 노션에 넣고 슬랙으로 알린다 — 같은 칸에 태운다.
       //
       // 예약 오픈 수집은 지금 꺼 두었다. 홈 띠를 내린 동안 후보만 계속 쌓이고
-      // 슬랙만 울리기 때문이다. 다시 켤 때는 아래 한 줄을 되살리고 노션에서
-      // 공개여부를 체크하면 된다 — runReservationImport(env)
+      // 슬랙만 울리기 때문이다. 다시 켤 때는 reservation-service.js 의
+      // runReservationImport 를 import 해 여기서 함께 돌리면 된다.
       ctx.waitUntil(runScheduledFestivalImport(env));
       return;
     }

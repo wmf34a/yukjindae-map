@@ -212,7 +212,7 @@ async function renderFestivals() {
   wrap.hidden = false;
   wrap.innerHTML = `
     <div class="festival-strip__head">
-      <h2 class="section__title">🎪 지금 열리는 축제</h2>
+      <h2 class="section__title">🎪 지금 열리는 축제<button type="button" class="info-dot" aria-expanded="false" aria-label="축제 목록이 언제 바뀌는지 보기" data-info="매주 일요일 새벽에 새 축제를 모아 와요. 끝난 축제는 종료일이 지나면 자동으로 내려가요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
       <a class="festival-strip__more" href="festival.html">전체 ${festivals.length}개 ›</a>
     </div>
     <div class="festival-strip__scroll">${cards}</div>
@@ -425,21 +425,43 @@ function renderPlaces() {
 //
 // 지역별 요약은 날씨에 따라 고르는 곳이 달라진다. 비 오는 날에는 그 지역 1위가
 // 야외면 순위를 양보하고 실내를 고르는데, 제목에 "1위"라고 써두면 사실과 다르다.
+// 제목을 textContent 로 갈아치우면 옆에 붙여둔 안내 물음표가 같이 지워진다.
+// 제목마다 갱신 주기가 다르므로 문구도 함께 갈아 끼운다.
+function writePlaceListTitle(title, text, info) {
+  title.textContent = text;
+  if (!info) return;
+  const dot = document.createElement("button");
+  dot.type = "button";
+  dot.className = "info-dot";
+  dot.dataset.info = info;
+  dot.setAttribute("aria-expanded", "false");
+  dot.setAttribute("aria-label", "이 목록이 언제 바뀌는지 보기");
+  dot.innerHTML = INFO_ICON;
+  title.appendChild(dot);
+}
+
+const MONTHLY_INFO = "매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 여름엔 물놀이터가, 가을엔 단풍 명소가 위로 올라와요.";
+const WEATHER_INFO = "순위는 매달 1일에 계절에 맞춰 다시 매겨요. 여기에 더해 그날 날씨를 보고, 비 오는 날엔 실내를 앞으로 당겨 보여줘요.";
+
 function setPlaceListTitle(showRank, regionDigest) {
   const title = document.querySelector(".section__title--diary");
   if (!title) return;
   if (showRank) {
-    title.textContent = `${state.region} 이달의 Top 10`;
+    writePlaceListTitle(title, `${state.region} 이달의 Top 10`, MONTHLY_INFO);
     return;
   }
   if (!regionDigest) {
-    title.textContent = "전체 장소";
+    writePlaceListTitle(title, "전체 장소", "");
     return;
   }
   const weatherApplied = Boolean(
     state.weather && ((state.weather.boost || []).length || (state.weather.avoid || []).length)
   );
-  title.textContent = weatherApplied ? "오늘 가기 좋은 곳 · 지역별 한 곳씩" : "이달의 지역별 1위";
+  writePlaceListTitle(
+    title,
+    weatherApplied ? "오늘 가기 좋은 곳 · 지역별 한 곳씩" : "이달의 지역별 1위",
+    weatherApplied ? WEATHER_INFO : MONTHLY_INFO
+  );
 }
 
 // "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해

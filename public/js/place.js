@@ -24,6 +24,15 @@ function amenityChipHtml(icon, label) {
   return `<span class="place-detail__amenity"><span class="place-detail__amenity-icon">${icon}</span>${escapeHtml(label)}</span>`;
 }
 
+// 공식 사이트로 나가는 줄. 정보출처와 다르다 — 정보출처는 우리가 값을 어디서
+// 얻었는지(절반이 블로그 글)이고, 이건 그 장소가 직접 운영하는 곳이다.
+// 요금·휴관은 수시로 바뀌므로 원본으로 가는 길을 열어 둔다.
+function officialLinkHtml(place) {
+  const href = safeHref(place.officialUrl);
+  if (!href) return "";
+  return `<a class="place-detail__official" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">🔗 공식 사이트에서 확인하기 ↗</a>`;
+}
+
 function sourceLinkHtml(place) {
   const href = safeHref(place.sourceUrl);
   if (!href) return "";
@@ -155,6 +164,7 @@ function render(place) {
         ${favoriteButtonHtml(place.id, "place-detail__favorite-btn")}
       </div>
       <div class="place-detail__tags">${tags}</div>
+      ${officialLinkHtml(place)}
 
       ${row("📍 주소", place.address)}
       ${row("⏰ 운영시간", place.hours)}

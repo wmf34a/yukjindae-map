@@ -334,7 +334,7 @@ const FLAG_ICON = {
       <div style="position:absolute;top:3px;left:3px;width:30px;height:30px;border-radius:50%;
            background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;
            box-shadow:0 1px 3px rgba(58,67,99,0.25);">
-        <img src="/assets/logo/character-logo.svg" style="width:22px;height:22px;object-fit:contain;" alt="" />
+        <img src="/assets/logo/character-logo-96.png" style="width:22px;height:22px;object-fit:contain;" alt="" />
       </div>
     </div>
   `,

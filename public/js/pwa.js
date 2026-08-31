@@ -128,7 +128,7 @@ function showInstallPopup() {
   overlay.innerHTML = `
     <div class="install-popup" role="dialog" aria-modal="true" aria-label="앱 설치 안내">
       <button class="install-popup__close" type="button" aria-label="닫기">✕</button>
-      <img class="install-popup__logo" src="/assets/logo/character-logo.svg" alt="육진대" />
+      <img class="install-popup__logo" src="/assets/logo/character-logo-256.png" alt="육진대" />
       <p class="install-popup__title">육진대를 홈 화면에 추가해보세요</p>
       <p class="install-popup__desc">앱처럼 빠르게, 언제든 한 번에 접속할 수 있어요</p>
     </div>

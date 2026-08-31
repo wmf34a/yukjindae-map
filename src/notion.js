@@ -70,6 +70,9 @@ export function toPlace(page) {
     kidsChair: p["유아의자"] && p["유아의자"].checkbox,
     freeAgePolicy: text(p["무료입장연령"]),
     sourceUrl: urlValue(p["정보출처"]),
+    // 정보출처는 우리가 값을 어디서 얻었는지다 — 절반 이상이 블로그 글이라
+    // 사용자에게 "공식 사이트"로 내보낼 수 없다. 그래서 칸을 따로 둔다.
+    officialUrl: urlValue(p["공식사이트"]),
     verifiedAt: dateValue(p["정보확인일"]),
     verifiedStatus: selectName(p["확인상태"]),
     nearbyRestaurant: text(p["근처맛집"]),

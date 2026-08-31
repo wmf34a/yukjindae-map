@@ -546,6 +546,7 @@ async function fetchSeoulReservations(env) {
   return rows;
 }
 
+/* oxlint-disable-next-line no-unused-vars -- 홈 띠를 내린 동안만 호출을 뺐다. 위 크론에서 되살린다. */
 async function runReservationImport(env) {
   if (!env.SEOUL_API_KEY || !env.NOTION_API_KEY || !env.NOTION_RESERVATION_DATABASE_ID) {
     console.error("[reservations] 자동 수집 설정이 없어 건너뜁니다.");
@@ -2068,7 +2069,11 @@ export default {
     if (event.cron === FESTIVAL_IMPORT_CRON) {
       // 크론은 워커당 5개까지라 자리가 없다. 축제 수집과 성격이 같아 — 주 1회
       // 외부 API에서 후보를 긁어 노션에 넣고 슬랙으로 알린다 — 같은 칸에 태운다.
-      ctx.waitUntil(Promise.all([runScheduledFestivalImport(env), runReservationImport(env)]));
+      //
+      // 예약 오픈 수집은 지금 꺼 두었다. 홈 띠를 내린 동안 후보만 계속 쌓이고
+      // 슬랙만 울리기 때문이다. 다시 켤 때는 아래 한 줄을 되살리고 노션에서
+      // 공개여부를 체크하면 된다 — runReservationImport(env)
+      ctx.waitUntil(runScheduledFestivalImport(env));
       return;
     }
     if (event.cron === MONTHLY_TOP10_CRON) {

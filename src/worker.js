@@ -1404,14 +1404,25 @@ async function runScheduledMonthlyTop10(env) {
 
   const ok = result.regions.filter((r) => r.ok);
   const failed = result.regions.filter((r) => !r.ok);
+  // 열 개 지역이 전부 실패했는데 "일부 실패"라고 보내면 심각성이 안 드러난다.
+  const allFailed = ok.length === 0 && failed.length > 0;
+  const headline = result.ok ? "완료" : allFailed ? "전부 실패" : "일부 실패";
   const lines = [
-    `🗓️ ${monthKey} 지역별 Top 10 갱신 ${result.ok ? "완료" : "일부 실패"}`,
+    `🗓️ ${monthKey} 지역별 Top 10 갱신 ${headline}`,
     `• 성공 ${ok.length}개 지역 (${ok.reduce((sum, r) => sum + r.ranked, 0)}곳 순위 부여)`,
   ];
   if (failed.length) {
     lines.push(`• 실패 ${failed.length}개 지역 — 지난달 순위를 그대로 유지합니다`);
-    for (const r of failed.slice(0, 5)) {
-      lines.push(`   - ${r.region}: ${r.error || (r.failures || []).join(", ")}`);
+    // 크레딧이 떨어지면 열 지역이 같은 이유로 무너진다. 지역별 오류를 줄줄이
+    // 나열하는 대신 원인과 할 일을 한 줄로 알린다.
+    const detail = failed.map((r) => r.error || (r.failures || []).join(", ")).join(" ");
+    if (/credit balance is too low/i.test(detail)) {
+      lines.push("• 원인: Anthropic API 크레딧 소진입니다. console.anthropic.com 에서 충전한 뒤");
+      lines.push("  `node scripts/run-monthly-top10.mjs " + monthKey + " --apply` 로 다시 돌려주세요.");
+    } else {
+      for (const r of failed.slice(0, 5)) {
+        lines.push(`   - ${r.region}: ${r.error || (r.failures || []).join(", ")}`);
+      }
     }
   }
   lines.push("https://yukjindae-map.wmf34a.workers.dev");

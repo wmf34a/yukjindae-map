@@ -13,6 +13,7 @@ import {
   buildClearProperties,
   pickPlacesToClear,
   runMonthlyTop10,
+  autumnRule,
 } from "./monthly-top10.js";
 
 const place = (over = {}) => ({
@@ -379,5 +380,36 @@ describe("가을 명소 신호", () => {
       candidates: [{ no: 1, name: "실내놀이터", categories: ["실내놀이"] }],
     });
     expect(prompt).not.toContain("단풍 명소로 알려진 곳");
+  });
+});
+
+describe("autumnRule — 단풍 시기", () => {
+  it("9월에는 어느 지역도 단풍을 밀지 않는다", () => {
+    for (const region of ["강원도", "서울강남", "전라도", "제주"]) {
+      expect(autumnRule(9, region)).toBe("");
+    }
+  });
+
+  it("10월에는 강원이 절정, 중부는 시작이다", () => {
+    expect(autumnRule(10, "강원도")).toContain("절정");
+    expect(autumnRule(10, "서울강남")).toContain("물들기 시작");
+  });
+
+  it("11월에는 남부가 절정, 강원은 끝물이다", () => {
+    expect(autumnRule(11, "전라도")).toContain("절정");
+    expect(autumnRule(11, "경상도")).toContain("절정");
+    expect(autumnRule(11, "강원도")).toContain("끝물");
+  });
+
+  it("겨울에는 규칙이 붙지 않는다", () => {
+    expect(autumnRule(12, "전라도")).toBe("");
+    expect(autumnRule(1, "강원도")).toBe("");
+  });
+
+  it("프롬프트에 그 달·그 지역의 단풍 규칙만 실린다", () => {
+    const oct = buildPrompt({ monthKey: "2026-10", region: "강원도", candidates: [{ no: 1, name: "화담숲", categories: [] }] });
+    expect(oct).toContain("지금이 단풍 절정");
+    const sep = buildPrompt({ monthKey: "2026-09", region: "강원도", candidates: [{ no: 1, name: "화담숲", categories: [] }] });
+    expect(sep).not.toContain("단풍 절정");
   });
 });

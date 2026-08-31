@@ -514,6 +514,82 @@ async function handleFestivals(env) {
   }
 }
 
+function plainText(prop) {
+  return prop?.rich_text?.map((t) => t.plain_text).join("") || "";
+}
+
+// 예약 오픈은 축제와 성질이 다르다. 축제는 "기간 중이면 계속 유효"하지만
+// 예약은 오픈 시각이 지나면 알림으로서 가치가 없다 — 접수마감이 지난 것은
+// 담당자가 체크를 안 풀어도 여기서 걸러 낸다.
+async function handleReservations(env) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+
+  if (!env.NOTION_API_KEY || !env.NOTION_RESERVATION_DATABASE_ID) {
+    return new Response(JSON.stringify({ reservations: [] }), { status: 200, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+
+  try {
+    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_RESERVATION_DATABASE_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        filter: { property: "공개여부", checkbox: { equals: true } },
+        sorts: [{ property: "예약오픈", direction: "ascending" }],
+      }),
+    });
+
+    if (!res.ok) {
+      return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
+    }
+
+    const data = await res.json();
+    const now = Date.now();
+    const reservations = (data.results || [])
+      .map((page) => {
+        const p = page.properties;
+        const openAt = p["예약오픈"]?.date?.start || "";
+        const closeAt = p["접수마감"]?.date?.start || "";
+        return {
+          id: page.id,
+          title: p["제목"]?.title?.map((t) => t.plain_text).join("") || "",
+          place: plainText(p["시설명"]),
+          target: plainText(p["대상"]),
+          fee: p["요금"]?.select?.name || "",
+          region: p["지역"]?.select?.name || "",
+          area: plainText(p["자치구"]),
+          url: p["신청링크"]?.url || "",
+          note: plainText(p["메모"]),
+          openAt,
+          closeAt,
+          // 아직 안 열린 것과 지금 신청 가능한 것을 화면에서 다르게 보여준다.
+          status: openAt && Date.parse(openAt) > now ? "오픈예정" : "접수중",
+        };
+      })
+      .filter((r) => r.title && (!r.closeAt || Date.parse(r.closeAt) >= now));
+
+    // 노션 정렬(예약오픈 오름차순)만으로는 오래전에 열린 "접수중"이 앞을 다 먹고
+    // 정작 알려야 할 "오픈 예정"이 뒤로 밀린다. 아직 안 열린 것을 먼저, 그 안에서는
+    // 빨리 열리는 순으로. 이미 열린 것은 마감이 임박한 순으로 뒤에 붙인다.
+    const soon = reservations
+      .filter((r) => r.status === "오픈예정")
+      .toSorted((a, b) => a.openAt.localeCompare(b.openAt));
+    const open = reservations
+      .filter((r) => r.status !== "오픈예정")
+      .toSorted((a, b) => (a.closeAt || "").localeCompare(b.closeAt || ""));
+    const ordered = [...soon, ...open].slice(0, 12);
+
+    return new Response(JSON.stringify({ reservations: ordered }), { status: 200, headers });
+  } catch (err) {
+    return serverErrorResponse(err);
+  }
+}
+
 // runFestivalImport(중복 검사)와 fetchFestivalsForAutoImport가 함께 쓰는, 공개
 // 여부와 무관하게 전체 축제 페이지를 순회하는 헬퍼.
 async function fetchAllFestivalPages(env) {
@@ -1766,6 +1842,9 @@ async function handleRequest(request, env, ctx) {
   }
   if (url.pathname === "/api/courses") {
     return withEdgeCache(request, ctx, 60, () => handleCourses(env));
+  }
+  if (url.pathname === "/api/reservations") {
+    return handleReservations(env);
   }
   if (url.pathname === "/api/festivals") {
     return withEdgeCache(request, ctx, 60, () => handleFestivals(env));

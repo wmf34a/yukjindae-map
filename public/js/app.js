@@ -219,6 +219,68 @@ async function renderFestivals() {
   `;
 }
 
+// 예약 오픈은 "언제 신청 버튼이 열리냐"를 알린다. 오픈 시각을 놓치면 그만이라
+// 날짜를 카드 맨 위에 크게 두고, 아직 안 열린 것을 먼저 보여준다.
+const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+function formatReservationWhen(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  // 보는 사람이 어느 시간대에 있든 한국 시각으로 읽혀야 한다.
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  const mm = kst.getUTCMonth() + 1;
+  const dd = kst.getUTCDate();
+  const day = DAY_NAMES[kst.getUTCDay()];
+  const hh = String(kst.getUTCHours()).padStart(2, "0");
+  const mi = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${mm}/${dd}(${day}) ${hh}:${mi}`;
+}
+
+async function renderReservations() {
+  const section = document.getElementById("reservation-section");
+  const list = document.getElementById("reservation-list");
+  if (!section || !list) return;
+
+  let reservations = [];
+  try {
+    const data = await fetchJson("/api/reservations");
+    reservations = data.reservations || [];
+  } catch {
+    // 예약 정보를 못 가져와도 홈은 떠야 한다.
+  }
+
+  if (!reservations.length) {
+    section.hidden = true;
+    return;
+  }
+
+  list.innerHTML = reservations.map((r) => {
+    const soon = r.status === "오픈예정";
+    const when = formatReservationWhen(soon ? r.openAt : r.closeAt);
+    const label = soon ? "오픈" : "마감";
+    const where = [r.area, r.place].filter(Boolean).join(" · ");
+    const chips = [
+      r.fee === "무료" ? `<span class="reservation-strip__chip reservation-strip__chip--free">무료</span>` : "",
+      r.target ? `<span class="reservation-strip__chip">${escapeHtml(r.target)}</span>` : "",
+    ].join("");
+    // 신청은 서울시 예약 페이지에서 이뤄진다. 우리가 중간에 낄 이유가 없다.
+    const href = r.url ? escapeHtml(r.url) : "#";
+    return `
+      <a class="reservation-strip__card reservation-strip__card--${soon ? "soon" : "open"}"
+         href="${href}" target="_blank" rel="noopener noreferrer">
+        <div class="reservation-strip__when">
+          ${escapeHtml(when)}
+          <span class="reservation-strip__status">${escapeHtml(label)}</span>
+        </div>
+        <div class="reservation-strip__name">${escapeHtml(r.title || "")}</div>
+        ${where ? `<div class="reservation-strip__where">${escapeHtml(where)}</div>` : ""}
+        ${chips ? `<div class="reservation-strip__chips">${chips}</div>` : ""}
+      </a>`;
+  }).join("");
+
+  section.hidden = false;
+}
+
 function renderCategoryFilter() {
   const filter = document.getElementById("tag-filter");
   filter.innerHTML = CATEGORIES.map((category) => {
@@ -779,6 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderRegionLegend();
   renderReviewBanner();
   renderFestivals();
+  renderReservations();
   renderCategoryFilter();
   initNoticesBell();
   initShareButton();

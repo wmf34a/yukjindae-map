@@ -103,6 +103,18 @@
     <div class="banner__dots" id="hero-dots"></div>
   </section>
 
+  <!-- 예약 오픈은 "어디가 좋냐"가 아니라 "언제 신청 버튼이 열리냐"를 알린다.
+       인기 프로그램은 오픈 몇 분 만에 마감돼서 늦게 보면 소용이 없다. 그래서
+       둘러보는 영역(태그 필터·추천장소)보다 위, 배너 바로 아래에 둔다.
+       가져올 게 없으면 통째로 숨긴다 — 빈 줄이 남으면 홈이 고장 나 보인다. -->
+  <section class="section reservation-strip" id="reservation-section" hidden>
+    <div class="reservation-strip__head">
+      <h2 class="section__title">🎟️ 예약 오픈</h2>
+      <span class="reservation-strip__hint">놓치면 끝! 오픈 시각에 맞춰 신청하세요</span>
+    </div>
+    <div class="reservation-strip__scroll" id="reservation-list"></div>
+  </section>
+
   <div class="tag-filter" id="tag-filter">
     <!-- 자연/공원, 실내놀이, 맛집, 카페, 체험/문화, 스포츠, 무료 -->
   </div>

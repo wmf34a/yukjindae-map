@@ -114,13 +114,16 @@ function renderNearbyList() {
 
   wrap.hidden = false;
   wrap.innerHTML = `
-    <p class="map-nearby__title">내 위치에서 가까운 순</p>
+    <p class="map-nearby__title">내 위치에서 가까운 순<span class="map-nearby__hint">🍼 지도에 공공 수유실도 함께 표시돼요</span></p>
     <div class="map-nearby__track">
       ${nearest
         .map(
           (p) => `
         <button class="map-nearby__card" data-id="${p.id}">
-          <img class="map-nearby__thumb" src="${escapeHtml(safeImageSrc(p.image))}" alt="" />
+          <span class="map-nearby__thumb-wrap">
+            <img class="map-nearby__thumb" src="${escapeHtml(safeImageSrc(p.image))}" alt="" />
+            ${p.nursingRoom ? '<span class="map-nearby__badge" title="수유실 있음">🍼</span>' : ""}
+          </span>
           <span class="map-nearby__name">${escapeHtml(p.name)}</span>
           <span class="map-nearby__dist">${distanceLabel(p)}</span>
         </button>`
@@ -368,6 +371,7 @@ let nursingMarkers = [];
 let nursingRooms = [];
 let nursingLoaded = false;
 let nursingVisible = false;
+let nursingUserToggled = false;
 
 function clearNursingMarkers() {
   if (nursingClusterer) {
@@ -394,10 +398,19 @@ function renderNursingMarkers() {
   if (!nursingClusterer) nursingMarkers.forEach((m) => m.setMap(map));
 }
 
-// 큐레이션된 장소 목록과 달리 자주 안 바뀌는 공공데이터라, 토글을 처음 켤 때만
+// 큐레이션된 장소 목록과 달리 자주 안 바뀌는 공공데이터라, 한 번만
 // 불러오고 이후에는 다시 요청하지 않는다.
-async function loadNursingRooms() {
-  if (nursingLoaded) return;
+// 자동으로 켜는 초기 로딩과 사용자가 누른 토글이 겹칠 수 있어서(둘 다 로딩이
+// 끝나기 전에 불린다) 요청 자체를 하나로 묶는다. 안 그러면 같은 공공데이터를
+// 두 번 부른다.
+let nursingLoadPromise = null;
+
+function loadNursingRooms() {
+  if (!nursingLoadPromise) nursingLoadPromise = fetchNursingRooms();
+  return nursingLoadPromise;
+}
+
+async function fetchNursingRooms() {
   try {
     const data = await fetchJson("/api/nursing-rooms");
     nursingRooms = data.rooms || [];
@@ -409,9 +422,9 @@ async function loadNursingRooms() {
 }
 
 async function toggleNursingLayer() {
-  const btn = document.getElementById("nursing-layer-btn");
+  nursingUserToggled = true;
   nursingVisible = !nursingVisible;
-  btn.classList.toggle("is-active", nursingVisible);
+  updateNursingButton();
 
   if (!nursingVisible) {
     clearNursingMarkers();
@@ -421,8 +434,29 @@ async function toggleNursingLayer() {
   renderNursingMarkers();
 }
 
-function initNursingLayerButton() {
+function updateNursingButton() {
+  const btn = document.getElementById("nursing-layer-btn");
+  btn.classList.toggle("is-active", nursingVisible);
+  btn.setAttribute("aria-pressed", String(nursingVisible));
+  btn.title = nursingVisible ? "공공 수유실 숨기기" : "공공 수유실 보기";
+}
+
+// 주변 탭은 "아이 데리고 지금 어디 갈까"를 보는 화면이라 수유실이 켜져 있어야
+// 쓸모가 있다. 기본 꺼짐이던 시절에는 🍼 버튼을 못 찾은 사람은 이 레이어가
+// 있는 줄도 몰랐다. 지도와 장소는 먼저 그리고 수유실은 뒤따라 붙인다 —
+// 공공데이터 응답을 기다리느라 지도가 늦게 뜨면 안 된다.
+async function initNursingLayer() {
   document.getElementById("nursing-layer-btn").addEventListener("click", toggleNursingLayer);
+  updateNursingButton();
+
+  await loadNursingRooms();
+  // 못 불러왔으면 켜진 척하지 않는다. loadNursingRooms가 이미 토스트로 알린다.
+  if (!nursingRooms.length) return;
+  // 로딩이 끝나기 전에 사용자가 버튼을 눌렀다면 그 선택이 우선이다.
+  if (nursingUserToggled) return;
+  nursingVisible = true;
+  updateNursingButton();
+  renderNursingMarkers();
 }
 
 function renderRegionChips() {
@@ -507,8 +541,15 @@ function locateMe(options) {
     return;
   }
   navigator.geolocation.getCurrentPosition(
-    (pos) => showMyLocation(pos.coords.latitude, pos.coords.longitude, options),
+    (pos) => {
+      window.saveLastLocation(pos.coords.latitude, pos.coords.longitude);
+      showMyLocation(pos.coords.latitude, pos.coords.longitude, options);
+    },
     (err) => showToast(geolocationErrorMessage(err)),
+    // 옵션이 없으면 브라우저가 정밀 측위를 무한정 기다린다. 최근에 잡아 둔
+    // 위치가 있으면 그대로 쓰고, 8초 안에 못 잡으면 포기한다 — 나들이 지도라
+    // 미터 단위 정확도가 필요 없다.
+    { maximumAge: 60_000, timeout: 8_000, enableHighAccuracy: false },
   );
 }
 
@@ -549,18 +590,21 @@ function initTrackButton() {
 }
 
 function init() {
+  // 기억해 둔 위치가 있으면 전국 뷰를 거치지 않고 바로 그 자리에서 연다.
+  const start = window.initialMapView(DEFAULT_VIEW);
   map = new naver.maps.Map("map", {
-    center: new naver.maps.LatLng(DEFAULT_VIEW.lat, DEFAULT_VIEW.lng),
-    zoom: DEFAULT_VIEW.zoom,
+    center: new naver.maps.LatLng(start.lat, start.lng),
+    zoom: start.zoom,
     logoControlOptions: { position: naver.maps.Position.TOP_LEFT },
   });
   naver.maps.Event.addListener(map, "click", closeSheet);
 
   renderRegionChips();
   initTrackButton();
-  initNursingLayerButton();
+  initNursingLayer();
   initSheetDrag();
   loadPlaces();
+  // 기억한 위치에서 열었더라도 GPS로 다시 맞춘다 — 그새 움직였을 수 있다.
   locateMe();
 }
 

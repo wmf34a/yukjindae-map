@@ -1384,8 +1384,17 @@ async function runScheduledReportApply(env) {
 }
 
 async function runScheduledMonthlyTop10(env) {
-  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.ANTHROPIC_API_KEY) {
-    await notifySlack(env, "⚠️ 월간 Top10 갱신을 건너뛰었습니다 — 환경변수가 설정되지 않았습니다.");
+  // 어느 값이 비었는지 말해주지 않으면 셋 중 무엇을 고쳐야 할지 알 수 없다.
+  // 실제로 wrangler secret put 은 대화형 프롬프트에 값을 붙여넣어도 빈 값으로
+  // 올라가면서 성공 메시지를 띄운다 — 목록에는 있는데 값이 없는 상태가 된다.
+  const missing = ["NOTION_API_KEY", "NOTION_DATABASE_ID", "ANTHROPIC_API_KEY"].filter((k) => !env[k]);
+  if (missing.length) {
+    await notifySlack(env, [
+      "⚠️ 월간 Top10 갱신을 건너뛰었습니다",
+      `• 비어 있는 값: ${missing.join(", ")}`,
+      "• 시크릿 목록에 이름이 있어도 값이 비어 있을 수 있습니다. 대화형 프롬프트 대신",
+      "  `printf '값' | npx wrangler secret put 이름` 으로 넣어주세요.",
+    ].join("\n"));
     return;
   }
 

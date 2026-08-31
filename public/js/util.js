@@ -356,3 +356,47 @@ window.pickRegionTops = pickRegionTops;
 window.weatherScore = weatherScore;
 window.reviewToken = reviewToken;
 window.withReview = withReview;
+
+// 주변 탭은 "지금 내 근처"를 보러 들어오는 화면인데, 지도를 전국 뷰로 먼저
+// 그리고 GPS 응답을 기다린 뒤에야 옮겼다. 그 사이 몇 초가 전부 남한 전도라
+// 매번 "왜 내 위치가 아니지?" 하게 된다.
+//
+// 마지막으로 확인한 위치를 기억해 두었다가 지도를 그 자리에서 연다. GPS가
+// 오면 그때 정확한 위치로 다시 맞춘다. 처음 오는 사람에게만 전국 뷰가 보인다.
+const LAST_LOCATION_KEY = "yukjindae:lastLocation";
+// 이사하거나 여행 중이면 옛 위치가 오히려 방해가 된다. 2주까지만 믿는다.
+const LAST_LOCATION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+
+function readLastLocation(now = Date.now()) {
+  try {
+    const raw = localStorage.getItem(LAST_LOCATION_KEY);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (typeof saved?.lat !== "number" || typeof saved?.lng !== "number") return null;
+    if (!Number.isFinite(saved.at) || now - saved.at > LAST_LOCATION_MAX_AGE_MS) return null;
+    return saved;
+  } catch {
+    // 저장소를 못 읽는 브라우저(사생활 보호 모드 등)에서도 지도는 떠야 한다.
+    return null;
+  }
+}
+
+function saveLastLocation(lat, lng, now = Date.now()) {
+  try {
+    localStorage.setItem(LAST_LOCATION_KEY, JSON.stringify({ lat, lng, at: now }));
+  } catch {
+    // 저장 실패는 무시한다 — 다음에 다시 GPS로 잡으면 된다.
+  }
+}
+
+// 지도를 처음 어디에 놓을지 정한다. 기억해 둔 위치가 있으면 거기서,
+// 없으면 전국 뷰에서 시작한다.
+function initialMapView(fallback, now = Date.now()) {
+  const last = readLastLocation(now);
+  if (!last) return { ...fallback, fromMemory: false };
+  return { lat: last.lat, lng: last.lng, zoom: 13, fromMemory: true };
+}
+
+window.readLastLocation = readLastLocation;
+window.saveLastLocation = saveLastLocation;
+window.initialMapView = initialMapView;

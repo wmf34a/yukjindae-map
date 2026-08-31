@@ -9,10 +9,19 @@ import vm from "node:vm";
 let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthlyRank;
 let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore;
 let naverDirectionsUrl;
+let readLastLocation, saveLastLocation, initialMapView;
+let fakeStore;
 
 beforeAll(() => {
   const source = fs.readFileSync(path.resolve("public/js/util.js"), "utf8");
-  const sandbox = { window: {}, URL, AbortSignal, fetch: () => {}, Date, Math, JSON, String, Number, encodeURIComponent };
+  // localStorage 를 쓰는 함수가 생겨서 흉내 낸다. 사생활 보호 모드처럼 저장소를
+  // 아예 못 쓰는 경우까지 같은 자리에서 검증한다.
+  fakeStore = new Map();
+  const localStorage = {
+    getItem: (k) => (fakeStore.has(k) ? fakeStore.get(k) : null),
+    setItem: (k, v) => { if (fakeStore.blocked) throw new Error("blocked"); fakeStore.set(k, String(v)); },
+  };
+  const sandbox = { window: {}, URL, AbortSignal, fetch: () => {}, Date, Math, JSON, String, Number, encodeURIComponent, localStorage };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(source, sandbox);
@@ -20,6 +29,7 @@ beforeAll(() => {
   ({ splitNearbyList, primaryNearby, activeEvent } = sandbox.window);
   ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore } = sandbox.window);
   ({ naverDirectionsUrl } = sandbox.window);
+  ({ readLastLocation, saveLastLocation, initialMapView } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -494,5 +504,57 @@ describe("naverDirectionsUrl", () => {
   it("0,0은 좌표로 보지 않는다", () => {
     const url = naverDirectionsUrl({ lat: 0, lng: 0, name: "어딘가" });
     expect(url).toContain("/p/search/");
+  });
+});
+
+describe("주변 탭 첫 화면", () => {
+  const NATION = { lat: 36.4, lng: 127.9, zoom: 7 };
+  const NOW = Date.parse("2026-09-01T12:00:00Z");
+
+  it("기억한 위치가 없으면 전국 뷰에서 연다", () => {
+    fakeStore.clear();
+    expect(initialMapView(NATION, NOW)).toEqual({ ...NATION, fromMemory: false });
+  });
+
+  it("기억한 위치가 있으면 거기서 연다 — 전국 뷰를 거치지 않는다", () => {
+    fakeStore.clear();
+    saveLastLocation(37.5, 127.0, NOW);
+    const view = initialMapView(NATION, NOW);
+    expect(view.fromMemory).toBe(true);
+    expect(view.lat).toBeCloseTo(37.5);
+    expect(view.zoom).toBe(13);
+  });
+
+  it("2주가 지난 위치는 믿지 않는다 — 여행 중이거나 이사했을 수 있다", () => {
+    fakeStore.clear();
+    saveLastLocation(37.5, 127.0, NOW - 15 * 24 * 60 * 60 * 1000);
+    expect(initialMapView(NATION, NOW).fromMemory).toBe(false);
+  });
+
+  it("저장소를 못 쓰는 브라우저에서도 지도는 뜬다", () => {
+    fakeStore.clear();
+    fakeStore.blocked = true;
+    expect(() => saveLastLocation(37.5, 127.0, NOW)).not.toThrow();
+    expect(initialMapView(NATION, NOW).fromMemory).toBe(false);
+    fakeStore.blocked = false;
+  });
+
+  it("깨진 값이 저장돼 있어도 전국 뷰로 떨어진다", () => {
+    fakeStore.clear();
+    fakeStore.set("yukjindae:lastLocation", "{망가진 값");
+    expect(readLastLocation(NOW)).toBeNull();
+    expect(initialMapView(NATION, NOW).fromMemory).toBe(false);
+  });
+
+  it("좌표가 숫자가 아니면 믿지 않는다", () => {
+    fakeStore.clear();
+    fakeStore.set("yukjindae:lastLocation", JSON.stringify({ lat: "37.5", lng: 127, at: NOW }));
+    expect(readLastLocation(NOW)).toBeNull();
+  });
+
+  it("저장한 값을 그대로 읽어 온다", () => {
+    fakeStore.clear();
+    saveLastLocation(35.1796, 129.0756, NOW);
+    expect(readLastLocation(NOW)).toEqual({ lat: 35.1796, lng: 129.0756, at: NOW });
   });
 });

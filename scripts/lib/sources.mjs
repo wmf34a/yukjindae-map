@@ -75,6 +75,9 @@ export function makeKakaoNearby(key, { radius = 5000 } = {}) {
       lat: Number(p.y),
       lng: Number(p.x),
       kind: code === KAKAO_CAFE ? "cafe" : "food",
+      // 같은 건물 안 매장을 걸러내려면 주소가 필요하다 — 이름만으로는
+      // "델리카트슨"이 리조트 안 카페라는 걸 알 수 없다.
+      address: p.road_address_name || p.address_name || "",
       category: p.category_name || "",
       url: p.place_url || "",
     }));

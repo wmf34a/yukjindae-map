@@ -34,6 +34,7 @@ do {
       lat: p.properties["위도"]?.number,
       lng: p.properties["경도"]?.number,
       author: p.properties["등록자"]?.rich_text?.[0]?.plain_text || "",
+      addr: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
       맛집: p.properties["근처맛집"]?.rich_text?.[0]?.plain_text || "",
       카페: p.properties["근처카페"]?.rich_text?.[0]?.plain_text || "",
     });
@@ -47,7 +48,7 @@ console.log(`전체 ${places.length}곳 중 기계가 채운 ${targets.length}�
 const changes = [];
 for (const p of targets) {
   const raw = await findNearby({ lat: p.lat, lng: p.lng }).catch(() => []);
-  const { restaurants, cafes } = pickNearby(raw, { maxEach: 2, placeName: p.name });
+  const { restaurants, cafes } = pickNearby(raw, { maxEach: 2, placeName: p.name, placeAddress: p.addr });
   const 맛집 = formatNearby(restaurants);
   const 카페 = formatNearby(cafes);
   await sleep(150);

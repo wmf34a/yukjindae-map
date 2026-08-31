@@ -16,6 +16,7 @@ import {
   collectFeeHints,
   sidoOf,
   preferKidFriendly,
+  normalizeAddress,
 } from "./place-pipeline.js";
 
 describe("isInKorea", () => {
@@ -485,5 +486,41 @@ describe("formatNearby 시설 안 가게", () => {
 
   it("100m 이상은 그대로 적는다", () => {
     expect(formatNearby([{ title: "밥집", roadDist: 120 }])).toBe("밥집 (약 120m)");
+  });
+});
+
+describe("normalizeAddress", () => {
+  it("건물 번호까지만 남긴다", () => {
+    expect(normalizeAddress("강원특별자치도 횡성군 둔내면 고원로 451 2층"))
+      .toBe(normalizeAddress("강원특별자치도 횡성군 둔내면 고원로 451"));
+  });
+
+  it("가지번호도 하나로 본다", () => {
+    expect(normalizeAddress("서울 강남구 테헤란로 12-3 B동")).toBe("서울강남구테헤란로12-3");
+  });
+
+  it("빈 값은 빈 값", () => {
+    expect(normalizeAddress("")).toBe("");
+  });
+});
+
+describe("pickNearby — 같은 건물 매장 제외", () => {
+  const at = (title, address, dist) => ({ title, address, dist, kind: "cafe", category: "카페" });
+
+  it("주소가 같으면 뺀다 — 리조트 안 카페는 따로 들를 곳이 아니다", () => {
+    const { cafes } = pickNearby(
+      [at("델리카트슨", "강원특별자치도 횡성군 둔내면 고원로 451", 272),
+       at("윤토마", "강원특별자치도 횡성군 둔내면 고원로425번길 31", 1083)],
+      { placeName: "웰리힐리파크 워터플래닛", placeAddress: "강원특별자치도 횡성군 둔내면 고원로 451" }
+    );
+    expect(cafes.map((c) => c.title)).toEqual(["윤토마"]);
+  });
+
+  it("장소 주소를 모르면 아무것도 빼지 않는다", () => {
+    const { cafes } = pickNearby(
+      [at("델리카트슨", "강원특별자치도 횡성군 둔내면 고원로 451", 272)],
+      { placeName: "웰리힐리파크 워터플래닛" }
+    );
+    expect(cafes).toHaveLength(1);
   });
 });

@@ -67,7 +67,15 @@ export function preferKidFriendly(sorted) {
   return [...near.filter(kidFriendly), ...near.filter((i) => !kidFriendly(i)), ...far];
 }
 
-export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName = "" } = {}) {
+// 도로명 주소에서 건물 번호까지만 남긴다. 같은 건물이면 상세 층·호수가 달라도
+// 여기까지는 같다 — "고원로 451 2층"과 "고원로 451"이 한 건물로 묶인다.
+export function normalizeAddress(value) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const m = /^(.*?\d+(?:-\d+)?)(?:\s|$)/.exec(text);
+  return (m ? m[1] : text).replace(/\s/g, "");
+}
+
+export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName = "", placeAddress = "" } = {}) {
   // 관내 식당은 "근처"가 아니다. 해남공룡박물관 반경 검색에 "해남공룡박물관 식당"이
   // 0m로 잡혔는데, 코스보기에서 장소와 핀이 겹쳐 따로 들를 곳이 되지 못한다.
   //
@@ -83,8 +91,14 @@ export function pickNearby(items, { maxEach = 2, maxDistanceKm = 10, placeName =
     return other.includes(own) || (core.length >= 4 && own.includes(core));
   };
 
+  // 이름만 봐서는 관내 매장을 못 잡는다. 웰리힐리파크 워터플래닛의 "델리카트슨"은
+  // 이름이 전혀 겹치지 않는데 주소가 리조트와 똑같았다(고원로 451). 리조트 안
+  // 카페를 "근처 카페"로 내보내면 따로 들를 곳이 아니라 같은 건물을 가리킨다.
+  const ownAddress = normalizeAddress(placeAddress);
+  const sameBuilding = (address) => Boolean(ownAddress) && normalizeAddress(address) === ownAddress;
+
   const clean = (items || [])
-    .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title) && !isInside(i.title))
+    .filter((i) => i && i.title && !EXCLUDE_NAME.test(i.title) && !isInside(i.title) && !sameBuilding(i.address))
     .filter((i) => !Number.isFinite(Number(i.dist)) || Number(i.dist) / 1000 <= maxDistanceKm)
     .toSorted((a, b) => Number(a.dist || 0) - Number(b.dist || 0));
 
@@ -320,7 +334,7 @@ export async function preparePlace({ base, geocode, findNearby, searchPosts, roa
 
   // 2) 근처 맛집·카페 — 없으면 코스보기에 핀이 안 찍힌다.
   const nearbyRaw = await findNearby(coords).catch(() => []);
-  const nearby = pickNearby(nearbyRaw, { placeName: base.name });
+  const nearby = pickNearby(nearbyRaw, { placeName: base.name, placeAddress: base.address });
   if (!nearby.restaurants.length) warnings.push("근처 맛집을 찾지 못했습니다");
   if (!nearby.cafes.length) warnings.push("근처 카페를 찾지 못했습니다");
 

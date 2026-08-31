@@ -16,9 +16,6 @@ import {
 } from "./report-apply.js";
 import { isValidCoords } from "./nearby-lookup.js";
 import { notifySlack } from "./notify.js";
-// 주간 수집(runReservationImport)은 홈 띠를 내린 동안 꺼 두었다. 다시 켤 때
-// 여기 import 에 되살리고 아래 크론에서 호출하면 된다.
-import { handleReservations } from "./reservation-service.js";
 import { prepareUserPlace } from "./new-place.js";
 import { handleNearbyPlace, handleGeocode, handleDirections } from "./naver-proxy.js";
 import { makeKakaoNearby, makeRoadDistance } from "./place-sources.js";
@@ -1546,9 +1543,6 @@ async function handleRequest(request, env, ctx) {
   if (url.pathname === "/api/courses") {
     return withEdgeCache(request, ctx, 60, () => handleCourses(env));
   }
-  if (url.pathname === "/api/reservations") {
-    return handleReservations(env);
-  }
   if (url.pathname === "/api/festivals") {
     return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
   }
@@ -1639,10 +1633,6 @@ export default {
     if (event.cron === FESTIVAL_IMPORT_CRON) {
       // 크론은 워커당 5개까지라 자리가 없다. 축제 수집과 성격이 같아 — 주 1회
       // 외부 API에서 후보를 긁어 노션에 넣고 슬랙으로 알린다 — 같은 칸에 태운다.
-      //
-      // 예약 오픈 수집은 지금 꺼 두었다. 홈 띠를 내린 동안 후보만 계속 쌓이고
-      // 슬랙만 울리기 때문이다. 다시 켤 때는 reservation-service.js 의
-      // runReservationImport 를 import 해 여기서 함께 돌리면 된다.
       ctx.waitUntil(runScheduledFestivalImport(env));
       return;
     }

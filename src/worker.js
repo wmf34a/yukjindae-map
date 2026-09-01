@@ -812,7 +812,7 @@ async function handleFestivalDetail(env, id, ctx) {
 // 훑는 것을 막기 위함.
 const IMAGE_KEY_PATTERN = /^(banners|courses|festivals|places)\/[A-Za-z0-9._-]+$/;
 
-async function handleImage(env, key) {
+async function handleImage(env, request, key) {
   if (!IMAGE_KEY_PATTERN.test(key)) {
     return new Response("이미지를 찾을 수 없습니다.", { status: 404 });
   }
@@ -826,7 +826,13 @@ async function handleImage(env, key) {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("etag", object.httpEtag);
-  headers.set("cache-control", "public, max-age=31536000, immutable");
+  // 키는 노션 페이지 ID라서 사진을 갈아끼워도 URL이 그대로다. immutable 을 주면
+  // 이미 받아 간 브라우저가 새 사진을 영영 안 가져간다(사람이 찍힌 사진을 교체해도
+  // 옛 사진이 계속 보였다). 하루 동안은 그냥 쓰되 그 뒤로는 etag 로 재검증하게 한다.
+  headers.set("cache-control", "public, max-age=86400, stale-while-revalidate=604800");
+  if (request?.headers.get("if-none-match") === object.httpEtag) {
+    return new Response(null, { status: 304, headers });
+  }
   return new Response(object.body, { headers });
 }
 
@@ -1653,7 +1659,7 @@ async function handleRequest(request, env, ctx) {
     return handleReport(request, env, ctx, url);
   }
   if (url.pathname.startsWith("/images/")) {
-    return handleImage(env, url.pathname.slice("/images/".length));
+    return handleImage(env, request, url.pathname.slice("/images/".length));
   }
 
   return withSecurityHeaders(await env.ASSETS.fetch(request));

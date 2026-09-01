@@ -1258,10 +1258,15 @@ body {
 }
 
 /* 오늘 날씨 한 줄 안내. 날씨를 못 가져오면 아예 렌더하지 않는다(hidden). */
+/* 한 줄에 다 넣으려다 헤드라인이 한 글자씩 세로로 쪼개졌다.
+   기준·강수·기온·위치버튼이 모두 줄바꿈을 거부하는 사이에서 헤드라인만 밀려
+   최소 폭까지 눌린 것인데, 한국어는 단어 경계가 없어 글자 단위까지 줄어든다.
+   그래서 헤드라인이 첫 줄을 통째로 쓰고 나머지가 아래로 내려가게 한다. */
 .today-weather {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin: 0 0 12px;
   padding: 10px 14px;
   background: var(--color-white);
@@ -1275,26 +1280,36 @@ body {
 }
 
 .today-weather__icon {
+  flex: 0 0 auto;
   font-size: 18px;
   line-height: 1;
 }
 
 .today-weather__text {
-  flex: 1;
+  /* 아이콘과 나란히 첫 줄을 채운다. 남는 자리가 없으므로 기준·기온·버튼은
+     다음 줄로 내려간다. 34px 은 아이콘 폭과 gap 에 여유를 조금 더한 값이다. */
+  flex: 1 1 calc(100% - 34px);
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.5;
   color: var(--color-text);
 }
 
 /* 어디 기준 날씨인지 밝히는 잔글씨. 본문보다 확실히 물러나 있어야 헤드라인을
    가리지 않는다. */
 .today-weather__basis {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 11px;
   color: var(--color-text-muted, #6b7280);
-  white-space: nowrap;
+  /* 아주 좁은 화면에서는 이 줄도 접히는 편이 낫다 — nowrap 이면 이것이 폭을
+     붙들어 옆의 기온이 다시 쪼개진다. */
+  overflow-wrap: anywhere;
 }
 
 .today-weather__temp {
+  flex: 0 0 auto;
   font-size: 13px;
   font-weight: 700;
   color: var(--color-primary);
@@ -1334,7 +1349,9 @@ body {
 /* 서울 기준으로 보여주는 중일 때만 나오는 "내 위치" 버튼. 권한을 이미 허용했거나
    거부한 사용자에게는 렌더하지 않는다. */
 .today-weather__locate {
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  /* 둘째 줄 오른쪽 끝에 붙인다. */
+  margin-left: auto;
   border: 1px solid var(--color-border);
   background: var(--color-bg);
   color: var(--color-primary);

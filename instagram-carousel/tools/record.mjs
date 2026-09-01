@@ -30,6 +30,9 @@ const WIDTH = Number(process.argv[5] || 1080);
 const HEIGHT = Number(process.argv[6] || 1350);
 
 const FRAMES = mkdtempSync(path.join(os.tmpdir(), "carousel-frames-"));
+// 프로필은 한 자리를 계속 쓴다. 매번 새로 만들면 지도 타일을 처음부터 받느라
+// 녹화 시작 시점에 화면이 아직 안정되지 않아 프레임이 몇 장밖에 안 모인다.
+const PROFILE = path.join(os.tmpdir(), "carousel-record-profile");
 mkdirSync(path.dirname(OUT), { recursive: true });
 
 const PORT = 9355;
@@ -42,7 +45,7 @@ const chrome = spawn(CHROME, [
   "--disable-renderer-backgrounding",
   "--disable-backgrounding-occluded-windows",
   `--remote-debugging-port=${PORT}`,
-  `--user-data-dir=${path.join(FRAMES, ".profile")}`,
+  `--user-data-dir=${PROFILE}`,
   `--window-size=${WIDTH},${HEIGHT}`,
   "about:blank",
 ], { stdio: "ignore" });
@@ -70,7 +73,8 @@ async function main() {
     const m = JSON.parse(e.data);
     if (m.id && pending.has(m.id)) {
       const p = pending.get(m.id); pending.delete(m.id);
-      m.error ? p.rej(new Error(JSON.stringify(m.error))) : p.res(m.result);
+      if (m.error) p.rej(new Error(JSON.stringify(m.error)));
+      else p.res(m.result);
       return;
     }
     if (m.method === "Page.screencastFrame") {

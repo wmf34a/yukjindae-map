@@ -27,9 +27,40 @@ const H = {
   "content-type": "application/json",
 };
 
-const audit = JSON.parse(fs.readFileSync("tmp/사진감사.json", "utf8"));
-// 검사 자체가 실패한 것(이미지 404 등)도 대체 대상이다.
-const targets = audit.filter((r) => r.usable === false || r.error);
+// --no-credit 을 주면 감사 파일 없이 "사진출처가 빈 곳"을 대상으로 삼는다.
+// 사진 자체는 멀쩡해도 어디서 왔는지 모르면 나중에 또 전수로 뒤져야 한다.
+const byCredit = process.argv.includes("--no-credit");
+let targets;
+if (byCredit) {
+  targets = [];
+} else {
+  const audit = JSON.parse(fs.readFileSync("tmp/사진감사.json", "utf8"));
+  // 검사 자체가 실패한 것(이미지 404 등)도 대체 대상이다.
+  targets = audit.filter((r) => r.usable === false || r.error);
+}
+const places = [];
+{
+  let cursor;
+  do {
+    const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
+      method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
+    })).json();
+    for (const p of data.results) {
+      if (p.properties["공개여부"]?.checkbox !== true) continue;
+      places.push({
+        id: p.id,
+        name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+        credit: p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "",
+        lat: p.properties["위도"]?.number,
+        lng: p.properties["경도"]?.number,
+      });
+    }
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+}
+const byId = new Map(places.map((p) => [p.id, p]));
+if (byCredit) targets = places.filter((p) => !p.credit);
+
 console.log(`대체가 필요한 곳 ${targets.length}\n`);
 
 // 이름이 조금씩 달라 한 번에 못 찾는다. 괄호와 지역 접두어를 떼며 넓혀 간다.
@@ -39,6 +70,33 @@ function nameVariants(name) {
   const sp = base.indexOf(" ");
   if (sp > 0 && base.length - sp - 1 >= 4) out.push(base.slice(sp + 1));
   return [...new Set(out)];
+}
+
+// 이름이 서로 달라 검색으로 못 찾는 곳이 많다 — "담양 죽녹원"은 TourAPI 에
+// "죽녹원", "전북 119 안전체험관"은 "전북특별자치도 119안전체험관"이다.
+// 좌표 반경으로 훑으면 표기가 달라도 같은 자리에서 만난다.
+async function findByCoords(name, lat, lng) {
+  if (typeof lat !== "number" || typeof lng !== "number") return null;
+  const list = tour.items(await tour.call("locationBasedList2", {
+    mapX: String(lng), mapY: String(lat), radius: "1000", numOfRows: "30", pageNo: "1", arrange: "E",
+  }));
+  await sleep(180);
+  const key = name.replace(/\s|\(.*\)/g, "");
+  // 지역 접두어("담양 ", "전북 ")를 뗀 알맹이끼리 겹치면 같은 곳으로 본다.
+  const core = key.replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주|담양|익산|정읍|부안|김해|공주|음성)/, "");
+  // "대전 오월드" 자리에 "레이저태그스포츠 오월드점"이 잡혔다. 좌표가 같아도
+  // 다른 시설이다. 이름 알맹이로 시작하거나 알맹이가 통째로 담긴 것만 받는다.
+  const hit = list.find((it) => {
+    const t = clean(it.title).replace(/\s/g, "");
+    if (!it.firstimage) return false;
+    if (t === key || t.includes(key) || key.includes(t)) return true;
+    return core.length >= 3 && (t.startsWith(core) || t.endsWith(core));
+  });
+  if (!hit) return null;
+  const imgs = tour.items(await tour.call("detailImage2", { contentId: hit.contentid, imageYN: "Y", numOfRows: "20", pageNo: "1" }));
+  await sleep(180);
+  const urls = [...new Set([hit.firstimage, ...imgs.map((x) => x.originimgurl)].filter(Boolean))];
+  return urls.length ? { title: clean(hit.title), urls } : null;
 }
 
 async function findPhotos(name) {
@@ -63,7 +121,8 @@ fs.mkdirSync("tmp", { recursive: true });
 const replaced = [];
 const unresolved = [];
 for (const t of targets) {
-  const found = await findPhotos(t.name);
+  const place = byId.get(t.id) || t;
+  const found = await findPhotos(t.name) || await findByCoords(t.name, place.lat, place.lng);
   if (!found) { unresolved.push(t); console.log(`  · ${t.name} — 대체 사진 없음`); continue; }
   console.log(`  ✓ ${t.name} — ${found.title}에서 ${found.urls.length}장`);
   replaced.push({ ...t, candidate: found.urls[0], all: found.urls });

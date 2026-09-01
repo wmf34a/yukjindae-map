@@ -47,7 +47,8 @@ async function main() {
     const m = JSON.parse(e.data);
     if (!m.id || !pending.has(m.id)) return;
     const p = pending.get(m.id); pending.delete(m.id);
-    m.error ? p.rej(new Error(JSON.stringify(m.error))) : p.res(m.result);
+    if (m.error) p.rej(new Error(JSON.stringify(m.error)));
+    else p.res(m.result);
   };
 
   await send("Page.enable");

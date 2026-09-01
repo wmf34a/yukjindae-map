@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>코스보기 동선 영상 슬라이드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 1080px; height: 1350px; overflow: hidden;
+    background: #F5F6FA;
+    font-family: "Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif;
+  }
+  .slide { position: relative; width: 1080px; height: 1350px; display: flex; flex-direction: column; }
+
+  .head { padding: 72px 80px 0; text-align: center; }
+  .head h2 { font-size: 66px; font-weight: 800; line-height: 1.28; letter-spacing: -.04em; color: #2C3555; }
+  .head h2 b { color: #1A2F6B; }
+
+  .stage { position: relative; flex: 1; display: flex; justify-content: center; align-items: flex-start; padding-top: 60px; }
+
+  .card {
+    position: relative;
+    width: 966px;
+    border-radius: 30px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 30px 70px rgba(26,47,107,.26);
+  }
+  /* 실제 앱을 그대로 태워 코스 모달만 잘라 보여준다 — 자동차가 경로 위를
+     움직이는 장면이 정지 화면으로는 전달이 안 돼서 영상으로 뽑는다. */
+  .card iframe {
+    border: 0;
+    width: 480px;
+    height: 960px;
+    transform-origin: 0 0;
+    display: block;
+  }
+
+  .bubble {
+    position: absolute; z-index: 5; max-width: 430px;
+    background: #232B47; color: #fff;
+    font-size: 28px; font-weight: 600; line-height: 1.45; letter-spacing: -.025em;
+    padding: 22px 28px; border-radius: 22px;
+    box-shadow: 0 14px 34px rgba(26,32,56,.3);
+  }
+  .bubble b { color: #FFD874; font-weight: 800; }
+  .bubble--tl { top: 84px; left: 4px; }
+  .bubble--br { bottom: 300px; right: 4px; }
+  .bubble.bubble--foot {
+    bottom: 84px; left: 50%; transform: translateX(-50%);
+    text-align: center; max-width: 860px; font-size: 26px;
+  }
+
+  .brandmark {
+    display: none;
+    position: absolute; left: 0; right: 0; bottom: 44px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    font-size: 24px; font-weight: 700; color: #9AA3C0;
+  }
+  .brandmark img { width: 44px; height: 44px; opacity: .9; }
+</style>
+</head>
+<body>
+<div class="slide">
+  <div class="head">
+    <h2><b>'코스보기'</b> 한 번이면<br />하루 동선이 완성돼요</h2>
+  </div>
+  <div class="stage">
+    <div class="card" id="card">
+      <iframe id="app"></iframe>
+    </div>
+    <div class="bubble bubble--tl">장소 → 근처 맛집 → 카페<br />순서까지 <b>자동으로</b></div>
+    <div class="bubble bubble--br"><b>자동차가 경로를 달리며</b><br />동선을 미리 보여줘요</div>
+    <div class="bubble bubble--foot">구간마다 <b>실제 도로 기준</b> 거리·시간<br />네이버 지도로 바로 길찾기</div>
+  </div>
+</div>
+
+<script>
+  // 같은 출처(로컬 프록시 서버)라 iframe 안을 직접 조작할 수 있다.
+  const CARD_W = 966;
+  const frame = document.getElementById("app");
+  const card = document.getElementById("card");
+
+  // iframe 과 같은 출처라 스토리지를 공유한다. 튜토리얼/설치 유도 팝업이
+  // 지도를 가려서 미리 "봤음"으로 표시해 두고 iframe 을 띄운다.
+  try {
+    localStorage.setItem("yukjindae_tour_seen", "1");
+    localStorage.setItem("installPopupDismissedDate", new Date().toISOString().slice(0, 10));
+    sessionStorage.setItem("splashShown", "1");
+  } catch (e) {}
+  frame.src = "/place.html?id=3caa4eba-1ccb-8147-9a5f-e7b3c99deef9";
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  async function waitFor(fn, timeoutMs = 25000) {
+    const until = Date.now() + timeoutMs;
+    while (Date.now() < until) {
+      const v = fn();
+      if (v) return v;
+      await sleep(200);
+    }
+    throw new Error("timeout");
+  }
+
+  async function run() {
+    await new Promise((r) => frame.addEventListener("load", r, { once: true }));
+    const doc = frame.contentDocument;
+
+    // 상세 로딩 후 코스보기 실행
+    const btn = await waitFor(() => doc.getElementById("course-btn"));
+    btn.click();
+
+    // 모달이 열리고 지도가 그려질 때까지 기다린다
+    const modal = await waitFor(() => {
+      const el = doc.querySelector(".course-modal");
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return r.width > 100 && r.height > 100 ? el : null;
+    });
+    await sleep(4000);
+
+    const r = modal.getBoundingClientRect();
+    const k = CARD_W / r.width;
+    frame.style.transform = `scale(${k}) translate(${-r.x}px, ${-r.y}px)`;
+    card.style.height = `${r.height * k}px`;
+
+    window.__ready = true;
+  }
+
+  run().catch((e) => {
+    window.__error = String(e);
+  });
+</script>
+</body>
+</html>

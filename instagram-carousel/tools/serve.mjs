@@ -6,13 +6,17 @@
 // 앱과 같은 출처여야 슬라이드 페이지가 iframe 안을 조작할 수 있기 때문이다.
 //
 //   node tools/serve.mjs [port]
+//   APP_PUBLIC=<육진대맵 저장소>/public node tools/serve.mjs   # 저장소 밖에서 쓸 때
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(HERE, "../../public");
+// 스킬 폴더에 따로 떼어 두고 쓸 수도 있어서, 앱 public/ 위치를 밖에서 받는다.
+const ROOT = process.env.APP_PUBLIC
+  ? path.resolve(process.env.APP_PUBLIC)
+  : path.resolve(HERE, "../../public");
 const SLIDES = path.join(HERE, "slide");
 const PROD = process.env.PROD_ORIGIN || "https://yukjindae-map.wmf34a.workers.dev";
 const PORT = Number(process.argv[2] || process.env.PORT || 8799);

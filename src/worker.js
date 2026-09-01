@@ -1014,15 +1014,22 @@ async function handleReport(request, env, ctx) {
 //
 // 홈에서 POST를 부르고(화면에는 아무것도 안 보인다) 소개 페이지에서 GET으로 보여준다.
 // 소개 페이지만 세면 대부분의 사용자가 빠져 숫자가 뜻을 잃는다.
-// 표본만 세므로(visit-counter.js 참고) 읽을 때 배수를 곱해 되돌린다. 2026-09-01
-// 이전에 쌓인 누적치는 전수로 센 값이라 배수를 곱하면 안 되지만, 그날 이전 누적이
-// 세 자리라 섞여도 자릿수를 흔들지 않는다 — 정확한 숫자가 필요하면 별도 분석 도구를
-// 붙이는 게 맞고, 이 카운터는 "대충 몇 명"을 보여주는 용도다.
+// 표본 집계로 바꾸기 전까지 전수로 센 누적. 오픈 첫날 KV 한도가 터지기 전까지
+// 쌓인 실제 사람 수다.
+//
+// 이 값에 배수를 곱하면 안 된다. 처음에는 "섞여도 자릿수를 흔들지 않는다"고 보고
+// 전체에 곱했는데, 267명이 1,335명으로 보여 다섯 배가 부풀려졌다. 누적은 계속
+// 남는 숫자라 한 번 틀리면 계속 틀린다.
+const VISIT_TOTAL_BASELINE = 267;
+
+// 표본만 세므로(visit-counter.js 참고) 읽을 때 배수를 곱해 되돌린다.
+// 기준선까지는 전수로 센 값이라 그대로 두고, 그 뒤에 늘어난 만큼만 곱한다.
 async function visitStats(env, today) {
   const raw = await readStats(env.RATE_LIMIT, today);
+  const sampled = Math.max(0, raw.total - VISIT_TOTAL_BASELINE);
   return {
     today: raw.today * SAMPLE_DENOMINATOR,
-    total: raw.total * SAMPLE_DENOMINATOR,
+    total: VISIT_TOTAL_BASELINE + sampled * SAMPLE_DENOMINATOR,
     approximate: true,
   };
 }

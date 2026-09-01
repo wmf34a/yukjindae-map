@@ -11,6 +11,32 @@ export function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_
   return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
 }
 
+// 한 번 흔들렸다고 화면을 비우지 않기 위한 재시도.
+//
+// 장소 목록은 노션을 세 번 연달아 부른다(100개씩 페이지네이션). 그중 하나만
+// 타임아웃 나도 목록 전체가 500이 되어 사용자는 빈 화면을 본다 — 오픈 당일 실제로
+// 한 번 그랬다. 상대가 잠깐 느린 것과 우리가 잘못 부른 것은 다르게 다뤄야 한다.
+//
+// 그래서 네트워크 오류와 5xx·429 만 다시 부른다. 4xx 는 다시 불러도 같은 답이
+// 오므로 그대로 돌려준다.
+export async function fetchWithRetry(url, options = {}, { timeoutMs = DEFAULT_TIMEOUT_MS, retries = 2, backoffMs = 400 } = {}) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(url, options, timeoutMs);
+      if (res.status < 500 && res.status !== 429) return res;
+      if (attempt === retries) return res;
+      lastError = new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) throw err;
+    }
+    console.warn(`[retry ${attempt + 1}/${retries}] ${String(url).slice(0, 80)}: ${lastError.message}`);
+    await new Promise((r) => setTimeout(r, backoffMs * (attempt + 1)));
+  }
+  throw lastError;
+}
+
 // 상대 API가 준 에러 본문(detail)을 그대로 클라이언트에 내려주면 노션 DB 구조나
 // 내부 오류 메시지가 외부에 노출된다. 로그에는 남기고 응답에는 일반화된 문구만
 // 담는다.

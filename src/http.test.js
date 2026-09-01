@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isNotionId, upstreamErrorResponse, serverErrorResponse, fetchWithTimeout } from "./http.js";
+import { isNotionId, upstreamErrorResponse, serverErrorResponse, fetchWithTimeout, fetchWithRetry } from "./http.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -89,5 +89,50 @@ describe("fetchWithTimeout", () => {
     );
 
     await expect(fetchWithTimeout("https://example.com", {}, 10)).rejects.toThrow();
+  });
+});
+
+describe("fetchWithRetry", () => {
+  // 장소 목록은 노션을 세 번 연달아 부른다. 그중 하나가 잠깐 흔들렸다고 목록 전체가
+  // 500이 되면 사용자는 빈 화면을 본다 — 오픈 당일 실제로 그랬다.
+  it("5xx가 오면 다시 부르고, 성공하면 그 응답을 준다", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      return new Response(calls < 3 ? "nope" : "ok", { status: calls < 3 ? 503 : 200 });
+    }));
+    const res = await fetchWithRetry("https://example.com", {}, { retries: 2, backoffMs: 1 });
+    expect(res.status).toBe(200);
+    expect(calls).toBe(3);
+  });
+
+  it("네트워크 오류도 다시 부른다", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("network");
+      return new Response("ok", { status: 200 });
+    }));
+    const res = await fetchWithRetry("https://example.com", {}, { retries: 2, backoffMs: 1 });
+    expect(res.status).toBe(200);
+    expect(calls).toBe(2);
+  });
+
+  // 우리가 잘못 부른 요청은 다시 불러도 같은 답이 온다. 사용자만 더 기다리게 된다.
+  it("4xx는 다시 부르지 않는다", async () => {
+    let calls = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      calls += 1;
+      return new Response("bad", { status: 400 });
+    }));
+    const res = await fetchWithRetry("https://example.com", {}, { retries: 2, backoffMs: 1 });
+    expect(res.status).toBe(400);
+    expect(calls).toBe(1);
+  });
+
+  it("끝까지 5xx면 마지막 응답을 그대로 돌려준다", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 502 })));
+    const res = await fetchWithRetry("https://example.com", {}, { retries: 1, backoffMs: 1 });
+    expect(res.status).toBe(502);
   });
 });

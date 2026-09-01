@@ -9,7 +9,7 @@ import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
-import { fetchWithTimeout, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
+import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
   applyApprovedReports, isListField, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
@@ -205,7 +205,7 @@ async function fetchAllPlaces(env) {
     const body = { page_size: 100, filter: { property: "공개여부", checkbox: { equals: true } } };
     if (cursor) body.start_cursor = cursor;
 
-    const res = await fetchWithTimeout(
+    const res = await fetchWithRetry(
       `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
       { method: "POST", headers: notionHeaders, body: JSON.stringify(body) }
     );
@@ -282,7 +282,7 @@ async function handlePlaceById(env, url, id) {
   }
 
   try {
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
+    const res = await fetchWithRetry(`https://api.notion.com/v1/pages/${id}`, {
       headers: {
         Authorization: `Bearer ${env.NOTION_API_KEY}`,
         "Notion-Version": "2022-06-28",
@@ -412,7 +412,7 @@ async function handleBanners(env) {
   };
 
   try {
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_BANNER_DATABASE_ID}/query`, {
+    const res = await fetchWithRetry(`https://api.notion.com/v1/databases/${env.NOTION_BANNER_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -481,7 +481,7 @@ async function handleCourses(env) {
   };
 
   try {
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_COURSE_DATABASE_ID}/query`, {
+    const res = await fetchWithRetry(`https://api.notion.com/v1/databases/${env.NOTION_COURSE_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -537,7 +537,7 @@ async function handleFestivals(env) {
   };
 
   try {
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+    const res = await fetchWithRetry(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
@@ -586,7 +586,7 @@ async function fetchAllFestivalPages(env) {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
 
-    const res = await fetchWithTimeout(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
+    const res = await fetchWithRetry(`https://api.notion.com/v1/databases/${env.NOTION_FESTIVAL_DATABASE_ID}/query`, {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify(body),

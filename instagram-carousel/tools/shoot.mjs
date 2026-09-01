@@ -14,7 +14,8 @@
 //   BASE=http://localhost:8799 GEO=37.534,126.986 VW=390 VH=800 \
 //   node tools/shoot.mjs '[{"name":"map","path":"/map.html","wait":13000}]' shots
 import { spawn } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,7 +33,7 @@ const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/M
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
   `--remote-debugging-port=${PORT}`,
-  `--user-data-dir=${path.join(SHOTS, ".profile")}`,
+  `--user-data-dir=${mkdtempSync(path.join(os.tmpdir(), "carousel-shoot-"))}`,
   `--window-size=${VW},${VH}`,
   "about:blank",
 ], { stdio: "ignore" });

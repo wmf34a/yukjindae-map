@@ -5,7 +5,8 @@
 // 파일명은 각 섹션의 id(s1, s2 …). 업로드 순서대로 01-slide.png … 로 바꾸는 건
 // README 의 명령 한 줄로 처리한다.
 import { spawn } from "node:child_process";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, mkdtempSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,7 +21,7 @@ const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
   "--allow-file-access-from-files",
   `--remote-debugging-port=${PORT}`,
-  `--user-data-dir=${path.join(OUT, ".render-profile")}`,
+  `--user-data-dir=${mkdtempSync(path.join(os.tmpdir(), "carousel-render-"))}`,
   "about:blank",
 ], { stdio: "ignore" });
 

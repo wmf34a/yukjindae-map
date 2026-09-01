@@ -257,6 +257,30 @@ async function withMirroredPlacePhotos(env, places) {
 //
 // 공개여부는 여기서 다시 본다 — 아직 검수 중인 장소의 id를 주소창에 넣으면
 // 목록에 없는 곳이 상세로 열려 버린다.
+// 설정이 제대로 들어갔는지 확인하는 곳. 값은 절대 내보내지 않고 있음/없음만 준다.
+//
+// wrangler secret list 는 이름만 보여주고 값이 비었는지는 알려주지 않는다.
+// 대화형 프롬프트로 넣으면 값이 안 들어가도 Success 가 뜨는데, 그걸 세 번
+// 놓쳤다 — 예약 DB 아이디, 그리고 월간 순위가 건너뛴 원인이었다. 크론은
+// 월 1회라 문제를 알아채는 데도 한 달이 걸린다.
+const REQUIRED_ENV = [
+  "NOTION_API_KEY", "NOTION_DATABASE_ID", "NOTION_BANNER_DATABASE_ID",
+  "NOTION_COURSE_DATABASE_ID", "NOTION_FESTIVAL_DATABASE_ID", "NOTION_REPORTS_DATABASE_ID",
+  "ANTHROPIC_API_KEY", "TOUR_API_KEY", "KAKAO_REST_API_KEY",
+  "NAVER_MAP_CLIENT_ID", "NAVER_MAP_CLIENT_SECRET",
+  "NAVER_SEARCH_CLIENT_ID", "NAVER_SEARCH_CLIENT_SECRET",
+  "TURNSTILE_SECRET_KEY", "SLACK_WEBHOOK_URL",
+];
+
+function handleHealth(env) {
+  // 이름만 돌려준다. 값도, 길이도 담지 않는다.
+  const missing = REQUIRED_ENV.filter((k) => !env[k]);
+  return new Response(JSON.stringify({ ok: missing.length === 0, missing, checked: REQUIRED_ENV.length }, null, 1), {
+    status: missing.length ? 503 : 200,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+  });
+}
+
 async function handlePlaceById(env, url, id) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
@@ -1547,6 +1571,9 @@ function handlePreflight(request, origin) {
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
 
+  if (url.pathname === "/api/health") {
+    return handleHealth(env);
+  }
   if (url.pathname.startsWith("/api/places/")) {
     const id = url.pathname.slice("/api/places/".length);
     return withEdgeCache(request, ctx, 60, () => handlePlaceById(env, url, id));

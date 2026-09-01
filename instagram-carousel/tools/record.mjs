@@ -6,8 +6,8 @@
 // 대상 페이지는 준비가 끝나면 window.__ready = true 를 세워야 한다(실패하면
 // window.__error 에 사유). tools/slide/course-video.html 참고.
 //
-// ffmpeg 는 PATH 의 것을 쓰고, 없으면 ffmpeg-static 을 찾는다.
-// (brew ffmpeg 가 깨져 있으면: npm i -D ffmpeg-static)
+// ffmpeg 는 FFMPEG 환경변수 → PATH → ffmpeg-static 순으로 찾는다.
+// (brew ffmpeg 가 libx265 를 못 찾아 죽는다면 brew reinstall x265 ffmpeg)
 import { spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { writeFileSync, mkdirSync, rmSync, mkdtempSync } from "node:fs";
@@ -15,9 +15,11 @@ import os from "node:os";
 import path from "node:path";
 
 function findFfmpeg() {
+  const given = process.env.FFMPEG;
+  if (given && spawnSync(given, ["-version"], { stdio: "ignore" }).status === 0) return given;
   if (spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0) return "ffmpeg";
   try { return createRequire(import.meta.url)("ffmpeg-static"); } catch {}
-  console.error("ffmpeg 가 없다. npm i -D ffmpeg-static 하거나 brew reinstall ffmpeg.");
+  console.error("ffmpeg 를 못 찾았다. FFMPEG=<경로> 로 알려주거나, brew reinstall x265 ffmpeg 로 고칠 것.");
   process.exit(1);
 }
 
@@ -34,6 +36,11 @@ const PORT = 9355;
 const CHROME = process.env.CHROME || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const chrome = spawn(CHROME, [
   "--headless=new", "--disable-gpu", "--hide-scrollbars", "--no-first-run",
+  // 이 세 개가 없으면 크롬이 페이지를 백그라운드로 보고 rAF 를 눌러버려서
+  // 9초를 찍어도 프레임이 스무 장도 안 모이는 일이 생긴다.
+  "--disable-background-timer-throttling",
+  "--disable-renderer-backgrounding",
+  "--disable-backgrounding-occluded-windows",
   `--remote-debugging-port=${PORT}`,
   `--user-data-dir=${path.join(FRAMES, ".profile")}`,
   `--window-size=${WIDTH},${HEIGHT}`,

@@ -1,6 +1,7 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 import { filterByWindow } from "./banner-window.js";
-import { countVisitSampled, readStats, SAMPLE_DENOMINATOR, todayInKst as visitToday } from "./visit-counter.js";
+import { todayInKst as visitToday } from "./visit-counter.js";
+import { readVisitStats, refreshVisitStats } from "./visit-stats.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
@@ -1035,24 +1036,11 @@ async function handleReport(request, env, ctx) {
 //
 // 홈에서 POST를 부르고(화면에는 아무것도 안 보인다) 소개 페이지에서 GET으로 보여준다.
 // 소개 페이지만 세면 대부분의 사용자가 빠져 숫자가 뜻을 잃는다.
-// 표본 집계로 바꾸기 전까지 전수로 센 누적. 오픈 첫날 KV 한도가 터지기 전까지
-// 쌓인 실제 사람 수다.
-//
-// 이 값에 배수를 곱하면 안 된다. 처음에는 "섞여도 자릿수를 흔들지 않는다"고 보고
-// 전체에 곱했는데, 267명이 1,335명으로 보여 다섯 배가 부풀려졌다. 누적은 계속
-// 남는 숫자라 한 번 틀리면 계속 틀린다.
-const VISIT_TOTAL_BASELINE = 267;
-
-// 표본만 세므로(visit-counter.js 참고) 읽을 때 배수를 곱해 되돌린다.
-// 기준선까지는 전수로 센 값이라 그대로 두고, 그 뒤에 늘어난 만큼만 곱한다.
-async function visitStats(env, today) {
-  const raw = await readStats(env.RATE_LIMIT, today);
-  const sampled = Math.max(0, raw.total - VISIT_TOTAL_BASELINE);
-  return {
-    today: raw.today * SAMPLE_DENOMINATOR,
-    total: VISIT_TOTAL_BASELINE + sampled * SAMPLE_DENOMINATOR,
-    approximate: true,
-  };
+// 화면에 뜨는 숫자는 크론이 Analytics Engine 에서 세어 KV 에 넣어 둔 값이다.
+// 자세한 사정은 visit-stats.js 주석 참고.
+async function visitStats(env) {
+  const stats = await readVisitStats(env);
+  return { today: stats.today, total: stats.total };
 }
 
 async function handleVisit(request, env, url) {
@@ -1060,7 +1048,7 @@ async function handleVisit(request, env, url) {
   const today = visitToday();
 
   if (request.method !== "POST") {
-    return new Response(JSON.stringify(await visitStats(env, today)), { status: 200, headers });
+    return new Response(JSON.stringify(await visitStats(env)), { status: 200, headers });
   }
 
   // 기기 ID가 없으면(시크릿 창 등) IP 해시로 대신한다. 같은 와이파이를 쓰는 가족이
@@ -1070,10 +1058,8 @@ async function handleVisit(request, env, url) {
 
   // 들어온 사람을 하나도 빠짐없이 적어 둔다.
   //
-  // 화면에 보이는 숫자는 아래 KV 카운터가 만들지만 그건 표본이라 어림값이고, 하루
-  // 쓰기 한도에 걸리면 그마저 멈춘다(오픈 첫날 오후를 그렇게 잃었다). 여기는 매
-  // 방문을 그대로 적고 나중에 날짜별로 세면 되므로, 지나간 날의 숫자를 다시 물을
-  // 수 있다. 같은 사람이 여러 번 와도 그대로 적고, 셀 때 기기 ID로 중복을 지운다.
+  // 같은 사람이 여러 번 와도 그대로 적고, 셀 때 기기 ID로 중복을 지운다. 날짜별로
+  // 남으므로 지나간 날의 숫자를 다시 물을 수 있다 — KV 카운터로는 못 하던 일이다.
   if (env.VISITS) {
     try {
       env.VISITS.writeDataPoint({
@@ -1086,13 +1072,7 @@ async function handleVisit(request, env, url) {
     }
   }
 
-  try {
-    await countVisitSampled(env.RATE_LIMIT, id, today);
-  } catch (err) {
-    // 숫자를 못 세는 것 때문에 화면이 막히면 안 된다.
-    console.warn(`방문자 집계 실패: ${err.message}`);
-  }
-  return new Response(JSON.stringify(await visitStats(env, today)), { status: 200, headers });
+  return new Response(JSON.stringify(await visitStats(env)), { status: 200, headers });
 }
 
 function handleNaverConfig(env) {
@@ -1740,6 +1720,11 @@ export default {
     }
     if (event.cron === REPORT_APPLY_CRON) {
       ctx.waitUntil(runScheduledReportApply(env));
+      // 방문자 수 갱신도 여기 얹는다. 크론은 워커당 5개까지라 자리가 없고,
+      // 10분마다 다시 세는 것으로 충분하다.
+      ctx.waitUntil(
+        refreshVisitStats(env).catch((err) => console.warn(`방문자 집계 실패: ${err.message}`))
+      );
       return;
     }
     if (event.cron === ENRICHMENT_CRON) {

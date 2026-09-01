@@ -27,6 +27,16 @@
       "id": "fb985d035ef04d20911f768fcf337d0e"
     }
   ],
+  // 방문 기록. KV 카운터는 오픈 첫날 하루 쓰기 한도(1,000회)를 30분 만에 소진해
+  // 그날 오후 방문자를 통째로 놓쳤고, 지금은 다섯 명 중 한 명만 세는 표본이라
+  // 정확한 숫자가 아니다. Analytics Engine 은 쓰기 한도가 훨씬 넉넉해 전수로
+  // 기록할 수 있고, 3개월치가 날짜별로 남는다.
+  "analytics_engine_datasets": [
+    {
+      "binding": "VISITS",
+      "dataset": "yukjindae_visits"
+    }
+  ],
   // 크론 다섯 개가 모두 같은 scheduled() 핸들러로 들어오므로, worker.js의
   // ENRICHMENT_CRON / FESTIVAL_IMPORT_CRON / STATION_GEOCODE_CRON /
   // PUBLIC_DATA_PLACE_MATCH_CRON / MONTHLY_TOP10_CRON 상수와 아래 표현식이

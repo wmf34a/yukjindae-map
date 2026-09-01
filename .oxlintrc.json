@@ -6,6 +6,19 @@
     "suspicious": "warn",
     "perf": "warn"
   },
+  "overrides": [
+    {
+      // 워커 코드(src/)는 ESM 이라 쓰는 이름이 전부 import 나 선언으로 잡혀야 한다.
+      // no-undef 는 기본이 off 인데, worker.js 를 주제별 파일로 가르면서 import 를
+      // 빠뜨린 적이 두 번 있었고(isValidCoords, nameMatches) 둘 다 린트를 통과해
+      // 배포까지 나갔다 — 두 번째는 오픈 당일 근처 가게 검색을 죽였다.
+      //
+      // scripts/ 는 Node 전역(process)을, public/js/ 는 스크립트 태그로 나눠 실은
+      // 전역 함수를 쓰기 때문에 여기서만 켠다.
+      "files": ["src/**/*.js"],
+      "rules": { "no-undef": "error" }
+    }
+  ],
   "env": {
     "builtin": true,
     "browser": true,

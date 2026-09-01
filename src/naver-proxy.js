@@ -5,7 +5,14 @@
 // 물어보는 일"만 모은다: 근처 가게 찾기, 주소→좌표, 두 지점 사이 도로거리.
 import { fetchWithTimeout, upstreamErrorResponse } from "./http.js";
 import { decodeNaverHtml } from "./text-utils.js";
-import { pickNearest, distanceKm, isValidCoords, NEARBY_SEARCH_RADIUS_M, MAX_ACCEPT_KM } from "./nearby-lookup.js";
+import {
+  pickNearest,
+  distanceKm,
+  isValidCoords,
+  nameMatches,
+  NEARBY_SEARCH_RADIUS_M,
+  MAX_ACCEPT_KM,
+} from "./nearby-lookup.js";
 
 async function searchNearbyByCoords(env, query, origin) {
   const qs = new URLSearchParams({

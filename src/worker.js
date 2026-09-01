@@ -27,30 +27,51 @@ import {
   reportQuota,
 } from "./rate-limit.js";
 
+// 캐시에 넣어 둔 응답을 언제 만든 것인지 적어 두는 헤더. 엣지 캐시 자체의 수명은
+// 길게 잡고(CACHE_HOLD_SECONDS) 신선도는 이 값으로 우리가 판단한다.
+const CACHED_AT = "x-cached-at";
+// 만료된 뒤에도 이만큼은 들고 있는다. 그 사이 들어온 요청은 옛 응답이라도 바로 받고,
+// 새 값은 뒤에서 받아 갈아 끼운다.
+const CACHE_HOLD_SECONDS = 3600;
+
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
 // 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
 // 필요하지 않으므로, 엣지에서 짧게 캐싱해서 재방문/새로고침을 빠르게 만든다.
-async function withEdgeCache(request, ctx, ttlSeconds, handler) {
+//
+// 캐시가 만료된 순간에 들어온 사람만 그 1초를 온전히 뒤집어쓰는 게 문제였다.
+// 노션이 한 번 느리면 10초까지 갔다(새벽에 실제로 그랬다). 사람이 뜸한 시간일수록
+// 캐시가 자주 비어서 더 자주 걸린다.
+//
+// 그래서 만료돼도 옛 응답을 먼저 돌려주고 새 값은 뒤에서 받는다. 화면에는 최대
+// ttlSeconds 만큼 지난 값이 보일 수 있지만, 노션을 기다리며 멈춰 있는 것보다 낫다.
+export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
   const cache = caches.default;
   const cacheKey = new Request(request.url, request);
 
-  const cached = await cache.match(cacheKey);
-  if (cached) return cached;
-
-  const response = await handler();
-  if (response.status === 200) {
+  const store = async () => {
+    const response = await handler();
+    if (response.status !== 200) return response;
     const toCache = new Response(response.body, response);
-    // max-age는 브라우저 자체 캐시용으로 짧게(1분), s-maxage는 Cloudflare 엣지용으로
-    // 원래 ttlSeconds를 그대로 준다 — 이 둘을 분리 안 하면 모바일 브라우저가 엣지
-    // 캐시(1시간)와 똑같이 새로고침해도 재요청을 안 해서, 서버를 고쳐도 한동안 옛날
-    // 응답이 계속 보이는 문제가 있었다(실제로 겪음).
-    toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${ttlSeconds}`);
+    // max-age는 브라우저 자체 캐시용으로 짧게(1분) — 이 둘을 분리 안 하면 모바일
+    // 브라우저가 엣지 캐시와 똑같이 새로고침해도 재요청을 안 해서, 서버를 고쳐도
+    // 한동안 옛날 응답이 계속 보이는 문제가 있었다(실제로 겪음).
+    toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${CACHE_HOLD_SECONDS}`);
+    toCache.headers.set(CACHED_AT, String(Date.now()));
     const forCache = toCache.clone();
     if (ctx) ctx.waitUntil(cache.put(cacheKey, forCache));
     else await cache.put(cacheKey, forCache);
     return toCache;
-  }
-  return response;
+  };
+
+  const cached = await cache.match(cacheKey);
+  if (!cached) return store();
+
+  const cachedAt = Number(cached.headers.get(CACHED_AT)) || 0;
+  const stale = Date.now() - cachedAt > ttlSeconds * 1000;
+  // ctx 가 없으면(테스트 등) 뒤에서 돌릴 곳이 없으니 그 자리에서 새로 받는다.
+  if (stale && ctx) ctx.waitUntil(store().catch(() => {}));
+  else if (stale) return store();
+  return cached;
 }
 
 // wrangler.jsonc의 triggers.crons 중 축제 자동 수집용 주간 스케줄을 식별하는 값 —
@@ -1046,6 +1067,24 @@ async function handleVisit(request, env, url) {
   // 한 명으로 잡히지만, 아무도 안 세는 것보다는 낫다.
   const device = String(url.searchParams.get("d") || "").slice(0, 64).replace(/[^A-Za-z0-9-]/g, "");
   const id = device || (await hashIp(request.headers.get("cf-connecting-ip") || "unknown"));
+
+  // 들어온 사람을 하나도 빠짐없이 적어 둔다.
+  //
+  // 화면에 보이는 숫자는 아래 KV 카운터가 만들지만 그건 표본이라 어림값이고, 하루
+  // 쓰기 한도에 걸리면 그마저 멈춘다(오픈 첫날 오후를 그렇게 잃었다). 여기는 매
+  // 방문을 그대로 적고 나중에 날짜별로 세면 되므로, 지나간 날의 숫자를 다시 물을
+  // 수 있다. 같은 사람이 여러 번 와도 그대로 적고, 셀 때 기기 ID로 중복을 지운다.
+  if (env.VISITS) {
+    try {
+      env.VISITS.writeDataPoint({
+        blobs: [today, id, request.headers.get("cf-ipcountry") || "??"],
+        doubles: [1],
+        indexes: [today],
+      });
+    } catch (err) {
+      console.warn(`방문 기록 실패: ${err.message}`);
+    }
+  }
 
   try {
     await countVisitSampled(env.RATE_LIMIT, id, today);

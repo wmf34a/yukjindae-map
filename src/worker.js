@@ -1,6 +1,6 @@
 import { toPlace, toBanner, toCourse, toFestival } from "./notion.js";
 import { filterByWindow } from "./banner-window.js";
-import { countVisit, readStats, todayInKst as visitToday } from "./visit-counter.js";
+import { countVisitSampled, readStats, SAMPLE_DENOMINATOR, todayInKst as visitToday } from "./visit-counter.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
@@ -1039,12 +1039,25 @@ async function handleReport(request, env, ctx, url) {
 //
 // 홈에서 POST를 부르고(화면에는 아무것도 안 보인다) 소개 페이지에서 GET으로 보여준다.
 // 소개 페이지만 세면 대부분의 사용자가 빠져 숫자가 뜻을 잃는다.
+// 표본만 세므로(visit-counter.js 참고) 읽을 때 배수를 곱해 되돌린다. 2026-09-01
+// 이전에 쌓인 누적치는 전수로 센 값이라 배수를 곱하면 안 되지만, 그날 이전 누적이
+// 세 자리라 섞여도 자릿수를 흔들지 않는다 — 정확한 숫자가 필요하면 별도 분석 도구를
+// 붙이는 게 맞고, 이 카운터는 "대충 몇 명"을 보여주는 용도다.
+async function visitStats(env, today) {
+  const raw = await readStats(env.RATE_LIMIT, today);
+  return {
+    today: raw.today * SAMPLE_DENOMINATOR,
+    total: raw.total * SAMPLE_DENOMINATOR,
+    approximate: true,
+  };
+}
+
 async function handleVisit(request, env, url) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
   const today = visitToday();
 
   if (request.method !== "POST") {
-    return new Response(JSON.stringify(await readStats(env.RATE_LIMIT, today)), { status: 200, headers });
+    return new Response(JSON.stringify(await visitStats(env, today)), { status: 200, headers });
   }
 
   // 기기 ID가 없으면(시크릿 창 등) IP 해시로 대신한다. 같은 와이파이를 쓰는 가족이
@@ -1053,12 +1066,12 @@ async function handleVisit(request, env, url) {
   const id = device || (await hashIp(request.headers.get("cf-connecting-ip") || "unknown"));
 
   try {
-    await countVisit(env.RATE_LIMIT, id, today);
+    await countVisitSampled(env.RATE_LIMIT, id, today);
   } catch (err) {
     // 숫자를 못 세는 것 때문에 화면이 막히면 안 된다.
     console.warn(`방문자 집계 실패: ${err.message}`);
   }
-  return new Response(JSON.stringify(await readStats(env.RATE_LIMIT, today)), { status: 200, headers });
+  return new Response(JSON.stringify(await visitStats(env, today)), { status: 200, headers });
 }
 
 function handleNaverConfig(env) {

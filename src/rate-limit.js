@@ -51,10 +51,22 @@ export async function consumeRateLimit(env, { scope, ip, limit, windowSeconds })
   if (!env.RATE_LIMIT) return true; // KV 미바인딩 환경(로컬 등)에서는 통과시킨다.
 
   const key = `${scope}:${await hashIp(ip)}`;
-  const raw = await env.RATE_LIMIT.get(key);
-  const count = raw ? parseInt(raw, 10) : 0;
+  let count = 0;
+  try {
+    const raw = await env.RATE_LIMIT.get(key);
+    count = raw ? parseInt(raw, 10) : 0;
+  } catch {
+    return true; // KV를 못 읽으면 세지 못할 뿐이다. 막을 근거가 없으니 통과시킨다.
+  }
   if (count >= limit) return false;
-  await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: windowSeconds });
+  try {
+    await env.RATE_LIMIT.put(key, String(count + 1), { expirationTtl: windowSeconds });
+  } catch (err) {
+    // KV 일일 쓰기 한도를 넘기면 put이 throw 한다. 여기서 터지면 남용 방지 장치가
+    // 서비스 자체를 멈춰 세운다 — 실제로 오픈 첫날 근처 맛집·카페 조회가 전부
+    // 500으로 떨어졌다. 카운트를 못 올리는 건 감수하고 요청은 살린다.
+    console.warn(`남용 방지 카운트 실패(${scope}): ${err.message}`);
+  }
   return true;
 }
 

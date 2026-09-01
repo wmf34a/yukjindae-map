@@ -67,6 +67,27 @@ export async function countVisit(kv, id, date) {
   return true;
 }
 
+// 무료 플랜 KV는 하루 1,000회만 쓸 수 있다. 새 방문자 한 명에 put이 세 번(봤다 표시,
+// 오늘 카운터, 누적 카운터) 나가므로 300명대에서 하루치를 다 쓴다 — 오픈 첫날 30분
+// 만에 소진됐고, 같은 KV를 쓰는 남용 방지 카운터까지 같이 죽었다.
+//
+// 그래서 표본만 센다. 기기 ID로 조각을 골라 일부만 실제로 세고, 읽을 때 배수를 곱해
+// 되돌린다. 같은 사람은 늘 같은 조각이라 "세는 사람"이 날마다 바뀌지 않는다.
+export const SAMPLE_DENOMINATOR = 5;
+
+export function isSampled(id) {
+  return pickShard(id) % SAMPLE_DENOMINATOR === 0;
+}
+
+/**
+ * 표본만 세는 방문 집계. 세지 않기로 한 사람에게는 KV 쓰기가 한 번도 나가지 않는다.
+ */
+export async function countVisitSampled(kv, id, date) {
+  if (!kv || !id) return false;
+  if (!isSampled(id)) return false;
+  return countVisit(kv, id, date);
+}
+
 export async function readStats(kv, date) {
   if (!kv) return { today: 0, total: 0 };
   const shards = Array.from({ length: SHARDS }, (_, i) => i);

@@ -86,7 +86,7 @@ function renderFavorites() {
 
 async function init() {
   try {
-    const data = await fetchJson(window.withReview("/api/places"));
+    const data = await fetchJson("/api/places");
     favoriteState.places = data.places || [];
   } catch (err) {
     console.error(err);

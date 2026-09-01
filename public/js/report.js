@@ -61,17 +61,12 @@ function hasTurnstileSiteKey() {
   return Boolean(window.__ENV__ && window.__ENV__.TURNSTILE_SITE_KEY);
 }
 
-// 검수 모드에서는 토큰이 사람 확인을 대신하므로 Turnstile을 기다리지 않는다.
-function isReviewMode() {
-  return Boolean(window.reviewToken && window.reviewToken());
-}
-
 function updateSubmitState() {
   const btn = document.getElementById("report-submit-btn");
   if (!btn) return;
-  const ready = isReviewMode() || hasTurnstileSiteKey();
+  const ready = hasTurnstileSiteKey();
   // 사람 확인이 끝났거나, 끝낼 방법이 없는 것이 확인된 경우 둘 다 보낼 수 있다.
-  const canSend = isReviewMode() || Boolean(turnstileToken) || turnstileUnavailable;
+  const canSend = Boolean(turnstileToken) || turnstileUnavailable;
   btn.disabled = !selectedValue || !ready || !canSend;
   btn.textContent = ready ? "제보하기" : "제보 기능을 준비 중이에요";
 }
@@ -111,13 +106,6 @@ function showTurnstileLoadError() {
 function renderTurnstile(retriesLeft = 50) {
   const container = document.getElementById("report-turnstile");
   if (!container || turnstileWidgetId !== null || !hasTurnstileSiteKey()) return;
-  // 검수 모드는 토큰이 사람 확인을 대신하므로 위젯을 띄우지 않는다. 광고 차단으로
-  // 스크립트가 안 실리는 브라우저에서도 제보가 막히지 않아야 한다.
-  if (isReviewMode()) {
-    container.hidden = true;
-    updateSubmitState();
-    return;
-  }
 
   if (!window.turnstile) {
     if (retriesLeft <= 0) {
@@ -219,9 +207,7 @@ async function submitReport(placeId) {
   btn.disabled = true;
 
   try {
-    // 검수 모드면 토큰을 함께 보낸다 — 광고 차단으로 Turnstile이 안 실려도
-    // 검수자는 제보할 수 있어야 한다.
-    const res = await fetch(window.apiUrl(window.withReview("/api/reports")), {
+    const res = await fetch(window.apiUrl("/api/reports"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

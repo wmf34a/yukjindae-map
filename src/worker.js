@@ -139,10 +139,8 @@ export function buildNewPlaceValue({ value, amenities }) {
   return picked.length ? `${body}\n[편의시설] ${picked.join(" / ")}` : body;
 }
 
-// reviewer: 검수 토큰으로 들어온 요청. 초대받은 사람만 토큰을 갖고 있으므로
-// 사람 확인의 목적을 이미 충족한다 — 자세한 사정은 handleReport 주석 참고.
-export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }, { reviewer = false } = {}) {
-  if (!reviewer && (typeof turnstileToken !== "string" || !turnstileToken)) {
+export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }) {
+  if (typeof turnstileToken !== "string" || !turnstileToken) {
     return "사람인지 확인이 필요합니다.";
   }
   if (typeof placeName !== "string" || !placeName.trim()) return "장소 이름이 필요합니다.";
@@ -152,12 +150,12 @@ export function validateNewPlacePayload({ placeName, value, turnstileToken, amen
   return validateNewPlaceAmenities(amenities);
 }
 
-export function validateReportPayload({ placeId, field, value, turnstileToken }, { reviewer = false } = {}) {
+export function validateReportPayload({ placeId, field, value, turnstileToken }) {
   if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
   // 노션 페이지 ID 형식이 아닌 값이 그대로 API 경로에 들어가지 않도록 막는다.
   if (!isNotionId(placeId)) return "잘못된 장소 ID입니다.";
   if (typeof field !== "string" || !REPORTABLE_FIELDS.has(field)) return "지원하지 않는 필드입니다.";
-  if (!reviewer && (typeof turnstileToken !== "string" || !turnstileToken)) {
+  if (typeof turnstileToken !== "string" || !turnstileToken) {
     return "사람인지 확인이 필요합니다.";
   }
   if (typeof value !== "string" || !value.trim()) return "제안값이 필요합니다.";
@@ -189,15 +187,7 @@ export function matchesQuery(place, { region, category, q }) {
 
 // handlePlaces(목록 API)와 enrich.js(블로그 힌트 배치)가 같은 전체 장소 목록이
 // 필요해서, 노션 페이지네이션 순회 로직을 공용 헬퍼로 뺐다.
-// 검수용 토큰. 지역장이 아직 공개하지 않은 장소까지 앱에서 보려면 필요하다.
-// 노션 편집 권한을 열면 실수로 행이 지워질 수 있어, 대신 앱에서 읽기만 하도록
-// 길을 냈다. 고칠 내용은 기존 제보 기능으로 받는다.
-export function isReviewer(env, url) {
-  const token = url.searchParams.get("review");
-  return Boolean(token && env.REVIEW_TOKEN && token === env.REVIEW_TOKEN);
-}
-
-async function fetchAllPlaces(env, { includeHidden = false } = {}) {
+async function fetchAllPlaces(env) {
   const notionHeaders = {
     Authorization: `Bearer ${env.NOTION_API_KEY}`,
     "Notion-Version": "2022-06-28",
@@ -210,9 +200,7 @@ async function fetchAllPlaces(env, { includeHidden = false } = {}) {
   // 다음 페이지 커서가 이전 응답에서만 나오므로 순차 호출이 필수라 병렬화 불가
   /* oxlint-disable no-await-in-loop */
   do {
-    const body = { page_size: 100 };
-    // 검수 모드에서는 비공개 장소까지 가져온다.
-    if (!includeHidden) body.filter = { property: "공개여부", checkbox: { equals: true } };
+    const body = { page_size: 100, filter: { property: "공개여부", checkbox: { equals: true } } };
     if (cursor) body.start_cursor = cursor;
 
     const res = await fetchWithTimeout(
@@ -255,7 +243,7 @@ async function withMirroredPlacePhotos(env, places) {
 // 상세 화면은 한 곳만 필요한데 목록 전체(195곳·69KB)를 받아 그 안에서 찾고
 // 있었다. 노션은 페이지 하나를 바로 줄 수 있으므로 그것만 읽는다.
 //
-// 공개여부는 여기서 다시 본다 — 아직 검수 중인 장소의 id를 주소창에 넣으면
+// 공개여부는 여기서 다시 본다 — 아직 공개하지 않은 장소의 id를 주소창에 넣으면
 // 목록에 없는 곳이 상세로 열려 버린다.
 // 설정이 제대로 들어갔는지 확인하는 곳. 값은 절대 내보내지 않고 있음/없음만 준다.
 //
@@ -310,7 +298,7 @@ async function handlePlaceById(env, url, id) {
     }
 
     const place = toPlace(page);
-    if (!place.published && !isReviewer(env, url)) {
+    if (!place.published) {
       return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
     }
 
@@ -330,11 +318,7 @@ async function handlePlaces(env, url) {
   }
 
   try {
-    const review = isReviewer(env, url);
-    const places = await withMirroredPlacePhotos(
-      env,
-      await fetchAllPlaces(env, { includeHidden: review })
-    );
+    const places = await withMirroredPlacePhotos(env, await fetchAllPlaces(env));
 
     const limitParam = url.searchParams.get("limit");
     if (!limitParam) {
@@ -865,18 +849,8 @@ async function verifyTurnstile(env, token, ip) {
   return data.success === true;
 }
 
-// 검수 토큰으로 들어온 요청은 Turnstile을 건너뛴다.
-//
-// 삼성 인터넷 같은 곳에서 광고 차단이 challenges.cloudflare.com을 막으면 Turnstile
-// 스크립트가 아예 안 실려 "보안 인증을 불러오지 못했어요"에서 제보가 통째로 막힌다.
-// 정작 그 제보를 부탁한 것이 검수자인데, 브라우저 설정 때문에 못 하게 되는 셈이다.
-//
-// 토큰은 초대받은 사람에게만 개별로 보낸 값이라 사람 확인의 목적을 이미 충족한다.
-// 토큰이 새더라도 제보는 장소 DB가 아니라 승인 큐로만 들어가고, 요청 제한도
-// 그대로 걸린다.
-async function handleReport(request, env, ctx, url) {
+async function handleReport(request, env, ctx) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
-  const reviewer = isReviewer(env, url);
 
   if (request.method !== "POST") {
     return new Response(JSON.stringify({ error: "허용되지 않은 메서드입니다." }), { status: 405, headers });
@@ -895,8 +869,8 @@ async function handleReport(request, env, ctx, url) {
   // 신규 장소 제보는 검증 규칙도 저장 형태도 달라서 먼저 갈라낸다.
   const isNewPlace = (body || {}).field === NEW_PLACE_FIELD;
   const validationError = isNewPlace
-    ? validateNewPlacePayload(body || {}, { reviewer })
-    : validateReportPayload(body || {}, { reviewer });
+    ? validateNewPlacePayload(body || {})
+    : validateReportPayload(body || {});
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
@@ -913,10 +887,9 @@ async function handleReport(request, env, ctx, url) {
   // 제보는 장소 DB가 아니라 승인 큐로만 들어가고 사람이 다 읽는다. 그래서 여기서
   // 막아 얻는 것보다 잃는 것이 크다. 대신 확인이 안 된 제보는 시간당 허용량을
   // 좁히고, 알림에 표시해 운영자가 더 살펴보게 한다.
-  const verified = reviewer || (await verifyTurnstile(env, turnstileToken, ip));
+  const verified = await verifyTurnstile(env, turnstileToken, ip);
 
-  // 검수 중인 지역장은 한 장소에서 여러 건을 이어 보내는 게 정상이라 따로 센다.
-  const quota = reportQuota({ reviewer, verified });
+  const quota = reportQuota({ verified });
   const allowed = await consumeRateLimit(env, {
     scope: quota.scope,
     ip,
@@ -1586,6 +1559,14 @@ function handlePreflight(request, origin) {
   });
 }
 
+// 목록 엣지 캐시 수명. 60초로 뒀더니 오픈 첫날 재보니 열 번 중 네 번이 캐시를
+// 놓쳤다 — 엣지가 지역별로 나뉘어 있어 한 곳에 채워도 다른 곳은 비어 있고, 그
+// 요청은 노션을 세 번 순차로 부르느라 1.6~3.1초가 걸렸다. 캐시에 맞으면 0.6초다.
+//
+// 데이터를 바꾸는 크론이 10분 주기라 5분은 최신성을 해치지 않는다. 노션에서 손으로
+// 고친 내용도 5분 안에는 보인다.
+const LIST_CACHE_SECONDS = 300;
+
 // 라우팅 본문. 바깥 fetch()가 이 응답에 CORS 헤더를 덧씌운다.
 async function handleRequest(request, env, ctx) {
   const url = new URL(request.url);
@@ -1595,22 +1576,22 @@ async function handleRequest(request, env, ctx) {
   }
   if (url.pathname.startsWith("/api/places/")) {
     const id = url.pathname.slice("/api/places/".length);
-    return withEdgeCache(request, ctx, 60, () => handlePlaceById(env, url, id));
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handlePlaceById(env, url, id));
   }
   if (url.pathname === "/api/places") {
     if (request.method === "GET" && !url.search) {
-      return withEdgeCache(request, ctx, 60, () => handlePlaces(env, url));
+      return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handlePlaces(env, url));
     }
     return handlePlaces(env, url);
   }
   if (url.pathname === "/api/banners") {
-    return withEdgeCache(request, ctx, 60, () => handleBanners(env));
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handleBanners(env));
   }
   if (url.pathname === "/api/courses") {
-    return withEdgeCache(request, ctx, 60, () => handleCourses(env));
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handleCourses(env));
   }
   if (url.pathname === "/api/festivals") {
-    return withEdgeCache(request, ctx, 60, () => handleFestivals(env));
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handleFestivals(env));
   }
   if (url.pathname.startsWith("/api/festivals/")) {
     const id = url.pathname.slice("/api/festivals/".length);
@@ -1669,7 +1650,7 @@ async function handleRequest(request, env, ctx) {
     return withProxyRateLimit(request, env, () => handleDirections(env, url));
   }
   if (url.pathname === "/api/reports") {
-    return handleReport(request, env, ctx, url);
+    return handleReport(request, env, ctx);
   }
   if (url.pathname.startsWith("/images/")) {
     return handleImage(env, request, url.pathname.slice("/images/".length));

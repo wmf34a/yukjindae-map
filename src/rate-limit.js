@@ -14,23 +14,13 @@ export const REPORT_RATE_LIMIT_PER_HOUR = 5;
 // 사람이 다 읽으므로 여기서 새는 비용은 "운영자가 스팸을 몇 건 더 본다" 정도다.
 export const UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR = 2;
 
-// 검수용 링크를 가진 지역장. 한 장소를 훑으면 고칠 것이 여러 개 나오는 게 정상이라
-// 시간당 5건은 너무 좁다 — 실제로 한 분이 다섯 건을 이어 보내다 막혀서
-// "잠시 후 다시 시도해주세요"만 보고 손을 놓으셨다.
-//
-// 토큰을 가진 사람은 우리가 이름을 아는 소수라 크게 열어도 된다. 그래도 상한을
-// 두는 이유는 링크가 새어 나갔을 때를 대비해서다.
-export const REVIEWER_REPORT_RATE_LIMIT_PER_HOUR = 60;
-
 /**
  * 제보 한 건에 적용할 시간당 허용량과 카운터 이름.
  *
- * 셋을 따로 센다. 지역장은 넉넉히, 사람 확인을 거친 익명 제보는 보통,
- * 확인을 못 거친 제보는 좁게. 카운터를 나누지 않으면 지역장이 쓴 건수가
- * 익명 제보 몫까지 같이 깎는다.
+ * 사람 확인을 거친 제보와 못 거친 제보를 따로 센다. 카운터를 나누지 않으면
+ * 확인된 제보가 확인 안 된 제보 몫까지 같이 깎는다.
  */
-export function reportQuota({ reviewer, verified }) {
-  if (reviewer) return { scope: "report-reviewer", limit: REVIEWER_REPORT_RATE_LIMIT_PER_HOUR };
+export function reportQuota({ verified }) {
   if (verified) return { scope: "report", limit: REPORT_RATE_LIMIT_PER_HOUR };
   return { scope: "report-unverified", limit: UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR };
 }

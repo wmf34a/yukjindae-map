@@ -129,8 +129,6 @@ function renderRegionLegend() {
   });
 }
 
-// 검수 모드로 들어왔다는 걸 화면에 드러낸다. 아직 공개하지 않은 장소가 섞여 있어
-// 일반 화면과 다르다는 것을 모르면 "왜 이런 게 있지" 하게 된다.
 // 헤더의 공유 버튼. 아빠들끼리 알려서 퍼지는 것이 이 앱이 늘어나는 방식이라
 // 보내는 길이 눈에 보이는 자리에 있어야 한다.
 function initShareButton() {
@@ -138,8 +136,7 @@ function initShareButton() {
   if (!btn) return;
 
   btn.addEventListener("click", async () => {
-    // 검수 링크에는 토큰이 붙어 있다. 그대로 공유되면 검수 전 정보가 그대로
-    // 퍼지므로, 항상 깨끗한 주소만 내보낸다.
+    // 주소창에 뭐가 붙어 있든 항상 깨끗한 주소만 내보낸다.
     const url = `${location.origin}${location.pathname}`;
     const share = {
       title: "아빠, 어디가?",
@@ -164,14 +161,6 @@ function initShareButton() {
       // 사용자가 공유 시트를 닫은 경우가 대부분이라 조용히 넘어간다.
     }
   });
-}
-
-function renderReviewBanner() {
-  if (!window.reviewToken()) return;
-  const bar = document.createElement("div");
-  bar.className = "review-bar";
-  bar.textContent = "검수 모드 — 아직 공개하지 않은 장소가 함께 보입니다";
-  document.body.prepend(bar);
 }
 
 // 지금까지는 "축제·행사 TOP10 / 지금 열리는 행사 10개"라는 링크 한 줄이었다.
@@ -280,18 +269,12 @@ function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
     : "";
   const event = activeEvent(place);
   const eventBadge = event ? `<span class="place-grid__event-badge">🎟 할인</span>` : "";
-  // 검수 모드에서만 비공개 장소가 섞여 온다. 표시가 없으면 이미 공개된 곳으로
-  // 착각해 검수해야 할 곳을 지나친다.
-  const pendingBadge = place.published === false
-    ? `<span class="place-grid__pending">검수 대기</span>`
-    : "";
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
         ${rankBadge}
         ${badge}
-        ${pendingBadge}
         ${eventBadge}
         ${favoriteButtonHtml(place.id, "place-grid__favorite-btn")}
       </div>
@@ -606,7 +589,7 @@ function initNoticesBell() {
 
 async function loadPlaces() {
   try {
-    const data = await fetchJson(window.withReview("/api/places"));
+    const data = await fetchJson("/api/places");
     const places = data.places || [];
     // 바뀐 게 없으면 그대로 둔다 — 목록을 다시 그리면 보고 있던 자리가 흔들린다.
     if (state.places.length && JSON.stringify(places) === JSON.stringify(state.places)) return;
@@ -799,7 +782,6 @@ document.addEventListener("DOMContentLoaded", () => {
   countVisit();
   renderRegionMap();
   renderRegionLegend();
-  renderReviewBanner();
   renderFestivals();
   renderCategoryFilter();
   initNoticesBell();

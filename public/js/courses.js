@@ -42,7 +42,7 @@ async function loadCourses() {
   try {
     const [coursesData, placesData] = await Promise.all([
       fetchJson("/api/courses"),
-      fetchJson(window.withReview("/api/places")),
+      fetchJson("/api/places"),
     ]);
     const courses = coursesData.courses || [];
     const places = placesData.places || [];

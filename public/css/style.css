@@ -1664,30 +1664,6 @@ body {
   cursor: pointer;
 }
 
-/* 검수 모드 표시. 아직 공개하지 않은 장소가 섞여 있다는 것을 화면에서 알아야
-   한다 — 모르면 "왜 이런 게 있지" 하거나, 검수할 곳을 지나친다. */
-.review-bar {
-  /* 헤더도 sticky top:0 이라 같이 붙이면 서로 겹친다. 처음 한 번 보이면 되고,
-     스크롤 중에는 카드의 "검수 대기" 배지가 계속 알려준다. */
-  padding: 9px 14px;
-  background: #7A4F1D;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
-}
-
-.place-grid__pending {
-  position: absolute;
-  left: 8px;
-  bottom: 8px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: #7A4F1D;
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
 
 /* 목록 끝의 보조 링크들. 자주 쓰는 것이 아니라 조용히 둔다. */
 .foot-links {

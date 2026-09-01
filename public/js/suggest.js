@@ -112,7 +112,7 @@ async function submit() {
   btn.disabled = true;
 
   try {
-    const res = await fetch(window.apiUrl(window.withReview("/api/reports")), {
+    const res = await fetch(window.apiUrl("/api/reports"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

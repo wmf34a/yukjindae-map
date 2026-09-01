@@ -203,12 +203,12 @@ function render(place) {
 // 워커가 먼저 바뀌어도 옛 번들이 깨지면 안 되므로 양쪽을 다 살려 둔다.
 async function loadPlace(id) {
   try {
-    const data = await fetchJson(window.withReview(`/api/places/${encodeURIComponent(id)}`));
+    const data = await fetchJson(`/api/places/${encodeURIComponent(id)}`);
     if (data && data.place) return data.place;
   } catch {
     // 아래 목록 조회로 넘어간다.
   }
-  const data = await fetchJson(window.withReview("/api/places"));
+  const data = await fetchJson("/api/places");
   return (data.places || []).find((p) => p.id === id) || null;
 }
 

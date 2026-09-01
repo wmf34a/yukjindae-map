@@ -139,10 +139,14 @@ export function buildNewPlaceValue({ value, amenities }) {
   return picked.length ? `${body}\n[편의시설] ${picked.join(" / ")}` : body;
 }
 
-export function validateNewPlacePayload({ placeName, value, turnstileToken, amenities }) {
-  if (typeof turnstileToken !== "string" || !turnstileToken) {
-    return "사람인지 확인이 필요합니다.";
-  }
+// 사람 확인(Turnstile) 토큰은 여기서 요구하지 않는다.
+//
+// 광고 차단이 challenges.cloudflare.com 을 막으면 토큰을 받을 방법 자체가 없다.
+// 여기서 400 으로 끊으면 그 사람은 추천을 아예 못 한다 — 확인 못 거친 제보를 좁게
+// 받으려고 따로 만든 허용량(UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR)이 이 검사 탓에
+// 한 번도 쓰이지 못했고, 화면의 "인증을 못 불러와도 보낼 수 있다"는 안내도 거짓말이
+// 되어 있었다. 확인 여부는 handleReport 가 판단해 허용량과 알림 표시로 다룬다.
+export function validateNewPlacePayload({ placeName, value, amenities }) {
   if (typeof placeName !== "string" || !placeName.trim()) return "장소 이름이 필요합니다.";
   if (placeName.trim().length > NEW_PLACE_NAME_MAX) return "장소 이름이 너무 깁니다.";
   if (typeof value !== "string" || !value.trim()) return "어떤 점이 좋았는지 알려주세요.";
@@ -150,14 +154,12 @@ export function validateNewPlacePayload({ placeName, value, turnstileToken, amen
   return validateNewPlaceAmenities(amenities);
 }
 
-export function validateReportPayload({ placeId, field, value, turnstileToken }) {
+// 사람 확인 토큰을 요구하지 않는 이유는 validateNewPlacePayload 주석 참고.
+export function validateReportPayload({ placeId, field, value }) {
   if (typeof placeId !== "string" || !placeId.trim()) return "placeId가 필요합니다.";
   // 노션 페이지 ID 형식이 아닌 값이 그대로 API 경로에 들어가지 않도록 막는다.
   if (!isNotionId(placeId)) return "잘못된 장소 ID입니다.";
   if (typeof field !== "string" || !REPORTABLE_FIELDS.has(field)) return "지원하지 않는 필드입니다.";
-  if (typeof turnstileToken !== "string" || !turnstileToken) {
-    return "사람인지 확인이 필요합니다.";
-  }
   if (typeof value !== "string" || !value.trim()) return "제안값이 필요합니다.";
   if (BOOLEAN_FIELDS.has(field)) {
     if (!BOOLEAN_VALUES.has(value)) return "제안값은 있음/없음 중 하나여야 합니다.";

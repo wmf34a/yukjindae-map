@@ -76,8 +76,9 @@ describe("validateReportPayload", () => {
     expect(validateReportPayload({ ...valid, field: "장소명" })).toMatch(/지원하지 않는/);
   });
 
-  it("turnstileToken이 없으면 걸러낸다", () => {
-    expect(validateReportPayload({ ...valid, turnstileToken: "" })).toMatch(/사람인지/);
+  // 사람 확인은 여기서 보지 않는다 — 자세한 사정은 validateNewPlacePayload 주석 참고.
+  it("turnstileToken이 없어도 통과한다", () => {
+    expect(validateReportPayload({ ...valid, turnstileToken: "" })).toBeNull();
   });
 
   it("불리언 필드에 있음/없음이 아닌 값은 걸러낸다", () => {
@@ -121,8 +122,10 @@ describe("validateNewPlacePayload", () => {
     expect(validateNewPlacePayload({ ...valid, value: "가".repeat(201) })).toMatch(/깁니다/);
   });
 
-  it("사람 확인 토큰이 없으면 걸러낸다", () => {
-    expect(validateNewPlacePayload({ ...valid, turnstileToken: "" })).toMatch(/사람/);
+  // 인증을 못 불러오는 브라우저에서도 추천은 보낼 수 있어야 한다. 확인 여부는
+  // 허용량과 알림 표시로 다룬다.
+  it("사람 확인 토큰이 없어도 통과한다", () => {
+    expect(validateNewPlacePayload({ ...valid, turnstileToken: "" })).toBeNull();
   });
 
   it("편의시설을 같이 보내도 통과한다", () => {
@@ -229,29 +232,25 @@ describe("isFirstDayInKst", () => {
   });
 });
 
-describe("사람 확인", () => {
+describe("제보 검증", () => {
   const base = { placeId: "3a5a4eba1ccb8184a779e148112599e7", field: "운영시간", value: "10시 오픈" };
 
-  it("Turnstile 토큰이 없으면 막는다", () => {
-    expect(validateReportPayload(base)).toMatch(/사람인지/);
-    expect(validateNewPlacePayload({ placeName: "가", value: "나" })).toMatch(/사람인지/);
+  // 광고 차단이 challenges.cloudflare.com 을 막으면 Turnstile 토큰을 받을 방법이
+  // 없다. 여기서 막으면 그 사람은 제보도 추천도 못 한다 — 확인 여부는 허용량으로
+  // 다루고, 검증은 내용만 본다.
+  it("사람 확인 토큰이 없어도 통과한다", () => {
+    expect(validateReportPayload(base)).toBeNull();
+    expect(validateNewPlacePayload({ placeName: "가", value: "나" })).toBeNull();
   });
 
-  // 사람 확인은 사람 확인만 본다. 나머지 검증은 그대로 걸려야 한다.
-  it("토큰이 있어도 다른 검증은 그대로 받는다", () => {
-    const ok = { ...base, turnstileToken: "t" };
-    expect(validateReportPayload({ ...ok, field: "공개여부" })).toMatch(/지원하지 않는/);
-    expect(validateReportPayload({ ...ok, placeId: "잘못된id" })).toMatch(/잘못된 장소/);
-    expect(validateReportPayload({ ...ok, value: "" })).toMatch(/제안값/);
+  it("내용 검증은 그대로 걸린다", () => {
+    expect(validateReportPayload({ ...base, field: "공개여부" })).toMatch(/지원하지 않는/);
+    expect(validateReportPayload({ ...base, placeId: "잘못된id" })).toMatch(/잘못된 장소/);
+    expect(validateReportPayload({ ...base, value: "" })).toMatch(/제안값/);
+    expect(validateNewPlacePayload({ placeName: "", value: "나" })).toMatch(/장소 이름/);
+    expect(validateNewPlacePayload({ placeName: "가", value: "" })).toMatch(/어떤 점이/);
     expect(validateNewPlacePayload(
-      { placeName: "가", value: "나", turnstileToken: "t", amenities: { 수유실: "아마도" } }
+      { placeName: "가", value: "나", amenities: { 수유실: "아마도" } }
     )).toMatch(/편의시설/);
-  });
-
-  it("제대로 채우면 통과한다", () => {
-    expect(validateReportPayload({ ...base, turnstileToken: "t" })).toBeNull();
-    expect(validateNewPlacePayload(
-      { placeName: "가", value: "좋아요", turnstileToken: "t" }
-    )).toBeNull();
   });
 });

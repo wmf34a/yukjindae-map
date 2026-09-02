@@ -24,6 +24,7 @@ import { handleNearbyPlace, handleGeocode, handleDirections } from "./naver-prox
 import { makeKakaoNearby, makeRoadDistance } from "./place-sources.js";
 import {
   consumeRateLimit,
+  consumeProxyLimit,
   hashIp,
   tooManyRequestsResponse,
   PROXY_RATE_LIMIT_PER_MINUTE,
@@ -1592,7 +1593,7 @@ async function runPublicDataPlaceMatch(env) {
 // 분당 호출 수를 제한한다 — 정상 사용(코스 한 개 열 때 구간 수만큼)은 넉넉히 통과한다.
 async function withProxyRateLimit(request, env, handler) {
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
-  const allowed = await consumeRateLimit(env, {
+  const allowed = await consumeProxyLimit({
     scope: "proxy",
     ip,
     limit: PROXY_RATE_LIMIT_PER_MINUTE,
@@ -1813,11 +1814,17 @@ export default {
     }
     if (event.cron === REPORT_APPLY_CRON) {
       ctx.waitUntil(runScheduledReportApply(env));
-      // 방문자 수 갱신도 여기 얹는다. 크론은 워커당 5개까지라 자리가 없고,
-      // 10분마다 다시 세는 것으로 충분하다.
-      ctx.waitUntil(
-        refreshVisitStats(env).catch((err) => console.warn(`방문자 집계 실패: ${err.message}`))
-      );
+      // 방문자 수 갱신도 여기 얹는다. 크론은 워커당 5개까지라 자리가 없다.
+      //
+      // 다만 30분에 한 번만 센다. 이 크론은 10분마다 도는데, 그때마다 KV에 쓰면
+      // 하루 144회다 — 무료 플랜의 하루 쓰기 한도가 1,000회뿐이라 아까운 자리다.
+      // 화면의 방문자 수가 30분 늦는 것은 아무도 눈치채지 못한다. 제보 반영은
+      // 늦으면 곤란하므로 그대로 10분마다 돈다.
+      if (new Date().getUTCMinutes() % 30 < 10) {
+        ctx.waitUntil(
+          refreshVisitStats(env).catch((err) => console.warn(`방문자 집계 실패: ${err.message}`))
+        );
+      }
       return;
     }
     if (event.cron === ENRICHMENT_CRON) {

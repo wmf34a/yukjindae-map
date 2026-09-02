@@ -4,6 +4,7 @@ import {
   hashIp,
   tooManyRequestsResponse,
   PROXY_RATE_LIMIT_PER_MINUTE,
+  consumeProxyLimit,
   reportQuota,
   REPORT_RATE_LIMIT_PER_HOUR,
   UNVERIFIED_REPORT_RATE_LIMIT_PER_HOUR,
@@ -127,5 +128,55 @@ describe("reportQuota", () => {
   it("둘이 서로 다른 카운터를 쓴다", () => {
     expect(reportQuota({ verified: true }).scope)
       .not.toBe(reportQuota({ verified: false }).scope);
+  });
+});
+
+describe("consumeProxyLimit", () => {
+  // Cache API 를 흉내낸다. put 한 값을 match 로 돌려주기만 하면 된다.
+  function fakeCache() {
+    const store = new Map();
+    return {
+      async match(req) {
+        const body = store.get(req.url);
+        return body === undefined ? undefined : new Response(body);
+      },
+      async put(req, res) {
+        store.set(req.url, await res.text());
+      },
+      size: () => store.size,
+    };
+  }
+
+  let cache;
+  beforeEach(() => {
+    cache = fakeCache();
+    globalThis.caches = { default: cache };
+  });
+
+  it("한도 안에서는 통과한다", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      expect(await consumeProxyLimit({ scope: "proxy", ip: "1.1.1.1", limit: 3, windowSeconds: 60 })).toBe(true);
+    }
+  });
+
+  it("한도를 넘으면 막는다", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await consumeProxyLimit({ scope: "proxy", ip: "1.1.1.1", limit: 3, windowSeconds: 60 });
+    }
+    expect(await consumeProxyLimit({ scope: "proxy", ip: "1.1.1.1", limit: 3, windowSeconds: 60 })).toBe(false);
+  });
+
+  it("IP 가 다르면 따로 센다", async () => {
+    for (let i = 0; i < 3; i += 1) {
+      await consumeProxyLimit({ scope: "proxy", ip: "1.1.1.1", limit: 3, windowSeconds: 60 });
+    }
+    expect(await consumeProxyLimit({ scope: "proxy", ip: "2.2.2.2", limit: 3, windowSeconds: 60 })).toBe(true);
+  });
+
+  // KV 를 쓰지 않는다는 것이 이 함수의 존재 이유다 — 무료 플랜 쓰기 한도를
+  // 이 카운터 하나가 절반 넘게 먹고 있었다.
+  it("Cache API 를 못 쓰는 환경에서는 그냥 통과시킨다", async () => {
+    globalThis.caches = undefined;
+    expect(await consumeProxyLimit({ scope: "proxy", ip: "1.1.1.1", limit: 1, windowSeconds: 60 })).toBe(true);
   });
 });

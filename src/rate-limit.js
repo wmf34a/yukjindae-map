@@ -37,6 +37,40 @@ export async function hashIp(ip) {
   return shortHash(ip || "unknown");
 }
 
+// 프록시 남용 방지는 Cache API 로 센다.
+//
+// KV 로 세던 시절, 이 카운터 하나가 무료 플랜의 하루 쓰기 한도(1,000회)를 절반
+// 넘게 먹었다. 장소 상세를 열 때마다 근처 맛집·카페 조회가 나가므로 방문자가
+// 수백 명이면 쓰기도 수백 번이다. 한도를 넘기면 put 이 throw 하고, 같은 KV 를
+// 쓰는 방문자 집계까지 함께 멈춘다.
+//
+// Cache API 는 쓰기 한도가 없다. 대신 엣지마다 따로 세므로 정확한 총합이 아니다.
+// 그래도 이 카운터의 목적은 "한 IP 가 우리 네이버 쿼터를 태우는 것"을 막는 것이라,
+// 엣지별 근사로 충분하다 — 여러 엣지에 나눠 때리려면 그만큼 여러 지역에서
+// 접속해야 하고, 그건 이 앱이 상대할 규모의 남용이 아니다.
+export async function consumeProxyLimit({ scope, ip, limit, windowSeconds }) {
+  if (typeof caches === "undefined" || !caches.default) return true;
+  const bucket = Math.floor(Date.now() / (windowSeconds * 1000));
+  const key = new Request(`https://rate-limit.internal/${scope}/${await hashIp(ip)}/${bucket}`);
+  const cache = caches.default;
+  let count = 0;
+  try {
+    const hit = await cache.match(key);
+    if (hit) count = Number(await hit.text()) || 0;
+  } catch {
+    return true; // 못 읽으면 세지 못할 뿐이다. 막을 근거가 없다.
+  }
+  if (count >= limit) return false;
+  try {
+    await cache.put(key, new Response(String(count + 1), {
+      headers: { "cache-control": `max-age=${windowSeconds}` },
+    }));
+  } catch {
+    // 세지 못해도 요청은 살린다. KV 시절과 같은 이유다.
+  }
+  return true;
+}
+
 export async function consumeRateLimit(env, { scope, ip, limit, windowSeconds }) {
   if (!env.RATE_LIMIT) return true; // KV 미바인딩 환경(로컬 등)에서는 통과시킨다.
 

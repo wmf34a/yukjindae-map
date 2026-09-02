@@ -46,6 +46,11 @@ const CACHED_AT = "x-cached-at";
 // 새 값은 뒤에서 받아 갈아 끼운다.
 const CACHE_HOLD_SECONDS = 3600;
 
+// 네이버·카카오 프록시 응답을 엣지에 두는 기간. 가게 위치와 주행 경로는 하루
+// 사이에 바뀌지 않는다. 이 값이 곧 바깥 API 호출 횟수를 나눈다 —
+// 같은 질문이 하루에 백 번 와도 한 번만 나간다.
+const PROXY_CACHE_SECONDS = 86400;
+
 // 장소/배너/코스/축제 목록은 노션 API를 순차 조회(+이미지 미러링 R2 조회)하느라
 // 요청마다 1초 안팎이 걸린다. 가족이 직접 관리하는 콘텐츠라 초 단위 최신성이
 // 필요하지 않으므로, 엣지에서 짧게 캐싱해서 재방문/새로고침을 빠르게 만든다.
@@ -67,7 +72,11 @@ export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
     // max-age는 브라우저 자체 캐시용으로 짧게(1분) — 이 둘을 분리 안 하면 모바일
     // 브라우저가 엣지 캐시와 똑같이 새로고침해도 재요청을 안 해서, 서버를 고쳐도
     // 한동안 옛날 응답이 계속 보이는 문제가 있었다(실제로 겪음).
-    toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${CACHE_HOLD_SECONDS}`);
+    // 엣지가 실제로 들고 있는 기간은 s-maxage 다. CACHE_HOLD_SECONDS 로만 고정하면
+    // ttlSeconds 를 아무리 길게 줘도 한 시간 뒤 캐시가 사라져 바깥 API 를 다시
+    // 부른다 — 하루짜리로 잡은 프록시 캐시가 그래서 무의미해질 뻔했다.
+    const holdSeconds = Math.max(CACHE_HOLD_SECONDS, ttlSeconds);
+    toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${holdSeconds}`);
     toCache.headers.set(CACHED_AT, String(Date.now()));
     const forCache = toCache.clone();
     if (ctx) ctx.waitUntil(cache.put(cacheKey, forCache));
@@ -1957,6 +1966,29 @@ const CSP = [
   "form-action 'self'",
 ].join("; ");
 
+// 정적 자산의 캐시 수명.
+//
+// Static Assets 는 기본으로 `max-age=0, must-revalidate` 를 준다. 그래서 CSS·JS·
+// 아이콘이 방문마다 다시 확인되고, 그 확인 하나하나가 Worker 요청으로 잡힌다.
+// 런칭 첫날 요청이 127,793건이었고 무료 한도는 하루 100,000건이다.
+//
+// 파일 이름에 버전이 없어 immutable 은 못 준다. 대신 짧게 준다 — 5분이면 한
+// 사람의 한 번 방문 동안에는 다시 묻지 않는다. 배포로 파일이 바뀌어도 5분 뒤엔
+// 새것을 받고, 홈 화면에 설치해 쓰는 사람은 서비스워커가 따로 관리한다.
+//
+// HTML 과 서비스워커는 제외한다. HTML 을 캐시하면 배포한 화면이 안 바뀌고,
+// sw.js 를 캐시하면 새 버전 감지 자체가 늦어진다.
+const ASSET_CACHE_SECONDS = 300;
+const NO_CACHE_ASSETS = /\.html?$|^\/sw\.js$|^\/manifest\.json$|^\/$/;
+
+export function withAssetCache(url, response) {
+  if (response.status !== 200) return response;
+  if (NO_CACHE_ASSETS.test(url.pathname)) return response;
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", `public, max-age=${ASSET_CACHE_SECONDS}`);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 function withSecurityHeaders(response) {
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
@@ -2102,14 +2134,23 @@ async function handleRequest(request, env, ctx) {
   if (url.pathname === "/naver-config") {
     return handleNaverConfig(env);
   }
+  // 이 셋은 네이버·카카오를 대신 부르는 프록시다. 응답에 cache-control 을 달아
+  // 두었지만 그건 브라우저 캐시일 뿐이라, 같은 장소를 백 명이 열면 바깥 API 도
+  // 백 번 불렸다. 그중 네이버 지오코딩·길찾기는 호출당 돈이 나간다.
+  //
+  // 엣지 캐시를 앞에 둔다. 캐시 키는 쿼리스트링까지 포함하므로 같은 질문에만
+  // 재사용된다. 근처 가게·좌표·주행 경로는 하루 사이에 바뀌지 않는다.
   if (url.pathname === "/api/nearby-place") {
-    return withProxyRateLimit(request, env, () => handleNearbyPlace(env, url));
+    return withProxyRateLimit(request, env, () =>
+      withEdgeCache(request, ctx, PROXY_CACHE_SECONDS, () => handleNearbyPlace(env, url)));
   }
   if (url.pathname === "/api/geocode") {
-    return withProxyRateLimit(request, env, () => handleGeocode(env, url));
+    return withProxyRateLimit(request, env, () =>
+      withEdgeCache(request, ctx, PROXY_CACHE_SECONDS, () => handleGeocode(env, url)));
   }
   if (url.pathname === "/api/directions") {
-    return withProxyRateLimit(request, env, () => handleDirections(env, url));
+    return withProxyRateLimit(request, env, () =>
+      withEdgeCache(request, ctx, PROXY_CACHE_SECONDS, () => handleDirections(env, url)));
   }
   if (url.pathname === "/api/reports") {
     return handleReport(request, env, ctx);
@@ -2118,7 +2159,7 @@ async function handleRequest(request, env, ctx) {
     return handleImage(env, request, url.pathname.slice("/images/".length));
   }
 
-  return withSecurityHeaders(await env.ASSETS.fetch(request));
+  return withSecurityHeaders(withAssetCache(url, await env.ASSETS.fetch(request)));
 }
 
 export default {

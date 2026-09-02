@@ -9,6 +9,7 @@ import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weat
 import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilRooms } from "./nursing-rooms.js";
+import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
@@ -993,14 +994,20 @@ async function handleReport(request, env, ctx) {
       return upstreamErrorResponse("제보 저장에 실패했습니다.", await res.text());
     }
     const created = await res.json();
-    const headline = isNursing
-      ? (reportField === NEW_NURSING_FIELD ? "🍼 새 수유실 제보가 들어왔습니다" : "🍼 수유실 정보 수정 제보가 들어왔습니다")
-      : "📍 새 장소 추천이 들어왔습니다";
+    // 수유실 제보는 지도에서 실제로 있는 곳인지 먼저 찾아본 뒤 알린다 — 운영자가
+    // 좌표를 손으로 찾지 않아도 되게.
     ctx.waitUntil(
-      notifySlack(
-        env,
-        `${headline}${unverifiedNote}\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
-      )
+      isNursing
+        ? announceNursingReport(env, {
+          field: reportField,
+          placeName: placeName.trim(),
+          value: reportValue,
+          unverified: Boolean(unverifiedNote),
+        }).catch((err) => console.warn(`수유실 제보 알림 실패: ${err.message}`))
+        : notifySlack(
+          env,
+          `📍 새 장소 추천이 들어왔습니다${unverifiedNote}\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
+        )
     );
     ctx.waitUntil(
       notifyNotionMention(env, created.id, {
@@ -1734,6 +1741,9 @@ export default {
       ctx.waitUntil(
         refreshSooyusilRooms(env)
           .catch((err) => console.warn(`수유정보 알리미 갱신 실패: ${err.message}`))
+          // 승인된 제보를 지도에 올린다. 명부 갱신 뒤에 해야 중복 판정이 최신 값을 쓴다.
+          .then(() => applyApprovedNursingReports(env)
+            .catch((err) => console.warn(`수유실 제보 반영 실패: ${err.message}`)))
           .then(() => runStationNursingGeocodeRefresh(env))
           .then(() => runPublicDataPlaceMatch(env))
       );

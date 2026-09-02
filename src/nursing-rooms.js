@@ -1,4 +1,5 @@
 import { fetchWithTimeout } from "./http.js";
+import { USER_ROOMS_KV_KEY } from "./nursing-reports.js";
 
 // 공공데이터포털의 지역별 수유실 API를 모아 지도 레이어용으로 정규화한다.
 // - 부산광역시: 좌표를 직접 주는 API라 요청마다 바로 불러온다.
@@ -357,12 +358,14 @@ export function dedupeByDistance(rooms, meters = 120) {
 }
 
 export async function fetchAllNursingRooms(env) {
-  const [busan, korail, seoulMetro, sooyusil] = await Promise.all([
+  const [busan, korail, seoulMetro, sooyusil, user] = await Promise.all([
     fetchBusanNursingRooms(env),
     readCachedRooms(env, KORAIL_KV_KEY),
     readCachedRooms(env, SEOUL_METRO_KV_KEY),
     readCachedRooms(env, SOOYUSIL_KV_KEY),
+    readCachedRooms(env, USER_ROOMS_KV_KEY),
   ]);
-  // 좌표를 직접 확인한 출처를 앞에 둔다 — 겹칠 때 이쪽이 남는다.
-  return dedupeByDistance([...busan, ...korail, ...seoulMetro, ...sooyusil]);
+  // 좌표를 직접 확인한 출처를 앞에 둔다 — 겹칠 때 이쪽이 남는다. 사람이 알려준
+  // 것은 맨 뒤에 둬서, 이미 명부에 있는 곳을 다시 올리면 조용히 묻히게 한다.
+  return dedupeByDistance([...busan, ...korail, ...seoulMetro, ...sooyusil, ...user]);
 }

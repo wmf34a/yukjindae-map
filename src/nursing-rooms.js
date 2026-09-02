@@ -303,11 +303,13 @@ async function readCachedRooms(env, key) {
 // 새 지역 API가 늘어나도 프론트는 이 함수 하나만 호출하면 되도록 결과를 합쳐서 준다.
 // 시·도를 하나씩 물어 전국을 받아 KV에 넣어 둔다. 주간 크론이 부른다.
 export async function refreshSooyusilRooms(env) {
-  if (!env.NURSING_API_KEY || !env.RATE_LIMIT) return 0;
+  // 키 이름은 출처 이름 그대로 쓴다. 예전 이름(NURSING_API_KEY)은 "수유실 API 키"로
+  // 읽혀서, 나중에 받은 다른 기관 키가 같은 칸에 덮어써지는 사고가 났다.
+  if (!env.SOOYUSIL_API_KEY || !env.RATE_LIMIT) return 0;
   const rooms = [];
   /* oxlint-disable no-await-in-loop -- 한 번에 다 부르면 상대 서버에 부담이다. */
   for (const zone of SOOYUSIL_ZONES) {
-    const qs = new URLSearchParams({ confirmApiKey: env.NURSING_API_KEY, zoneName: zone });
+    const qs = new URLSearchParams({ confirmApiKey: env.SOOYUSIL_API_KEY, zoneName: zone });
     try {
       const res = await fetchWithTimeout(`${SOOYUSIL_BASE}?${qs}`, {}, 20_000);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

@@ -12,7 +12,6 @@ TURNSTILE_SITE_KEY=
 TURNSTILE_SECRET_KEY=
 TOUR_API_KEY=
 SLACK_WEBHOOK_URL=
-VISITJEJU_API_KEY=
 ANTHROPIC_API_KEY=
 
 # 카카오 개발자 REST API 키 (근처 맛집·카페 반경 검색).
@@ -27,3 +26,15 @@ NOTION_NOTIFY_EMAILS=
 # 검수용 토큰. ?review=<값> 으로 접속하면 아직 공개하지 않은 장소까지 앱에서 보인다.
 # 지역장에게 노션 편집 권한을 주지 않고도 검수할 수 있게 하기 위한 것이다.
 REVIEW_TOKEN=
+
+# 인구보건복지협회 수유정보 알리미. 전국 수유실 명부와 아빠 이용 가능 여부.
+# sooyusil.com/home/39.htm 에서 신청한다.
+#
+# 이름을 기관 이름 그대로 둔다. 예전에 NURSING_API_KEY 였는데 "수유실 API 키"로
+# 읽혀서, 나중에 받은 다른 기관 키가 같은 칸에 덮어써지는 사고가 났다.
+SOOYUSIL_API_KEY=
+
+# 행정안전부 공유누리. 공공 개방자원(문화·숙박, 체육시설) 목록.
+# eshare.go.kr > OPEN API. 서비스별로 따로 승인받아야 하고, 인증키는
+# 쿼리스트링이 아니라 URL 경로에 넣는다 — scripts/check-eshare.mjs 참고.
+ESHARE_API_KEY=

@@ -109,7 +109,28 @@ async function searchNearbyByNaver(env, query, origin) {
   }
 }
 
-export async function handleNearbyPlace(env, url) {
+// 바깥 API 가 느릴 때 예외가 그대로 나가면 Worker 가 1101 을 반환하고 화면이
+// 통째로 깨진다. 실제로 네이버 길찾기가 한 번 시간을 넘겨 코스보기가 깨졌다.
+//
+// 이 셋은 모두 "찾으면 좋고 못 찾으면 마는" 성격이다 — 핀 하나가 안 찍히는 것과
+// 화면이 깨지는 것은 다르다. 그래서 실패를 found:false 로 돌려준다.
+async function guarded(label, handler) {
+  try {
+    return await handler();
+  } catch (err) {
+    console.warn(`${label} 실패: ${err.message}`);
+    return new Response(JSON.stringify({ found: false }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
+}
+
+export function handleNearbyPlace(env, url) {
+  return guarded("근처 장소 검색", () => handleNearbyPlaceInner(env, url));
+}
+
+async function handleNearbyPlaceInner(env, url) {
   const q = url.searchParams.get("q");
   if (!q) {
     return new Response(JSON.stringify({ error: "q 파라미터가 필요합니다." }), {
@@ -178,7 +199,11 @@ export async function handleNearbyPlace(env, url) {
   );
 }
 
-export async function handleGeocode(env, url) {
+export function handleGeocode(env, url) {
+  return guarded("주소 좌표 변환", () => handleGeocodeInner(env, url));
+}
+
+async function handleGeocodeInner(env, url) {
   const query = url.searchParams.get("query");
   if (!query) {
     return new Response(JSON.stringify({ error: "query 파라미터가 필요합니다." }), {
@@ -228,7 +253,11 @@ export async function handleGeocode(env, url) {
 // 네이버 클라우드에는 도보 길찾기 API가 따로 없어서, 자동차 길찾기(Direction 5)의
 // 도로 기반 거리값만 가져다 쓴다. 소요 시간은 이 거리에 도보 속도(4km/h)를 적용해
 // 프론트에서 직접 계산 — 자동차 소요시간을 "도보 시간"으로 보여주면 안 되기 때문.
-export async function handleDirections(env, url) {
+export function handleDirections(env, url) {
+  return guarded("길찾기", () => handleDirectionsInner(env, url));
+}
+
+async function handleDirectionsInner(env, url) {
   const start = url.searchParams.get("start");
   const goal = url.searchParams.get("goal");
   if (!start || !goal) {

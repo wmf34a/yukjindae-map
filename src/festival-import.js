@@ -9,10 +9,12 @@ const FAMILY_KEYWORDS = [
   "등불", "연등", "농산물", "사과", "배", "포도", "감", "빛축제", "일루미네이션",
 ];
 
-const EXCLUDE_KEYWORDS = [
-  "성인", "19세", "심야", "나이트", "클럽", "주류", "막걸리", "맥주", "와인",
-  "소주", "헌팅", "edm", "펍", "포차",
-];
+// 여기 걸리면 가점이 아니라 후보에서 통째로 빠지므로, 성인 전용이라는 신호만
+// 남긴다. 술 종류(맥주·막걸리 등)는 뺐다 — 강북 백맥축제처럼 캐리커처·버블쇼
+// 같은 아이 프로그램을 함께 돌리고 주류만 신분증으로 가르는 지역 축제가 많고,
+// "나이트"는 「나이트 캠크닉」 같은 야영 행사까지 잘라냈다. 술이 끼는 축제는
+// 0점 몫으로 내려보내 사람이 검토하게 둔다.
+const EXCLUDE_KEYWORDS = ["성인", "19세", "클럽", "헌팅", "edm", "펍"];
 
 function normalize(text) {
   return String(text || "").toLowerCase();
@@ -25,44 +27,74 @@ export function scoreCandidate(item) {
   return FAMILY_KEYWORDS.reduce((score, kw) => (haystack.includes(kw) ? score + 1 : score), 0);
 }
 
-// 왕궁수문장 교대의식·상설 공연처럼 사실상 연중 열리는 것은 "이번에 가볼 만한
+// 0점 몫에 넣을 후보를 "축제다운 것"으로 좁힌다. 가점 키워드가 하나도 없는
+// 후보는 60일 창에 230건이 넘는데, 그 절반은 기획전시·국악공연·국가유산야행·
+// 드론쇼처럼 아빠와 아이가 주말에 찾아가는 축제와는 결이 다르다. TourAPI의
+// 분류 코드(cat1~3)로 나누면 좋겠지만 searchFestival2 응답에는 빈 값으로 온다.
+const FESTIVAL_TITLE_PATTERN = /축제|페스티벌|문화제|한마당|축전/;
+
+// 왕궁수문장 교대의식·상설 전시처럼 사실상 연중 열리는 것은 "이번에 가볼 만한
 // 축제"가 아니라 상시 볼거리다. 기간이 이만큼 길면 상설로 본다.
 const LONG_RUN_DAYS = 180;
 
-function daysBetween(startYyyymmdd, endYyyymmdd) {
-  if (!startYyyymmdd || !endYyyymmdd) return 0;
-  const toDate = (v) => Date.parse(`${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T00:00:00Z`);
-  const diff = toDate(endYyyymmdd) - toDate(startYyyymmdd);
-  return Number.isNaN(diff) ? 0 : diff / 86400000;
+function toTimestamp(yyyymmdd) {
+  if (!yyyymmdd || yyyymmdd.length !== 8) return Number.NaN;
+  return Date.parse(`${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}T00:00:00Z`);
 }
 
-// "임박한 순" 비교자. 상설(장기) 행사를 뒤로 밀고, 나머지는 시작일이 이른 순으로 본다.
-// 이미 시작했더라도 아직 진행 중이면 후보로 유효하다 — 홍성남당항 대하축제처럼
-// 두 달 넘게 하는 축제를 "이미 시작했다"는 이유로 밀어내면 영영 못 올라온다.
-function byImminence(a, b) {
-  const longA = daysBetween(a.item.eventStartDate, a.item.eventEndDate) >= LONG_RUN_DAYS;
-  const longB = daysBetween(b.item.eventStartDate, b.item.eventEndDate) >= LONG_RUN_DAYS;
-  if (longA !== longB) return longA ? 1 : -1;
-  return (a.item.eventStartDate || "").localeCompare(b.item.eventStartDate || "");
+const DAY_MS = 86_400_000;
+
+function runDays(item) {
+  const start = toTimestamp(item.eventStartDate);
+  const end = toTimestamp(item.eventEndDate);
+  return Number.isNaN(start) || Number.isNaN(end) ? 0 : (end - start) / DAY_MS;
+}
+
+// 오늘로부터 시작일까지의 거리(일). 아직 안 시작한 쪽이 이미 시작한 쪽보다
+// 살짝 앞서도록 과거에 작은 가중치를 준다.
+function distanceFromToday(item, todayTs) {
+  const start = toTimestamp(item.eventStartDate);
+  if (Number.isNaN(start)) return Number.POSITIVE_INFINITY;
+  const diff = (start - todayTs) / DAY_MS;
+  return diff >= 0 ? diff : -diff + 0.5;
+}
+
+// "임박한 순" 비교자. 상설(장기) 행사를 뒤로 밀고, 나머지는 시작일이 오늘에
+// 가까운 순으로 본다.
+//
+// 단순 시작일 오름차순으로 하면 이미 몇 달째 진행 중인 기획전시·비엔날레가
+// 앞을 다 차지하고, 정작 이번 주에 시작하는 축제가 밀린다. 이미 시작했더라도
+// 아직 진행 중이면 후보로 유효하다 — 홍성남당항 대하축제처럼 두 달 넘게 하는
+// 축제를 "이미 시작했다"는 이유로 통째로 밀어내면 영영 못 올라온다.
+function byImminence(todayTs) {
+  return (a, b) => {
+    const longA = runDays(a.item) >= LONG_RUN_DAYS;
+    const longB = runDays(b.item) >= LONG_RUN_DAYS;
+    if (longA !== longB) return longA ? 1 : -1;
+    return distanceFromToday(a.item, todayTs) - distanceFromToday(b.item, todayTs);
+  };
 }
 
 // 가점 높은 순 → 같은 점수면 임박한 순으로 정렬해 상위 limit개를 뽑고,
 // 그 뒤에 0점 후보도 임박한 순으로 zeroScoreLimit개까지 덧붙인다.
 //
-// 0점 몫을 따로 두는 이유: 키워드 목록은 아무리 늘려도 샌다. 실제로 "홍성남당항
-// 대하축제"처럼 지역을 대표하는 먹거리 축제는 걸리는 키워드가 하나도 없어
-// 248건 중 234건이 0점으로 통째로 탈락했다. 어차피 노션에는 공개여부=false로만
+// 0점 몫을 따로 두는 이유: 가점 키워드 목록은 아무리 늘려도 샌다. 실제로
+// "홍성남당항 대하축제"처럼 지역을 대표하는 먹거리 축제는 걸리는 키워드가 하나도
+// 없어 248건 중 234건이 0점으로 통째로 탈락했다. 어차피 노션에는 공개여부=false로만
 // 들어가고 사람이 검토하므로, 검토거리 몇 건 더 보는 쪽이 놓치는 쪽보다 싸다.
-export function rankCandidates(items, { limit = 10, zeroScoreLimit = 10 } = {}) {
+export function rankCandidates(items, { limit = 10, zeroScoreLimit = 10, today = new Date() } = {}) {
   const scored = items
     .map((item) => ({ item, score: scoreCandidate(item) }))
     .filter(({ score }) => score !== null);
 
+  const imminence = byImminence(Date.parse(`${today.toISOString().slice(0, 10)}T00:00:00Z`));
   const positive = scored.filter(({ score }) => score > 0);
-  positive.sort((a, b) => (b.score !== a.score ? b.score - a.score : byImminence(a, b)));
+  positive.sort((a, b) => (b.score !== a.score ? b.score - a.score : imminence(a, b)));
 
-  const zero = scored.filter(({ score }) => score === 0);
-  zero.sort(byImminence);
+  const zero = scored.filter(
+    ({ score, item }) => score === 0 && FESTIVAL_TITLE_PATTERN.test(item.title || ""),
+  );
+  zero.sort(imminence);
 
   return [...positive.slice(0, limit), ...zero.slice(0, zeroScoreLimit)].map(({ item }) => item);
 }
@@ -134,6 +166,9 @@ export function toNotionProperties(item, order) {
   // 날짜로 저장하지 않도록 유효할 때만 "기간"을 포함한다.
   if (start) {
     properties["기간"] = { date: { start, end: end && end !== start ? end : null } };
+  }
+  if (item.useFee) {
+    properties["요금"] = { rich_text: [{ text: { content: item.useFee.slice(0, 200) } }] };
   }
   if (item.image) {
     properties["이미지"] = { files: [{ type: "external", name: "festival", external: { url: item.image } }] };

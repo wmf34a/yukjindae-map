@@ -23,8 +23,13 @@ describe("scoreCandidate", () => {
     expect(scoreCandidate(baseItem())).toBeGreaterThan(0);
   });
 
-  it("성인 지향 키워드가 있으면 null(제외)이다", () => {
-    expect(scoreCandidate(baseItem({ title: "심야 나이트 마켓" }))).toBeNull();
+  it("성인 전용 키워드가 있으면 null(제외)이다", () => {
+    expect(scoreCandidate(baseItem({ title: "19세 이상 클럽 파티" }))).toBeNull();
+  });
+
+  it("술이 나오지만 성인 전용은 아닌 축제는 제외하지 않는다", () => {
+    expect(scoreCandidate(baseItem({ title: "강북 백맥축제" }))).toBe(0);
+    expect(scoreCandidate(baseItem({ title: "거제맥주축제" }))).toBe(0);
   });
 
   it("아무 키워드도 없으면 0점이다", () => {
@@ -43,8 +48,8 @@ describe("rankCandidates", () => {
     expect(ranked.map((i) => i.contentId)).toEqual(["c", "b", "a"]);
   });
 
-  it("성인 지향 후보는 결과에서 빠진다", () => {
-    const items = [baseItem({ contentId: "a", title: "클럽 나이트 파티" })];
+  it("성인 전용 후보는 결과에서 빠진다", () => {
+    const items = [baseItem({ contentId: "a", title: "클럽 헌팅 파티" })];
     expect(rankCandidates(items)).toEqual([]);
   });
 
@@ -58,24 +63,69 @@ describe("rankCandidates", () => {
       baseItem({ contentId: "z2", title: "홍성남당항 대하축제", eventStartDate: "20260910" }),
       baseItem({ contentId: "p", title: "가족 체험 축제", eventStartDate: "20261001" }),
       baseItem({ contentId: "z1", title: "지역 문화 페스티벌", eventStartDate: "20260905" }),
-      baseItem({ contentId: "z3", title: "군민의 날 행사", eventStartDate: "20260920" }),
+      baseItem({ contentId: "z3", title: "군민의 날 축전", eventStartDate: "20260920" }),
     ];
-    const ranked = rankCandidates(items, { limit: 10, zeroScoreLimit: 2, today: "20260902" });
+    const ranked = rankCandidates(items, {
+      limit: 10,
+      zeroScoreLimit: 2,
+      today: new Date("2026-09-02T00:00:00Z"),
+    });
     expect(ranked.map((i) => i.contentId)).toEqual(["p", "z1", "z2"]);
   });
 
-  it("연중 상설처럼 이미 시작한 행사는 아직 시작 안 한 행사 뒤로 밀린다", () => {
+  it("0점 몫은 축제다운 제목만 받는다 — 전시·공연은 뺀다", () => {
     const items = [
-      baseItem({ contentId: "상설", title: "서울 왕궁수문장 교대의식", eventStartDate: "20260101" }),
-      baseItem({ contentId: "대하", title: "홍성남당항 대하축제", eventStartDate: "20260904" }),
+      baseItem({ contentId: "전시", title: "섬유기획전 《안식의 결》" }),
+      baseItem({ contentId: "야행", title: "공주 국가유산야행" }),
+      baseItem({ contentId: "대하", title: "홍성남당항 대하축제" }),
     ];
-    const ranked = rankCandidates(items, { zeroScoreLimit: 5, today: "20260902" });
-    expect(ranked.map((i) => i.contentId)).toEqual(["대하", "상설"]);
+    expect(rankCandidates(items).map((i) => i.contentId)).toEqual(["대하"]);
+  });
+
+  it("연중 상설(180일 이상) 축제는 시작일이 일러도 뒤로 밀린다", () => {
+    const items = [
+      baseItem({
+        contentId: "상설",
+        title: "서울 왕궁수문장 축제",
+        eventStartDate: "20260101",
+        eventEndDate: "20261231",
+      }),
+      baseItem({
+        contentId: "대하",
+        title: "홍성남당항 대하축제",
+        eventStartDate: "20260904",
+        eventEndDate: "20261108",
+      }),
+    ];
+    expect(rankCandidates(items).map((i) => i.contentId)).toEqual(["대하", "상설"]);
+  });
+
+  it("이미 시작했어도 진행 중인 장기 축제는 후보로 남는다", () => {
+    const items = [
+      baseItem({
+        contentId: "대하",
+        title: "홍성남당항 대하축제",
+        eventStartDate: "20260904",
+        eventEndDate: "20261108",
+      }),
+    ];
+    expect(rankCandidates(items).map((i) => i.contentId)).toEqual(["대하"]);
   });
 
   it("zeroScoreLimit이 0이면 0점 후보는 빠진다", () => {
     const items = [baseItem({ contentId: "z", title: "지역 문화 페스티벌" })];
     expect(rankCandidates(items, { zeroScoreLimit: 0 })).toEqual([]);
+  });
+});
+
+describe("toNotionProperties 요금", () => {
+  it("useFee가 있으면 요금 속성을 채운다", () => {
+    const props = toNotionProperties(baseItem({ useFee: "유료 (대인 19,000원)" }), 1);
+    expect(props["요금"].rich_text[0].text.content).toBe("유료 (대인 19,000원)");
+  });
+
+  it("useFee가 없으면 요금 속성을 넣지 않는다", () => {
+    expect(toNotionProperties(baseItem(), 1)["요금"]).toBeUndefined();
   });
 });
 

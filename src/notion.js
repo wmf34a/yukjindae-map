@@ -143,6 +143,7 @@ export function toFestival(page) {
     order: (p["순서"] && p["순서"].number) ?? 0,
     description: text(p["설명"]),
     address: text(p["주소"]),
+    useFee: text(p["요금"]),
     published: Boolean(p["공개여부"] && p["공개여부"].checkbox),
     tourApiId: text(p["TourAPI_ID"]),
   };

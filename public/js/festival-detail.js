@@ -44,6 +44,7 @@ function render(festival) {
       <div class="place-detail__tags">${tags}</div>
 
       ${row("📍 장소", [festival.placeName, festival.address].filter(Boolean).join(" · "))}
+      ${row("💰 요금", festival.useFee)}
       ${row("✏️ 소개", festival.description)}
 
       <div class="place-detail__actions">

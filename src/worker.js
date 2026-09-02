@@ -6,7 +6,7 @@ import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
 import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weather.js";
-import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
+import { fetchFestivalDescription, fetchFestivalUseFee, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilRooms } from "./nursing-rooms.js";
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
@@ -692,7 +692,7 @@ async function runScheduledFestivalImport(env) {
   // 중복 제거를 먼저 한다 — 순위를 매긴 뒤에 걸러내면 이미 노션에 있는 축제가
   // 상위 몫을 차지해 그만큼 신규가 덜 올라온다.
   const unseen = selectNewCandidates(candidates, existingIds);
-  const fresh = rankCandidates(unseen, { limit: 10, zeroScoreLimit: 5 });
+  const fresh = rankCandidates(unseen, { limit: 10, zeroScoreLimit: 10 });
 
   let order = maxOrder;
   // 순서(순번)를 겹치지 않게 이어서 매기려면 이전 생성 결과를 알아야 해서
@@ -700,7 +700,9 @@ async function runScheduledFestivalImport(env) {
   /* oxlint-disable no-await-in-loop */
   for (const item of fresh) {
     order += 1;
-    await createFestivalPage(env, toNotionProperties(item, order));
+    // 요금은 searchFestival2에 없어서 새로 만드는 것만 상세조회로 한 번 더 채운다.
+    const useFee = await fetchFestivalUseFee(env, item.contentId);
+    await createFestivalPage(env, toNotionProperties({ ...item, useFee }, order));
   }
   /* oxlint-enable no-await-in-loop */
 

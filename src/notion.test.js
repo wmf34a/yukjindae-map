@@ -305,6 +305,7 @@ describe("toFestival", () => {
         "순서": { number: 2 },
         "설명": { rich_text: [{ plain_text: "벚꽃길 축제" }] },
         "주소": { rich_text: [{ plain_text: "강원특별자치도 강릉시 경포로 365" }] },
+        "요금": { rich_text: [{ plain_text: "무료" }] },
         "공개여부": { checkbox: true },
         "TourAPI_ID": { rich_text: [{ plain_text: "695592" }] },
       },
@@ -323,6 +324,7 @@ describe("toFestival", () => {
       order: 2,
       description: "벚꽃길 축제",
       address: "강원특별자치도 강릉시 경포로 365",
+      useFee: "무료",
       published: true,
       tourApiId: "695592",
     });
@@ -337,7 +339,13 @@ describe("toFestival", () => {
       },
     };
 
-    expect(toFestival(page)).toMatchObject({ description: "", address: "", published: false, tourApiId: "" });
+    expect(toFestival(page)).toMatchObject({
+      description: "",
+      address: "",
+      useFee: "",
+      published: false,
+      tourApiId: "",
+    });
   });
 });
 

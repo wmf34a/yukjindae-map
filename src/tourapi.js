@@ -105,6 +105,24 @@ export async function fetchFestivalDescription(env, title) {
   }
 }
 
+// 축제 후보의 요금(usetimefestival)만 따로 가져온다. searchFestival2 응답에는
+// 요금이 없어서 축제별로 detailIntro2를 한 번 더 부른다 — 주 1회 배치에서
+// 새로 만드는 20건 남짓에만 쓰므로 호출량은 문제되지 않는다. 실패하면 빈 문자열:
+// 요금은 있으면 좋은 정보지 없다고 등록을 막을 값은 아니다.
+export async function fetchFestivalUseFee(env, contentId) {
+  if (!env.TOUR_API_KEY || !contentId) return "";
+  try {
+    const data = await callTourApi(env, "detailIntro2", {
+      contentId: String(contentId),
+      contentTypeId: FESTIVAL_CONTENT_TYPE_ID,
+    });
+    const first = parseSearchItems(data)[0];
+    return first && first.usetimefestival ? String(first.usetimefestival).trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 function normalizeCandidate(item) {
   return {
     contentId: item.contentid,

@@ -12,6 +12,11 @@ import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilR
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { readChangingToilets } from "./toilets.js";
+import { decodeImageDataUrl, reportImageKey } from "./report-image.js";
+
+// 제보 스크린샷 주소를 노션에 적을 때 쓴다. 운영자가 노션에서 바로 눌러 볼 수
+// 있어야 하므로 상대경로로는 안 된다.
+const PUBLIC_BASE_URL = "https://yukjindae-map.wmf34a.workers.dev";
 import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
@@ -843,7 +848,9 @@ async function handleFestivalDetail(env, id, ctx) {
 
 // 우리가 실제로 미러링하는 접두어(+ 파일명 문자셋)만 허용한다 — 임의 키로 R2를
 // 훑는 것을 막기 위함.
-const IMAGE_KEY_PATTERN = /^(banners|courses|festivals|places)\/[A-Za-z0-9._-]+$/;
+// reports/ 는 제보에 딸려 온 스크린샷이다. 30일 뒤 자동으로 지워지도록 R2 에
+// 수명 규칙을 걸어 두었으므로 여기서는 접두어만 허용해 주면 된다.
+const IMAGE_KEY_PATTERN = /^(banners|courses|festivals|places)\/[A-Za-z0-9._-]+$|^reports\/[a-z]+\/[A-Za-z0-9._-]+$/;
 
 async function handleImage(env, request, key) {
   if (!IMAGE_KEY_PATTERN.test(key)) {
@@ -1013,6 +1020,28 @@ async function handleReport(request, env, ctx) {
     const reportTitle = isBug
       ? `🐞 ${String(value).trim().split("\n")[0].slice(0, 60)}`
       : placeName.trim().slice(0, 200);
+    // 스크린샷이 함께 왔으면 R2 에 넣고 주소를 제안값 끝에 붙인다. 노션에 파일
+    // 칸을 새로 만들지 않는 이유는, 운영자가 제안값만 읽어도 되게 하기 위해서다.
+    let imageNote = "";
+    if (isBug && body.image && env.IMAGES) {
+      const decoded = decodeImageDataUrl(body.image);
+      if (!decoded) {
+        return new Response(
+          JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 보낼 수 있어요." }),
+          { status: 400, headers }
+        );
+      }
+      const key = reportImageKey("bug");
+      try {
+        await env.IMAGES.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
+        imageNote = `\n\n[스크린샷] ${PUBLIC_BASE_URL}/images/${key}`;
+      } catch (err) {
+        // 사진을 못 올려도 제보 자체는 살린다 — 글만으로도 고칠 수 있는 것이 많다.
+        console.warn(`제보 스크린샷 저장 실패: ${err.message}`);
+      }
+    }
+    reportValue += imageNote;
+
     const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
       method: "POST",
       headers: notionHeaders,

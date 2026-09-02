@@ -1572,6 +1572,63 @@ body {
   box-sizing: border-box;
 }
 
+/* 화면 캡처 붙이기. 파일 입력은 브라우저마다 생김새가 제각각이라 감추고
+   버튼으로 대신 연다. */
+.bug-shot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: 1.5px dashed var(--color-border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  margin-bottom: 14px;
+}
+
+.bug-shot__icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.bug-shot__preview {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.bug-shot__preview[hidden] {
+  display: none;
+}
+
+.bug-shot__preview img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  display: block;
+}
+
+.bug-shot__remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 /* 오류 신고는 한 줄로 안 끝난다. 무슨 화면에서 무엇을 눌렀는지 적을 자리를 준다. */
 .report-modal__textarea {
   resize: vertical;

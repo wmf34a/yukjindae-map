@@ -214,6 +214,17 @@
         <p class="report-modal__hint">화면이 깨지거나 눌러도 반응이 없을 때 알려주세요. 어느 화면이었는지 같이 적어주시면 훨씬 빨리 고칠 수 있어요.</p>
         <label class="report-modal__label" for="bug-value">무슨 일이 있었나요?</label>
         <textarea id="bug-value" class="report-modal__value-input report-modal__textarea" rows="4" maxlength="800" placeholder="예: 청주랜드 상세에서 수유실 칸이 길찾기 버튼 아래로 내려가요"></textarea>
+
+        <label class="report-modal__label" for="bug-image">화면 캡처 (선택)</label>
+        <input type="file" id="bug-image" accept="image/*" hidden />
+        <button type="button" class="bug-shot" id="bug-shot-btn">
+          <span class="bug-shot__icon">＋</span>
+          <span class="bug-shot__text">사진 한 장 붙이기</span>
+        </button>
+        <div class="bug-shot__preview" id="bug-shot-preview" hidden>
+          <img id="bug-shot-img" alt="붙인 화면 캡처" />
+          <button type="button" class="bug-shot__remove" id="bug-shot-remove" aria-label="사진 빼기">✕</button>
+        </div>
         <p class="report-modal__error" id="bug-error" hidden></p>
       </div>
       <p class="report-modal__success" id="bug-success" hidden>알려주셔서 고마워요! 확인하고 고칠게요.</p>

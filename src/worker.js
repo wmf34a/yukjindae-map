@@ -128,6 +128,15 @@ const REPORT_VALUE_MAX_LENGTH = 200;
 // 신규 장소 제보는 아직 DB에 없는 곳이라 placeId가 없다. 대신 장소명이 필수이고,
 // 주소·이유는 한 덩어리 텍스트로 받아 사람이 읽고 판단한다.
 const NEW_PLACE_FIELD = "신규장소";
+// 수유실 제보. 공공데이터로 받은 2,900곳은 우리 장소 DB에 없어서 placeId 로 묶을 수
+// 없고, 신규 장소처럼 이름과 내용만 받아 승인 큐에 남긴다.
+//
+// 둘로 나눈 이유는 사람이 하려는 말이 다르기 때문이다. 지도에 있는 수유실을 보고
+// "여기 없어졌어요"라고 하는 것과, 지도에 없는 곳을 "여기도 있어요"라고 알려주는
+// 것은 운영자가 할 일이 다르다.
+const NEW_NURSING_FIELD = "신규수유실";
+const NURSING_FIX_FIELD = "수유실정보수정";
+const NURSING_FIELDS = new Set([NEW_NURSING_FIELD, NURSING_FIX_FIELD]);
 const NEW_PLACE_NAME_MAX = 60;
 
 // 편의시설은 어떤 지도 API도 알려주지 않는다. 좌표·운영시간은 장소명만 있으면
@@ -905,9 +914,12 @@ async function handleReport(request, env, ctx) {
     return new Response(JSON.stringify({ error: "잘못된 요청 본문입니다." }), { status: 400, headers });
   }
 
-  // 신규 장소 제보는 검증 규칙도 저장 형태도 달라서 먼저 갈라낸다.
-  const isNewPlace = (body || {}).field === NEW_PLACE_FIELD;
-  const validationError = isNewPlace
+  // 신규 장소와 수유실 제보는 우리 DB에 없는 것을 가리키므로 placeId 가 없다.
+  // 검증 규칙도 저장 형태도 달라서 먼저 갈라낸다.
+  const reportField = (body || {}).field;
+  const isNewPlace = reportField === NEW_PLACE_FIELD;
+  const isNursing = NURSING_FIELDS.has(reportField);
+  const validationError = isNewPlace || isNursing
     ? validateNewPlacePayload(body || {})
     : validateReportPayload(body || {});
   if (validationError) {
@@ -959,8 +971,9 @@ async function handleReport(request, env, ctx) {
   // 신규 장소는 아직 DB에 없으므로 존재 확인을 건너뛰고, 관계 없이 제보만 남긴다.
   // 운영자가 노션에서 읽고 판단해 장소 DB에 직접 추가한다 — 사용자가 보낸 값이
   // 장소 DB로 곧장 들어가지 않게 하려는 것이다.
-  if (isNewPlace) {
-    const reportValue = buildNewPlaceValue({ value, amenities });
+  if (isNewPlace || isNursing) {
+    const reportValue = isNursing ? String(value).trim() : buildNewPlaceValue({ value, amenities });
+    const fieldName = isNursing ? reportField : NEW_PLACE_FIELD;
     const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
       method: "POST",
       headers: notionHeaders,
@@ -968,7 +981,7 @@ async function handleReport(request, env, ctx) {
         parent: { database_id: env.NOTION_REPORTS_DATABASE_ID },
         properties: {
           "장소명": { title: [{ text: { content: placeName.trim().slice(0, 200) } }] },
-          "필드명": { select: { name: NEW_PLACE_FIELD } },
+          "필드명": { select: { name: fieldName } },
           // 편의시설 줄이 붙어 본문 상한보다 길어질 수 있어 넉넉히 자른다.
           "제안값": { rich_text: [{ text: { content: reportValue.slice(0, REPORT_VALUE_MAX_LENGTH * 2) } }] },
           "상태": { select: { name: "대기중" } },
@@ -980,16 +993,19 @@ async function handleReport(request, env, ctx) {
       return upstreamErrorResponse("제보 저장에 실패했습니다.", await res.text());
     }
     const created = await res.json();
+    const headline = isNursing
+      ? (reportField === NEW_NURSING_FIELD ? "🍼 새 수유실 제보가 들어왔습니다" : "🍼 수유실 정보 수정 제보가 들어왔습니다")
+      : "📍 새 장소 추천이 들어왔습니다";
     ctx.waitUntil(
       notifySlack(
         env,
-        `📍 새 장소 추천이 들어왔습니다${unverifiedNote}\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
+        `${headline}${unverifiedNote}\n• ${placeName.trim()}\n• ${reportValue.slice(0, 200)}`
       )
     );
     ctx.waitUntil(
       notifyNotionMention(env, created.id, {
         placeName: placeName.trim(),
-        field: NEW_PLACE_FIELD,
+        field: fieldName,
         value: reportValue,
       })
     );

@@ -205,8 +205,16 @@ function openNursingSheet(room) {
         <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(room))}">네이버지도 길찾기</a>
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
       </div>
+      <button type="button" class="map-sheet__report" data-nursing-fix="${escapeHtml(room.name)}">
+        정보가 달라요
+      </button>
     </div>
   `);
+  // presentSheet 가 매번 새로 그리므로 여기서 붙인다.
+  const fixBtn = document.querySelector("[data-nursing-fix]");
+  if (fixBtn) {
+    fixBtn.addEventListener("click", () => openNursingReport("fix", fixBtn.dataset.nursingFix));
+  }
 }
 
 function closeSheet() {
@@ -480,11 +488,18 @@ async function toggleNursingLayer() {
   renderNursingMarkers();
 }
 
+// 수유실을 보고 있을 때만 "여기 수유실이 있어요"를 띄운다.
+function updateNursingAddButton() {
+  const btn = document.getElementById("nursing-add-btn");
+  if (btn) btn.hidden = !nursingVisible;
+}
+
 function updateNursingButton() {
   const btn = document.getElementById("nursing-layer-btn");
   btn.classList.toggle("is-active", nursingVisible);
   btn.setAttribute("aria-pressed", String(nursingVisible));
   btn.title = nursingVisible ? "공공 수유실 숨기기" : "공공 수유실 보기";
+  updateNursingAddButton();
 }
 
 // 주변 탭은 "아이 데리고 지금 어디 갈까"를 보는 화면이라 수유실이 켜져 있어야
@@ -493,6 +508,9 @@ function updateNursingButton() {
 // 공공데이터 응답을 기다리느라 지도가 늦게 뜨면 안 된다.
 async function initNursingLayer() {
   document.getElementById("nursing-layer-btn").addEventListener("click", toggleNursingLayer);
+  initNursingReport();
+  document.getElementById("nursing-add-btn")
+    .addEventListener("click", () => openNursingReport("new"));
   updateNursingButton();
 
   await loadNursingRooms();
@@ -672,3 +690,109 @@ if (window.naver && window.naver.maps) {
     }
   });
 }
+
+// ── 수유실 제보 ──
+//
+// 지도에 뜨는 수유실 2,900곳은 공공데이터라 우리가 고칠 수 없다. 없어진 곳이 남아
+// 있기도 하고, 새로 생긴 곳은 명부에 오르기까지 시간이 걸린다. 다녀온 사람만 아는
+// 것들이라 받아 두고 사람이 판단한다.
+//
+// 두 가지를 나눠 받는다. 지도에 없는 곳을 알려주는 것과, 있는 곳의 정보가 달라졌다고
+// 알려주는 것은 운영자가 할 일이 다르다.
+const NURSING_REPORT_MODES = {
+  new: {
+    field: "신규수유실",
+    title: "수유실 알려주기",
+    hint: "지도에 없는 수유실을 알려주시면 확인 후 올릴게요.",
+    namePlaceholder: "예: 롯데마트 청량리점 3층",
+    valuePlaceholder: "예: 아빠도 들어갈 수 있어요",
+  },
+  fix: {
+    field: "수유실정보수정",
+    title: "정보가 달라요",
+    hint: "공공데이터라 실제와 다를 수 있어요. 알려주시면 확인할게요.",
+    namePlaceholder: "수유실 이름",
+    valuePlaceholder: "예: 지금은 없어졌어요 / 아빠는 못 들어가요",
+  },
+};
+
+let nursingReportMode = "new";
+
+function nursingReportEl(id) {
+  return document.getElementById(`nursing-report-${id}`);
+}
+
+function updateNursingReportSubmit() {
+  const btn = nursingReportEl("submit");
+  if (!btn) return;
+  btn.disabled = !(nursingReportEl("name").value.trim() && nursingReportEl("value").value.trim());
+}
+
+function openNursingReport(mode, prefillName = "") {
+  const conf = NURSING_REPORT_MODES[mode] || NURSING_REPORT_MODES.new;
+  nursingReportMode = mode in NURSING_REPORT_MODES ? mode : "new";
+
+  nursingReportEl("title").textContent = conf.title;
+  nursingReportEl("hint").textContent = conf.hint;
+  nursingReportEl("name").placeholder = conf.namePlaceholder;
+  nursingReportEl("value").placeholder = conf.valuePlaceholder;
+  nursingReportEl("name").value = prefillName;
+  nursingReportEl("value").value = "";
+  nursingReportEl("error").hidden = true;
+  nursingReportEl("success").hidden = true;
+
+  nursingReportEl("overlay").classList.add("is-open");
+  updateNursingReportSubmit();
+  // 이름이 이미 채워져 있으면(정보 수정) 바로 내용부터 쓰게 한다.
+  (prefillName ? nursingReportEl("value") : nursingReportEl("name")).focus();
+}
+
+function closeNursingReport() {
+  nursingReportEl("overlay").classList.remove("is-open");
+}
+
+async function submitNursingReport() {
+  const btn = nursingReportEl("submit");
+  const error = nursingReportEl("error");
+  error.hidden = true;
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(window.apiUrl("/api/reports"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        field: NURSING_REPORT_MODES[nursingReportMode].field,
+        placeName: nursingReportEl("name").value.trim(),
+        value: nursingReportEl("value").value.trim(),
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "잠시 후 다시 시도해주세요.");
+
+    nursingReportEl("success").hidden = false;
+    nursingReportEl("name").value = "";
+    nursingReportEl("value").value = "";
+    setTimeout(closeNursingReport, 1800);
+  } catch (err) {
+    error.textContent = err.message;
+    error.hidden = false;
+  } finally {
+    updateNursingReportSubmit();
+  }
+}
+
+function initNursingReport() {
+  const overlay = nursingReportEl("overlay");
+  if (!overlay) return;
+  nursingReportEl("close").addEventListener("click", closeNursingReport);
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeNursingReport();
+  });
+  for (const id of ["name", "value"]) {
+    nursingReportEl(id).addEventListener("input", updateNursingReportSubmit);
+  }
+  nursingReportEl("submit").addEventListener("click", submitNursingReport);
+}
+
+window.openNursingReport = openNursingReport;

@@ -41,10 +41,40 @@
     </svg>
   </button>
   <button id="nursing-layer-btn" class="map-layer-btn" title="공공 수유실 보기">🍼</button>
+  <!-- 지도에 없는 수유실을 알려주는 자리. 🍼 를 켰을 때만 보인다 — 수유실을 보고
+       있을 때라야 "여기 없네"라는 생각이 든다. -->
+  <button id="nursing-add-btn" class="map-add-btn" hidden>🍼 여기 수유실이 있어요</button>
 
   <div class="map-sheet" id="map-sheet">
     <div class="map-sheet__handle"></div>
     <div id="map-sheet-content"></div>
+  </div>
+
+  <!-- 수유실 제보. 공공데이터에 없는 곳을 알려주거나, 있는 곳의 정보가 달라졌다고
+       알려주는 두 가지 용도로 쓴다. -->
+  <div class="report-modal-overlay" id="nursing-report-overlay">
+    <div class="report-modal" role="dialog" aria-modal="true" aria-labelledby="nursing-report-title">
+      <div class="report-modal__head">
+        <p class="report-modal__title" id="nursing-report-title">수유실 알려주기</p>
+        <button type="button" class="report-modal__close" id="nursing-report-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="report-modal__body">
+        <label class="report-modal__label" for="nursing-report-name">어디인가요?</label>
+        <input type="text" id="nursing-report-name" class="report-modal__value-input"
+               placeholder="예: 롯데마트 청량리점 3층" maxlength="80" />
+
+        <label class="report-modal__label" for="nursing-report-value">알려주실 내용</label>
+        <input type="text" id="nursing-report-value" class="report-modal__value-input"
+               placeholder="예: 아빠도 들어갈 수 있어요 / 지금은 없어졌어요" maxlength="200" />
+
+        <p class="report-modal__hint" id="nursing-report-hint"></p>
+        <p class="report-modal__error" id="nursing-report-error" hidden></p>
+        <p class="report-modal__success" id="nursing-report-success" hidden>알려주셔서 고마워요! 확인 후 반영할게요.</p>
+      </div>
+      <div class="report-modal__foot">
+        <button type="button" class="btn-primary" id="nursing-report-submit" disabled>보내기</button>
+      </div>
+    </div>
   </div>
 
   <nav class="tabbar">

@@ -406,3 +406,45 @@
     opacity: 0.5;
   }
 }
+
+/* 지도에 없는 수유실을 알려주는 버튼. 🍼 레이어를 켰을 때만 나온다 —
+   수유실을 보고 있을 때라야 "여기 없네" 하는 생각이 든다.
+   글자가 들어가서 동그란 레이어 버튼과 달리 알약 모양으로 두고, 겹치지 않게
+   그 왼쪽에 붙인다. */
+.map-add-btn {
+  position: fixed;
+  right: 68px;
+  bottom: calc(var(--tabbar-height) + 68px);
+  height: 44px;
+  padding: 0 15px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text);
+  box-shadow: 0 2px 8px rgba(58, 67, 99, 0.15);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  z-index: 5;
+}
+
+.map-add-btn[hidden] {
+  display: none;
+}
+
+/* 수유실 상세 아래의 "정보가 달라요". 길찾기 버튼들과 무게를 다르게 두어
+   눌러야 할 것과 알려줄 수 있는 것을 구분한다. */
+.map-sheet__report {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 0;
+  background: none;
+  color: var(--color-text-secondary);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

@@ -495,6 +495,22 @@ async function loadBanners() {
   initHeroSlider();
 }
 
+// 앱에 새 기능이 붙었을 때 알리는 자리.
+//
+// 지금까지 알림에는 노션 배너와 새로 등록된 장소만 떴다. 그러다 보니 기능을 붙여도
+// 아무도 모르고 지나갔다 — 수유실 레이어는 지도에 있는데도 🍼 버튼을 못 찾은 사람은
+// 그런 게 있는 줄도 몰랐다.
+//
+// 날짜를 손으로 적는다. 지나간 소식은 아래에서 지우면 된다.
+const FEATURE_NOTICES = [
+  {
+    title: "전국 수유실 2,900곳을 지도에 담았어요",
+    subtitle: "주변 탭에서 🍼 를 누르면 보여요 · 아빠가 들어갈 수 있는 곳도 표시돼요",
+    link: "map.html",
+    createdAt: "2026-09-02T10:00:00+09:00",
+  },
+];
+
 // 배너(이벤트 소식)와 최근 등록된 장소(신규 장소 소식)를 합쳐서 최신순으로 정리.
 // 로그인/푸시 인프라 없이 Notion의 생성일(createdAt)만으로 가볍게 구현.
 function buildNotices() {
@@ -517,7 +533,9 @@ function buildNotices() {
       createdAt: place.createdAt,
     }));
 
-  return [...eventNotices, ...newPlaceNotices]
+  const featureNotices = FEATURE_NOTICES.map((notice) => ({ ...notice, type: "feature" }));
+
+  return [...featureNotices, ...eventNotices, ...newPlaceNotices]
     .toSorted((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 5);
 }
@@ -537,8 +555,12 @@ function renderBellBadge() {
 }
 
 function noticeItemHtml(notice) {
+  // 기능 소식은 배지를 달아 장소 알림과 구분한다.
+  const badge = notice.type === "feature"
+    ? `<span class="notices-panel__badge">새 기능</span>`
+    : "";
   const inner = `
-    <p class="notices-panel__item-title">${escapeHtml(notice.title)}</p>
+    <p class="notices-panel__item-title">${badge}${escapeHtml(notice.title)}</p>
     ${notice.subtitle ? `<p class="notices-panel__item-sub">${escapeHtml(notice.subtitle)}</p>` : ""}
   `;
   // 이벤트 소식의 링크는 노션 배너에서 온 외부 URL이라 스킴 검사가 필요하고,

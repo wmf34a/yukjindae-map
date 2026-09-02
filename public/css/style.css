@@ -225,10 +225,25 @@ body {
   color: var(--color-text);
 }
 
+/* 새 기능 소식임을 알리는 배지. 장소가 하나 늘었다는 알림과 기능이 붙었다는
+   알림은 무게가 다른데, 제목만 나열하면 구분이 안 된다. */
+.notices-panel__badge {
+  display: inline-block;
+  margin-right: 5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
 .notices-panel__item-sub {
   margin: 0;
   font-size: 11.5px;
   color: var(--color-text-secondary);
+  line-height: 1.5;
 }
 
 .notices-panel__empty {

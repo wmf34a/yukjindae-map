@@ -504,6 +504,18 @@ async function loadBanners() {
 // 날짜를 손으로 적는다. 지나간 소식은 아래에서 지우면 된다.
 const FEATURE_NOTICES = [
   {
+    title: "이제 별점과 후기를 남길 수 있어요",
+    subtitle: "다녀온 곳에 별점 · 아이 나이 · 사진까지 · 모든 후기는 확인 후 올라와요",
+    link: "index.html",
+    createdAt: "2026-09-02T14:10:00+09:00",
+  },
+  {
+    title: "앱이 이상하면 바로 알려주세요",
+    subtitle: "홈 화면 위쪽 🐞 를 누르면 화면 캡처까지 함께 보낼 수 있어요",
+    link: "index.html",
+    createdAt: "2026-09-02T13:40:00+09:00",
+  },
+  {
     title: "기저귀 갈 곳 9,600곳이 새로 들어왔어요",
     subtitle: "주변 탭에서 🚼 를 누르면 보여요 · 남자화장실에도 있는 곳을 따로 표시해요",
     link: "map.html",

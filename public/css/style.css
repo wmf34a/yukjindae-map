@@ -1591,6 +1591,12 @@ body {
   margin-bottom: 14px;
 }
 
+/* display:flex 가 hidden 속성의 기본 display:none 을 이긴다. 사진을 붙인 뒤에도
+   "사진 붙이기" 버튼이 그대로 남아 있었다. */
+.bug-shot[hidden] {
+  display: none;
+}
+
 .bug-shot__icon {
   font-size: 17px;
   line-height: 1;
@@ -1917,6 +1923,12 @@ body {
   flex-direction: column;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+/* display:flex 가 hidden 속성을 이긴다. 근처맛집·근처카페가 아닌 필드를 골라도
+   반영 방식 선택이 그대로 보이고 있었다. */
+.report-modal__list[hidden] {
+  display: none;
 }
 
 .report-modal__list-current {

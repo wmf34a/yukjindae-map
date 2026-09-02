@@ -97,6 +97,20 @@
     </div>
   </div>
 
+  <div class="report-modal-overlay" id="review-modal-overlay">
+    <div class="report-modal" role="dialog" aria-modal="true" aria-label="후기 남기기">
+      <div class="report-modal__header">
+        <p class="report-modal__title">후기 남기기</p>
+        <button type="button" class="report-modal__close" id="review-modal-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="report-modal__body" id="review-modal-body"></div>
+      <p class="report-modal__success" id="review-success" hidden>고마워요! 확인 후 올릴게요.</p>
+      <div class="report-modal__footer">
+        <button type="button" class="btn-primary" id="review-submit" disabled>후기 남기기</button>
+      </div>
+    </div>
+  </div>
+
   <nav class="tabbar">
     <a class="tabbar__item" href="index.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5"/></svg></span>홈</a>
     <a class="tabbar__item" href="map.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.6 7-11.5A7 7 0 0 0 5 9.5C5 14.4 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>주변</a>
@@ -113,6 +127,7 @@
 <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 <script src="js/util.js"></script>
 <script src="js/favorites.js"></script>
+<script src="js/reviews.js"></script>
 <script src="js/place.js"></script>
 <script src="js/report.js"></script>
 <script src="js/course.js"></script>

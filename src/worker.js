@@ -1029,6 +1029,68 @@ async function handleReviewPost(request, env, ctx) {
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
 }
 
+// 후기 신고.
+//
+// App Store 1.2 는 UGC 를 다루는 앱에 "공격적인 콘텐츠를 신고할 방법"을 요구한다.
+// 신고가 들어오면 노션의 신고수를 올리고 슬랙으로 알린다. 신고 하나로 후기가
+// 곧바로 사라지지는 않는다 — 그러면 신고 자체가 남용 수단이 된다.
+const REPORT_HIDE_THRESHOLD = 3;
+
+async function handleReviewReport(request, env, ctx) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+  if (!env.NOTION_API_KEY) {
+    return new Response(JSON.stringify({ error: "신고 기능이 준비되지 않았습니다." }), { status: 503, headers });
+  }
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "잘못된 요청 본문입니다." }), { status: 400, headers });
+  }
+  const id = String((body || {}).id || "");
+  if (!isNotionId(id)) {
+    return new Response(JSON.stringify({ error: "잘못된 후기 ID입니다." }), { status: 400, headers });
+  }
+
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const allowed = await consumeRateLimit(env, { scope: "review-report", ip, limit: 10, windowSeconds: 3600 });
+  if (!allowed) {
+    return new Response(JSON.stringify({ error: "신고가 너무 잦아요. 잠시 뒤에 다시 시도해주세요." }), { status: 429, headers });
+  }
+
+  const notionHeaders = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+  const page = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, { headers: notionHeaders });
+  if (!page.ok) return upstreamErrorResponse("신고를 접수하지 못했습니다.", await page.text());
+  const data = await page.json();
+  const count = Number(data.properties?.["신고수"]?.number || 0) + 1;
+  const placeName = (data.properties?.["장소명"]?.title || []).map((t) => t.plain_text).join("");
+
+  // 신고가 쌓이면 자동으로 감춘다. 검수자가 볼 때까지 그대로 두면 정말 문제가
+  // 있는 후기가 밤새 노출된다.
+  const properties = { "신고수": { number: count } };
+  if (count >= REPORT_HIDE_THRESHOLD) properties["상태"] = { select: { name: "숨김" } };
+
+  const res = await fetchWithTimeout(`https://api.notion.com/v1/pages/${id}`, {
+    method: "PATCH",
+    headers: notionHeaders,
+    body: JSON.stringify({ properties }),
+  });
+  if (!res.ok) return upstreamErrorResponse("신고를 접수하지 못했습니다.", await res.text());
+
+  ctx.waitUntil(
+    notifySlack(
+      env,
+      `🚩 후기 신고 ${count}건째 — ${placeName}` +
+      (count >= REPORT_HIDE_THRESHOLD ? "\n• 자동으로 숨김 처리했습니다. 확인이 필요합니다." : "")
+    ).catch((err) => console.warn(`신고 알림 실패: ${err.message}`))
+  );
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+}
+
 // 노션에서 "공개"로 바꾼 후기만 KV 로 옮긴다. 검수를 통과하지 않은 후기는
 // 어디에도 보이지 않는다 — 이것이 App Store 1.2 의 필터링 요건에 대한 우리 답이다.
 async function refreshPublicReviews(env) {
@@ -1939,6 +2001,9 @@ async function handleRequest(request, env, ctx) {
     // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
     // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
     return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env, url));
+  }
+  if (url.pathname === "/api/reviews/report" && request.method === "POST") {
+    return handleReviewReport(request, env, ctx);
   }
   if (url.pathname === "/api/reviews") {
     if (request.method === "POST") return handleReviewPost(request, env, ctx);

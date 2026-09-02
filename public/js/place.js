@@ -183,6 +183,7 @@ function render(place) {
            아래로 밀려나 화면이 깨졌다. -->
       <div id="nursing-slot"></div>
       <div id="toilet-slot"></div>
+      <div id="review-slot"></div>
       ${eventHtml}
       ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
@@ -241,6 +242,7 @@ async function init() {
     // 화면이 늦게 뜨면 안 된다.
     renderNearbyNursing(place).catch((err) => console.error(err));
     renderNearbyToilets(place).catch((err) => console.error(err));
+    window.renderReviews(place).catch((err) => console.error(err));
 
     // 오류 신고 폼은 홈에 있는데 화면이 깨지는 곳은 대개 상세다. 마지막으로 본
     // 장소를 남겨 두면 신고에 저절로 따라붙어 되묻지 않아도 된다.

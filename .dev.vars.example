@@ -38,3 +38,6 @@ SOOYUSIL_API_KEY=
 # eshare.go.kr > OPEN API. 서비스별로 따로 승인받아야 하고, 인증키는
 # 쿼리스트링이 아니라 URL 경로에 넣는다 — scripts/check-eshare.mjs 참고.
 ESHARE_API_KEY=
+
+# 후기 DB. 별점·후기는 전건이 검수를 거쳐 "공개"로 바뀐 것만 앱에 나온다.
+NOTION_REVIEWS_DATABASE_ID=

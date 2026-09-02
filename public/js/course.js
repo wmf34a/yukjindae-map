@@ -148,10 +148,26 @@ async function resolveSegment(from, to) {
   return { from, to, distanceM: straightM, estimated: true };
 }
 
+// 구간을 한꺼번에 다 부르지 않는다.
+//
+// Promise.all 로 전부 동시에 던졌더니 길찾기가 무더기로 타임아웃 났다 — 한 번에
+// 아홉 건이 함께 실패한 로그가 있다. 코스 하나에 구간이 예닐곱 개씩 되는데,
+// 그게 동시에 몰리면 워커에서 네이버로 나가는 연결이 서로를 밀어낸다.
+//
+// 세 개씩 끊어 부른다. 전체 시간은 조금 늘지만 실패가 사라지는 편이 낫다 —
+// 실패한 구간은 직선거리로 대체되어 "예상"이라고 적히기 때문이다.
+const SEGMENT_BATCH = 3;
+
 async function resolveSegments(stops) {
   const pairs = [];
   for (let i = 1; i < stops.length; i++) pairs.push([stops[i - 1], stops[i]]);
-  return Promise.all(pairs.map(([from, to]) => resolveSegment(from, to)));
+  const out = [];
+  for (let i = 0; i < pairs.length; i += SEGMENT_BATCH) {
+    const batch = pairs.slice(i, i + SEGMENT_BATCH);
+    // eslint-disable-next-line no-await-in-loop -- 묶음 단위로 순서대로 부르는 것이 목적이다.
+    out.push(...await Promise.all(batch.map(([from, to]) => resolveSegment(from, to))));
+  }
+  return out;
 }
 
 async function geocodeAddress(address) {

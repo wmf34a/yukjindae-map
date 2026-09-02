@@ -278,6 +278,14 @@ async function handleDirectionsInner(env, url) {
     "cache-control": "public, max-age=86400",
   };
 
+  // 기본 8초로는 빠듯하다. 네이버를 직접 부르면 0.8초인데 워커를 거치면 1~5초가
+  // 나오고, 코스 하나가 구간 여러 개를 한꺼번에 부르는 순간 무더기로 타임아웃이
+  // 났다(실제로 한 번에 아홉 건이 함께 실패한 로그가 있다).
+  //
+  // 실패해도 화면이 깨지지는 않는다 — 프론트가 직선거리로 대체하고 "예상"이라고
+  // 적는다. 그래도 도로 거리를 보여줄 수 있으면 그게 낫다. 사람은 코스 화면이
+  // 그려진 뒤 거리 숫자가 채워지기를 기다릴 뿐이라 몇 초 더 기다릴 여유가 있다.
+  const DIRECTIONS_TIMEOUT_MS = 15_000;
   const res = await fetchWithTimeout(
     `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${encodeURIComponent(start)}&goal=${encodeURIComponent(goal)}&option=trafast`,
     {
@@ -285,7 +293,8 @@ async function handleDirectionsInner(env, url) {
         "x-ncp-apigw-api-key-id": env.NAVER_MAP_CLIENT_ID,
         "x-ncp-apigw-api-key": env.NAVER_MAP_CLIENT_SECRET,
       },
-    }
+    },
+    DIRECTIONS_TIMEOUT_MS
   );
 
   if (!res.ok) {

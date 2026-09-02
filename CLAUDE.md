@@ -124,8 +124,83 @@ node scripts/register-places.mjs tmp/<지역>-후보.json  # 공개여부=false 
 로직을 추가할 땐 worker.js에 밀어넣지 말고 모듈로 빼는 쪽이 이 저장소의 결에 맞는다.
 
 **Worker 엔드포인트**: `/api/places` · `/api/banners` · `/api/courses` · `/api/festivals` ·
-`/api/festivals/:id` · `/api/nursing-rooms` · `/api/nearby-place` · `/api/geocode` ·
-`/api/directions` · `/api/reports` · `/naver-config` · `/images/*`
+`/api/festivals/:id` · `/api/nursing-rooms` · `/api/toilets` · `/api/reviews` ·
+`/api/reviews/report` · `/api/nearby-place` · `/api/geocode` · `/api/directions` ·
+`/api/today` · `/api/visit` · `/api/reports` · `/api/health` · `/naver-config` · `/images/*`
+
+## 한도와 비용
+
+무료 플랜으로 돌고 있다. 무엇이 진짜 제약인지 한 번 전수로 확인했다(2026-09-02).
+
+### 정적 자산 요청은 세지 않는다
+
+홈 한 번 여는 데 37요청이 나가는데 그중 30건이 CSS·JS·이미지다. 이건
+**청구에도 한도에도 들어가지 않는다** — "Requests to static assets are free and
+unlimited"(Cloudflare 문서). 청구 대상은 Worker 스크립트가 실행된 요청뿐이라,
+방문 한 번에 7건 남짓이다.
+
+대시보드나 GraphQL 의 `workersInvocationsAdaptive` 숫자에는 정적 자산이 함께
+잡힌다. 런칭일 127,793건을 보고 하루 한도(100,000)를 넘긴 줄 알았는데, 그날
+`success` 가 127,642건이고 429 는 한 건도 없었다. **이 숫자를 한도와 직접
+비교하지 말 것.**
+
+### 진짜 빡빡한 것은 KV 쓰기다
+
+하루 1,000회뿐이다. 오픈 첫날 30분 만에 소진했고, 그때 남용 방지 카운터의
+`put` 이 throw 하면서 근처 맛집·카페 조회가 통째로 500으로 떨어졌다.
+
+- 프록시 남용 방지(`consumeProxyLimit`)는 **Cache API** 로 센다. 쓰기 한도가
+  없다. 엣지마다 따로 세어 총합이 정확하지 않지만, 한 IP 가 우리 네이버 쿼터를
+  태우는 것을 막는 용도라 근사로 충분하다.
+- 방문자 집계는 10분 크론 중 30분에 한 번만 KV 에 쓴다(하루 48회).
+- `consumeRateLimit` 은 put 이 실패해도 요청을 살린다. 남용 방지가 서비스를
+  멈춰 세우면 안 된다.
+
+### 돈이 나가는 호출
+
+`/api/geocode` 와 `/api/directions` 는 네이버 유료 API 를 대신 부른다.
+`/api/nearby-place` 는 카카오(일 10만 무료) 와 네이버를 함께 쓴다.
+
+**셋 다 `withEdgeCache` 를 거쳐야 한다.** 응답에 `cache-control` 만 달면 그건
+브라우저 캐시라, 같은 장소를 백 명이 열면 바깥 API 도 백 번 불린다.
+캐시 키에 쿼리스트링이 들어가므로 같은 질문에만 재사용된다.
+
+`withEdgeCache` 의 `ttlSeconds` 를 한 시간보다 길게 줄 때는 `s-maxage` 도 함께
+늘어나는지 확인할 것 — 예전에 `CACHE_HOLD_SECONDS` 로 고정돼 있어서, 하루로
+잡은 캐시가 한 시간 뒤 사라져 바깥 API 를 다시 불렀다.
+
+### 정적 자산 캐시 헤더는 `_headers` 에 있다
+
+`public/_headers` 다. **Worker 코드로는 못 붙인다** — 자산은 Worker 를 거치지
+않고 곧장 서빙된다. `withSecurityHeaders` 가 붙이는 것처럼 보이는 헤더도
+자산 파이프라인이 붙인 것이다.
+
+HTML·`sw.js`·`manifest.json` 은 캐시하지 않는다. HTML 을 캐시하면 배포한 화면이
+안 바뀌고, `sw.js` 를 캐시하면 새 버전 감지가 늦어진다.
+
+## 사용자 제보와 후기
+
+제보(`/api/reports`)와 후기(`/api/reviews`)는 같은 길을 탄다 — 앱은 노션 승인
+큐에 넣기만 하고, 10분 크론이 승인된 것만 반영한다. 검수 전에는 어디에도
+보이지 않는다.
+
+- **사진 검사는 시간당 허용량을 세기 전에 한다.** 순서를 반대로 뒀더니 사진
+  형식이 틀려 400 을 받은 요청도 허용량을 까먹었다. 사진을 몇 번 잘못 고른
+  사람은 아무것도 못 남긴 채 막힌다. 이 순서를 지키는지 확인하는 테스트가
+  `report-image.test.js` 에 있다.
+- 사진은 브라우저에서 긴 변 1600px 로 줄여 보낸다. 서버에서 다시 그리면 변환
+  비용이 붙고, 캔버스로 다시 그리는 과정에서 EXIF(GPS·촬영시각)가 사라진다.
+- 받는 형식은 JPEG·PNG 2MB 이하다. **SVG 는 받지 않는다** — 스크립트를 품을 수
+  있고 그걸 그대로 되돌려주면 저장된 XSS 가 된다.
+- 제보 스크린샷과 후기 사진은 R2 의 `reports/` 접두어에 넣는다. 30일 뒤 자동
+  삭제되도록 수명 규칙이 걸려 있다. 장소 사진과 접두어를 나눈 이유가 이것이다.
+- 후기 중복 확인은 **노션에 직접 묻는다.** KV(공개된 것)만 보면 검수를 기다리는
+  동안 같은 장소에 얼마든지 더 쓸 수 있다.
+- 신고는 세 건이 쌓이면 자동으로 숨긴다. 한 건으로 내리면 신고 자체가 남용
+  수단이 된다.
+- 로그인은 없다. 작성자 구분은 기기마다 다른 임의값(`작성자키`)으로 한다.
+  구글·네이버·카카오를 붙이면 App Store 4.8 이 "동등한 대체 로그인"을 요구해
+  애플 로그인까지 따라온다 — 로그인이 아예 없으면 그 항목이 적용 대상이 아니다.
 
 ## 환경 변수
 

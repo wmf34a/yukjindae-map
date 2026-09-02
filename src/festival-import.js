@@ -16,12 +16,20 @@ const FAMILY_KEYWORDS = [
 // 0점 몫으로 내려보내 사람이 검토하게 둔다.
 const EXCLUDE_KEYWORDS = ["성인", "19세", "클럽", "헌팅", "edm", "펍"];
 
+// 사람이 보고 뺀 축제. 노션에서 페이지를 지우면 TourAPI_ID 도 함께 사라져
+// 다음 주 배치가 같은 축제를 다시 만든다 — 뺀 이유를 여기 남겨야 안 돌아온다.
+// (장소 쪽 place-pipeline.js 의 REJECTED 와 같은 역할)
+export const REJECTED = {
+  "3486887": "왜관 홀리 페스티벌 — 천주교 수도원의 미사·피정 중심 종교 행사",
+};
+
 function normalize(text) {
   return String(text || "").toLowerCase();
 }
 
 // null이면 아예 후보에서 제외(성인 지향 키워드 포함), 숫자면 가점 점수.
 export function scoreCandidate(item) {
+  if (REJECTED[String(item.contentId || "")]) return null;
   const haystack = normalize(item.title);
   if (EXCLUDE_KEYWORDS.some((kw) => haystack.includes(kw))) return null;
   return FAMILY_KEYWORDS.reduce((score, kw) => (haystack.includes(kw) ? score + 1 : score), 0);

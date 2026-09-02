@@ -27,6 +27,10 @@ describe("scoreCandidate", () => {
     expect(scoreCandidate(baseItem({ title: "19세 이상 클럽 파티" }))).toBeNull();
   });
 
+  it("사람이 뺀 축제(REJECTED)는 null이다 — 노션에서 지워도 다시 안 만든다", () => {
+    expect(scoreCandidate(baseItem({ contentId: "3486887", title: "왜관 홀리 페스티벌" }))).toBeNull();
+  });
+
   it("술이 나오지만 성인 전용은 아닌 축제는 제외하지 않는다", () => {
     expect(scoreCandidate(baseItem({ title: "강북 백맥축제" }))).toBe(0);
     expect(scoreCandidate(baseItem({ title: "거제맥주축제" }))).toBe(0);

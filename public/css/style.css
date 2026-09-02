@@ -1814,6 +1814,13 @@ body {
   cursor: pointer;
 }
 
+/* .btn-primary 의 색은 상세·지도 화면에만 정의돼 있어서, 모달 안에서는 브라우저
+   기본 회색 버튼으로 떨어져 있었다 — 다 적고 나서도 눌러도 되는지 안 보인다. */
+.report-modal__footer .btn-primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+}
+
 .report-modal__footer button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

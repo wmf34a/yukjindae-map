@@ -8,7 +8,8 @@
 ```
 instagram-carousel/
   carousel.css         # ★ 디자인 시스템 — 색·글자·컴포넌트 전부 여기
-  themes/              # ★ 테마 3종(클린·써니·나이트) + 미리보기 페이지
+  themes/              # ★ 테마 3종(클린·써니·나이트)
+  미리보기/             # 혼자서도 열리는 단일 파일(톤 3종·템플릿·사례)
   template.html        # ★ 새 캐러셀 시작점(아빠 운동회 예시로 채워둠)
   템플릿-미리보기.html   # 더블클릭하면 바로 열리는 단독 파일(CSS·이미지 내장)
   slides*.html         # 실제 작업 파일들 (맵 오픈 · 유모차 콘서트 · 축제)
@@ -21,6 +22,7 @@ instagram-carousel/
     shoot.mjs          # 앱 화면 캡처
     render.mjs         # HTML → 슬라이드 PNG
     record.mjs         # 움직이는 슬라이드 → mp4(+gif)
+    build-standalone.mjs # CSS·이미지를 넣어 어디서든 열리는 단일 HTML 로
     slide/             # 영상 슬라이드용 페이지
 ```
 
@@ -86,7 +88,12 @@ cd out-운동회 && i=1; for f in t*.png; do mv "$f" "$(printf '%02d' $i)-slide.
 ```
 
 `themes/preview-a.html` · `preview-b.html` · `preview-c.html` 을 렌더하면 네 종류
-슬라이드(표지·사진카드·글카드·CTA)로 톤을 비교할 수 있다.
+슬라이드(표지·사진카드·글카드·CTA)로 톤을 비교할 수 있다. 사람에게 그냥 보여줄 때는
+`미리보기/A-클린.html` 처럼 단일 파일로 만든 것을 쓴다 — 더블클릭이면 열린다.
+
+```bash
+node tools/build-standalone.mjs themes/preview-b.html 미리보기/B-써니.html
+```
 
 **표지만 다른 테마로 섞어도 된다.** 2026-09 축제 캐러셀은 표지를 나이트, 본문을
 써니로 뽑았다 — 테마별로 한 벌씩 렌더한 뒤 필요한 장만 한 폴더에 모으면 된다.

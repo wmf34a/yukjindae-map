@@ -335,7 +335,31 @@ function handleHealth(env) {
   });
 }
 
-async function handlePlaceById(env, url, id) {
+// 이미 받아 둔 목록 응답에서 장소 하나를 꺼낸다.
+//
+// 상세가 주는 값은 목록의 한 항목과 완전히 같다(36개 필드가 전부 일치하는 것을
+// 확인했다). 그런데 상세는 장소마다 캐시가 따로라, 260곳 각각의 첫 방문자가
+// 노션 응답을 그대로 기다린다 — 실측 로그에 6.4초짜리가 남아 있다.
+//
+// 목록은 5분 캐시에 한 시간짜리 stale 여유까지 있어 대개 살아 있다. 거기서
+// 꺼낼 수 있으면 노션을 부를 이유가 없다.
+export async function placeFromCachedList(request, id) {
+  if (typeof caches === "undefined" || !caches.default) return null;
+  try {
+    const listUrl = new URL(request.url);
+    listUrl.pathname = "/api/places";
+    listUrl.search = "";
+    const hit = await caches.default.match(new Request(listUrl.toString()));
+    if (!hit) return null;
+    const data = await hit.json();
+    return (data.places || []).find((p) => p.id === id) || null;
+  } catch {
+    // 캐시를 못 읽으면 그냥 노션에 묻는다. 여기서 실패해도 잃는 것은 속도뿐이다.
+    return null;
+  }
+}
+
+async function handlePlaceById(env, url, id, request) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
   if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID) {
@@ -343,6 +367,11 @@ async function handlePlaceById(env, url, id) {
   }
   if (!isNotionId(id)) {
     return new Response(JSON.stringify({ error: "장소를 찾을 수 없습니다." }), { status: 404, headers });
+  }
+
+  const cached = request ? await placeFromCachedList(request, id) : null;
+  if (cached) {
+    return new Response(JSON.stringify({ place: cached }), { status: 200, headers });
   }
 
   try {
@@ -2039,7 +2068,7 @@ async function handleRequest(request, env, ctx) {
   }
   if (url.pathname.startsWith("/api/places/")) {
     const id = url.pathname.slice("/api/places/".length);
-    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handlePlaceById(env, url, id));
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handlePlaceById(env, url, id, request));
   }
   if (url.pathname === "/api/places") {
     if (request.method === "GET" && !url.search) {

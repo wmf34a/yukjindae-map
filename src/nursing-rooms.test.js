@@ -5,6 +5,8 @@ import {
   parseKorailItems,
   filterNursingStations,
   parseSeoulMetroNursingItems,
+  normalizeSooyusilRoom,
+  dedupeByDistance,
 } from "./nursing-rooms.js";
 
 describe("parseBusanItems", () => {
@@ -120,5 +122,62 @@ describe("parseSeoulMetroNursingItems", () => {
   it("빈 값/잘못된 값은 빈 배열이다", () => {
     expect(parseSeoulMetroNursingItems("")).toEqual([]);
     expect(parseSeoulMetroNursingItems(null)).toEqual([]);
+  });
+});
+
+describe("normalizeSooyusilRoom", () => {
+  const raw = {
+    roomNo: "1117", roomName: "코스트코 대전점", address: "대전 중구 오류로 41",
+    location: "3층 여자화장실 옆", managerTelNo: "042-000-0000",
+    gpsLat: "36.32", gpsLong: "127.40", fatherUseCode: "1", fatherUseNm: "아빠이용가능",
+  };
+
+  it("지도가 쓰는 형태로 바꾼다", () => {
+    expect(normalizeSooyusilRoom(raw)).toEqual({
+      name: "코스트코 대전점",
+      address: "대전 중구 오류로 41",
+      place: "3층 여자화장실 옆",
+      tel: "042-000-0000",
+      lat: 36.32,
+      lng: 127.4,
+      fatherAllowed: true,
+      source: "수유정보 알리미",
+      sourceUrl: "https://sooyusil.com/home/39.htm",
+    });
+  });
+
+  // 이 앱에서 가장 중요한 값이다. 아빠가 못 들어가는 곳을 갈 수 있다고 하면 안 된다.
+  it("아빠 이용 여부를 코드와 이름 둘 다로 본다", () => {
+    expect(normalizeSooyusilRoom({ ...raw, fatherUseCode: "0", fatherUseNm: "아빠이용불가" }).fatherAllowed).toBe(false);
+    expect(normalizeSooyusilRoom({ ...raw, fatherUseCode: "", fatherUseNm: "아빠이용가능" }).fatherAllowed).toBe(true);
+    expect(normalizeSooyusilRoom({ ...raw, fatherUseCode: "1", fatherUseNm: "" }).fatherAllowed).toBe(true);
+  });
+
+  it("좌표가 없으면 버린다", () => {
+    expect(normalizeSooyusilRoom({ ...raw, gpsLat: "", gpsLong: "" })).toBeNull();
+    expect(normalizeSooyusilRoom({ ...raw, gpsLat: "없음" })).toBeNull();
+  });
+});
+
+describe("dedupeByDistance", () => {
+  const at = (lat, lng, name) => ({ lat, lng, name });
+
+  // 같은 수유실이 부산 데이터와 전국 명부에 따로 잡힌다. 핀이 두 개 찍히면
+  // 사용자는 다른 곳인 줄 안다.
+  it("120m 안이면 같은 곳으로 보고 앞의 것을 남긴다", () => {
+    const out = dedupeByDistance([
+      at(35.1000, 129.0000, "부산 데이터"),
+      at(35.1005, 129.0000, "전국 명부"),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].name).toBe("부산 데이터");
+  });
+
+  it("멀리 있으면 둘 다 남긴다", () => {
+    expect(dedupeByDistance([at(35.1, 129.0, "가"), at(35.2, 129.1, "나")])).toHaveLength(2);
+  });
+
+  it("좌표가 없는 것은 버린다", () => {
+    expect(dedupeByDistance([{ name: "좌표없음" }, at(35.1, 129.0, "정상")])).toHaveLength(1);
   });
 });

@@ -8,7 +8,7 @@ import { runMonthlyTop10 } from "./monthly-top10.js";
 import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weather.js";
 import { fetchFestivalDescription, searchFestivalsInRange } from "./tourapi.js";
 import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
-import { fetchAllNursingRooms, runStationNursingGeocodeRefresh } from "./nursing-rooms.js";
+import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilRooms } from "./nursing-rooms.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
@@ -1701,7 +1701,10 @@ export default {
       // 좌표를 먼저 갱신하고 그 결과로 장소를 대조한다. 순서가 바뀌면 대조가
       // 지난주 좌표를 쓰게 된다.
       ctx.waitUntil(
-        runStationNursingGeocodeRefresh(env).then(() => runPublicDataPlaceMatch(env))
+        refreshSooyusilRooms(env)
+          .catch((err) => console.warn(`수유정보 알리미 갱신 실패: ${err.message}`))
+          .then(() => runStationNursingGeocodeRefresh(env))
+          .then(() => runPublicDataPlaceMatch(env))
       );
       return;
     }

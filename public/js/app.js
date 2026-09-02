@@ -504,6 +504,12 @@ async function loadBanners() {
 // 날짜를 손으로 적는다. 지나간 소식은 아래에서 지우면 된다.
 const FEATURE_NOTICES = [
   {
+    title: "기저귀 갈 곳 9,600곳이 새로 들어왔어요",
+    subtitle: "주변 탭에서 🚼 를 누르면 보여요 · 남자화장실에도 있는 곳을 따로 표시해요",
+    link: "map.html",
+    createdAt: "2026-09-02T11:50:00+09:00",
+  },
+  {
     title: "전국 수유실 2,900곳을 지도에 담았어요",
     subtitle: "주변 탭에서 🍼 를 누르면 보여요 · 아빠가 들어갈 수 있는 곳도 표시돼요",
     link: "map.html",

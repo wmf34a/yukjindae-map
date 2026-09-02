@@ -13,11 +13,16 @@
       cp template.html slides-<주제>.html
       node tools/render.mjs slides-<주제>.html out-<주제>
 
-  아래는 "아빠 운동회" 를 예로 든 것이다. 쓰는 슬라이드만 남기고 나머지는 지운다.
+  아래는 "아빠 운동회" 를 예로 든 것이다 — 주제는 무엇이든 된다(모임 모집, 공지,
+  꿀팁 정리, 장소 추천 …). 쓰는 슬라이드만 남기고 나머지는 지운다.
+  앱 화면이 필요 없으면 ⑧번 슬라이드를 통째로 지우면 된다.
   섹션 id(t1, t2 …)가 곧 렌더된 파일 이름이 되므로 순서대로 붙인다.
 
-  사진은 shots/ 아래에 넣는다. 얼굴이 크게 나오는 사진은 당사자 동의를 받은
-  것만 쓴다 — 캐러셀은 공개 게시물이다.
+  지금 들어 있는 회색 이미지는 자리 표시용(shots/placeholder/)이다. 실제 사진을
+  shots/ 에 넣고 src 를 그 파일로 바꾸면 된다 — 그대로 렌더해 보면 글과 사진이
+  어떻게 놓이는지 먼저 확인할 수 있다.
+
+  얼굴이 크게 나오는 사진은 당사자 동의를 받은 것만 쓴다 — 캐러셀은 공개 게시물이다.
 
   규칙 세 줄:
    1. 슬라이드 하나에 메시지 하나. 말풍선은 두 개까지.
@@ -29,7 +34,10 @@
      .cover__grid 의 grid-template-columns 를 2단으로 줄인다. -->
 <section class="slide cover" id="t1">
   <div class="cover__grid">
-    <img src="shots/운동회-01.jpg" alt="" /><img src="shots/운동회-02.jpg" alt="" /><img src="shots/운동회-03.jpg" alt="" />
+    <img src="shots/placeholder/ph-01.svg" alt="" /><img src="shots/placeholder/ph-02.svg" alt="" /><img src="shots/placeholder/ph-03.svg" alt="" />
+    <img src="shots/placeholder/ph-04.svg" alt="" /><img src="shots/placeholder/ph-05.svg" alt="" /><img src="shots/placeholder/ph-06.svg" alt="" />
+    <img src="shots/placeholder/ph-01.svg" alt="" /><img src="shots/placeholder/ph-02.svg" alt="" /><img src="shots/placeholder/ph-03.svg" alt="" />
+    <img src="shots/placeholder/ph-04.svg" alt="" /><img src="shots/placeholder/ph-05.svg" alt="" /><img src="shots/placeholder/ph-06.svg" alt="" />
     <img src="shots/운동회-04.jpg" alt="" /><img src="shots/운동회-05.jpg" alt="" /><img src="shots/운동회-06.jpg" alt="" />
     <img src="shots/운동회-07.jpg" alt="" /><img src="shots/운동회-08.jpg" alt="" /><img src="shots/운동회-09.jpg" alt="" />
     <img src="shots/운동회-10.jpg" alt="" /><img src="shots/운동회-11.jpg" alt="" /><img src="shots/운동회-12.jpg" alt="" />
@@ -79,7 +87,7 @@
 
 <!-- ③ 현장 한 컷 — 사진이 셀 때. 아래 그라데이션 위에 글을 얹는다. -->
 <section class="slide photo" id="t3">
-  <img class="photo__img" src="shots/운동회-대표컷.jpg" alt="" />
+  <img class="photo__img" src="shots/placeholder/ph-02.svg" alt="" />
   <div class="photo__veil"></div>
   <div class="photo__caption">
     <h2>출발선 앞에서 제일 긴장한 건<br />아빠였습니다</h2>
@@ -91,9 +99,9 @@
 <section class="slide" id="t4">
   <div class="head"><h2>이런 종목이 있었어요</h2></div>
   <div class="photo-grid photo-grid--3">
-    <figure><img src="shots/종목-이어달리기.jpg" alt="" /><figcaption>아빠와 이어달리기</figcaption></figure>
-    <figure><img src="shots/종목-공굴리기.jpg" alt="" /><figcaption>대형 공 굴리기</figcaption></figure>
-    <figure><img src="shots/종목-줄다리기.jpg" alt="" /><figcaption>가족 줄다리기</figcaption></figure>
+    <figure><img src="shots/placeholder/ph-03.svg" alt="" /><figcaption>아빠와 이어달리기</figcaption></figure>
+    <figure><img src="shots/placeholder/ph-04.svg" alt="" /><figcaption>대형 공 굴리기</figcaption></figure>
+    <figure><img src="shots/placeholder/ph-05.svg" alt="" /><figcaption>가족 줄다리기</figcaption></figure>
   </div>
   <div class="brandmark"><img src="shots/character-logo-600.png" alt="" />육진대</div>
 </section>
@@ -152,7 +160,7 @@
 <section class="slide" id="t8">
   <div class="head"><h2>다음 모임은 <b>앱에서</b> 먼저 알려드려요</h2></div>
   <div class="stage">
-    <div class="phone phone--clip"><img src="shots/앱-홈.png" alt="" /></div>
+    <div class="phone phone--clip"><img src="shots/placeholder/ph-app.svg" alt="" /></div>
     <div class="bubble bubble--tl">모임 일정과 장소를<br /><b>알림으로</b></div>
     <div class="bubble bubble--br">아빠들이 다녀온 곳<br />전국 249곳도 지도에</div>
   </div>

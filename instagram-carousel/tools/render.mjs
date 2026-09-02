@@ -1,6 +1,7 @@
 // slides.html 의 .slide 마다 1080×1350 PNG 를 뽑는다.
 //
 //   node tools/render.mjs [slides.html] [출력폴더]
+//   TRANSPARENT=1 node tools/render.mjs overlay.html out   # 배경 투명(영상 오버레이용)
 //
 // 파일명은 각 섹션의 id(s1, s2 …). 업로드 순서대로 01-slide.png … 로 바꾸는 건
 // README 의 명령 한 줄로 처리한다.
@@ -54,6 +55,10 @@ async function main() {
   await send("Page.enable");
   await send("Runtime.enable");
   await send("Emulation.setDeviceMetricsOverride", { width: 1080, height: 1350, deviceScaleFactor: 1, mobile: false });
+  // TRANSPARENT=1 이면 배경을 투명하게 찍는다 — 영상 위에 얹을 자막/뱃지 오버레이용.
+  if (process.env.TRANSPARENT === "1") {
+    await send("Emulation.setDefaultBackgroundColorOverride", { color: { r: 0, g: 0, b: 0, a: 0 } });
+  }
   await send("Page.navigate", { url: "file://" + SRC });
   await sleep(6000);
   // 웹폰트(Pretendard)가 붙기 전에 찍으면 자간이 통째로 달라진다.

@@ -1561,6 +1561,13 @@ body {
   box-sizing: border-box;
 }
 
+/* 오류 신고는 한 줄로 안 끝난다. 무슨 화면에서 무엇을 눌렀는지 적을 자리를 준다. */
+.report-modal__textarea {
+  resize: vertical;
+  min-height: 96px;
+  line-height: 1.5;
+}
+
 .report-modal__value-input[hidden],
 .report-modal__value-group[hidden] {
   display: none;

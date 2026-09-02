@@ -127,6 +127,7 @@
     <div class="foot-links">
       <button type="button" class="about-link" id="tour-again">사용법 다시 보기</button>
       <a class="about-link" href="about.html">육진대는 어떤 팀인가요?</a>
+      <button type="button" class="about-link" id="bug-btn">앱이 이상해요 (오류 신고)</button>
     </div>
   </section>
 
@@ -195,12 +196,32 @@
     </div>
   </div>
 
+  <div class="report-modal-overlay" id="bug-modal-overlay">
+    <div class="report-modal" role="dialog" aria-modal="true" aria-label="앱 오류 신고">
+      <div class="report-modal__header">
+        <p class="report-modal__title">앱 오류 신고</p>
+        <button type="button" class="report-modal__close" id="bug-close" aria-label="닫기">✕</button>
+      </div>
+      <div class="report-modal__body">
+        <p class="report-modal__hint">화면이 깨지거나 눌러도 반응이 없을 때 알려주세요. 어느 화면이었는지 같이 적어주시면 훨씬 빨리 고칠 수 있어요.</p>
+        <label class="report-modal__label" for="bug-value">무슨 일이 있었나요?</label>
+        <textarea id="bug-value" class="report-modal__value-input report-modal__textarea" rows="4" maxlength="800" placeholder="예: 청주랜드 상세에서 수유실 칸이 길찾기 버튼 아래로 내려가요"></textarea>
+        <p class="report-modal__error" id="bug-error" hidden></p>
+      </div>
+      <p class="report-modal__success" id="bug-success" hidden>알려주셔서 고마워요! 확인하고 고칠게요.</p>
+      <div class="report-modal__footer">
+        <button type="button" class="btn-primary" id="bug-submit" disabled>신고하기</button>
+      </div>
+    </div>
+  </div>
+
 <script src="js/util.js"></script>
 <!-- 지도 좌표는 app.js에서 분리했다(51KB). 앱 로직만 고쳐도 이 파일은 캐시가 유지된다. -->
 <script src="js/region-map-paths.js"></script>
 <script src="js/favorites.js"></script>
 <script src="js/info-dot.js"></script>
 <script src="js/app.js"></script>
+<script src="js/bug-report.js"></script>
 <!-- 장소 추천의 사람 확인(Turnstile)에 사이트 키가 필요하다. 홈은 지도를 쓰지 않아
      그동안 이 설정을 안 불러왔다. -->
 <script src="/naver-config"></script>

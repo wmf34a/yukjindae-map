@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>유모차 콘서트 모집 캐러셀</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="carousel.css" />
+<style>
+  /* 이번 캐러셀만 쓰는 보정. 포스터가 크림색 일러스트라 표지 딤을 옅게 쓰고,
+     정보/가격 슬라이드용 작은 변형 몇 개를 얹는다. */
+  .cover--poster .cover__bg { object-fit: cover; object-position: center 24%; filter: none; transform: scale(1.04); }
+  .cover--poster .cover__veil {
+    background: linear-gradient(180deg, rgba(16,26,53,.06) 0%, rgba(16,26,53,.05) 38%, rgba(16,26,53,.72) 60%, rgba(16,26,53,1) 78%, rgba(16,26,53,1) 100%);
+  }
+  .badge-row { display: flex; gap: 12px; margin-bottom: 26px; flex-wrap: wrap; }
+  .badge {
+    font-size: 28px; font-weight: 800; letter-spacing: -.02em;
+    padding: 12px 24px; border-radius: 999px;
+  }
+  .badge--now { background: #E23B3B; color: #fff; }
+  .badge--left { background: var(--pop); color: var(--navy); }
+  .badge--gift { background: rgba(255,255,255,.94); color: #1A2F6B; }
+  .cover__foot { margin-top: 26px; font-size: 30px; font-weight: 600; color: rgba(255,255,255,.85); letter-spacing: -.02em; }
+
+  /* 일시·장소 같은 항목 나열 */
+  .facts { padding: 48px 80px 110px; display: flex; flex-direction: column; gap: 20px; justify-content: center; flex: 1; }
+  .fact {
+    display: flex; align-items: center; gap: 24px;
+    background: #fff; border-radius: 24px; padding: 30px 36px;
+    box-shadow: 0 10px 30px rgba(44,53,85,.07);
+  }
+  .fact__icon { flex: none; font-size: 40px; width: 56px; text-align: center; }
+  .fact__body strong { display: block; font-size: 36px; font-weight: 800; color: var(--text); letter-spacing: -.03em; }
+  .fact__body span { display: block; margin-top: 6px; font-size: 26px; font-weight: 500; color: var(--sub); }
+
+  /* 가격 두 줄 */
+  .price-stage { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 110px; }
+  .price { display: flex; gap: 20px; justify-content: center; padding: 0 80px; }
+  .price__card {
+    flex: 1; background: #fff; border-radius: 28px; padding: 40px 30px; text-align: center;
+    box-shadow: 0 12px 32px rgba(44,53,85,.08);
+  }
+  .price__card--main { background: var(--navy); }
+  .price__label { font-size: 27px; font-weight: 700; color: var(--sub); }
+  .price__card--main .price__label { color: rgba(255,255,255,.75); }
+  .price__won { display: block; margin-top: 12px; font-size: 62px; font-weight: 800; letter-spacing: -.04em; color: var(--text); font-variant-numeric: tabular-nums; }
+  .price__card--main .price__won { color: #fff; }
+  .price__won small { font-size: 30px; font-weight: 700; margin-left: 4px; }
+  .price__note { margin-top: 34px; text-align: center; font-size: 27px; font-weight: 500; color: var(--sub); line-height: 1.55; }
+
+  .gift {
+    margin: 40px 80px 0; display: flex; align-items: center; gap: 24px;
+    background: var(--pop); border-radius: 26px; padding: 30px 36px;
+  }
+  .gift__icon { font-size: 46px; }
+  .gift__body strong { display: block; font-size: 36px; font-weight: 800; color: var(--navy); letter-spacing: -.03em; }
+  .gift__body span { display: block; margin-top: 6px; font-size: 26px; font-weight: 600; color: #4A5680; }
+
+  .stat__big--red { color: #E23B3B; }
+  .stat__row { display: flex; gap: 40px; align-items: baseline; justify-content: center; }
+  .stat__unit { font-size: 44px; font-weight: 800; color: var(--text); letter-spacing: -.03em; }
+</style>
+</head>
+<body>
+
+<!-- 1. 표지 — 훅 + 마감 압박 -->
+<section class="slide cover cover--poster" id="c1">
+  <img class="cover__bg" src="shots-concert/poster.png" alt="" />
+  <div class="cover__veil"></div>
+  <div class="cover__bottom">
+    <div class="badge-row">
+      <span class="badge badge--now">9/12 토요일</span>
+      <span class="badge badge--left">25자리 남음</span>
+      <span class="badge badge--gift">아이 선물 증정 🎁</span>
+    </div>
+    <h1 class="cover__title">울어도 괜찮아요.<br />유모차 끌고<br /><em>그대로 들어오세요</em></h1>
+    <p class="cover__foot">9월 12일 (토) 오전 11시 · 청주 아트리 연주홀</p>
+  </div>
+</section>
+
+<!-- 2. 공감 — 못 갔던 이유 -->
+<section class="slide" id="c2">
+  <div class="head">
+    <h2>공연 보고 싶어도<br /><b>아이 때문에</b> 미뤘죠?</h2>
+  </div>
+  <div class="checks">
+    <div class="check">
+      <div class="check__mark">?</div>
+      <div class="check__body">
+        <strong>"울면 눈치 보여서요"</strong>
+        <span>조용한 공연장에서 아이 소리 나면 나가야 하나 싶었던 그 마음</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">?</div>
+      <div class="check__body">
+        <strong>"유모차는 어디에 두나요"</strong>
+        <span>입구에 접어 세워두고, 아이 안고 두 시간 버티기</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">?</div>
+      <div class="check__body">
+        <strong>"몇 살부터 들어갈 수 있나요"</strong>
+        <span>대부분 7세 이상. 우리 아이는 아직 멀었고요</span>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 3. 해소 — 그래서 이렇게 엽니다 -->
+<section class="slide" id="c3">
+  <div class="head">
+    <h2>그래서 <b>아빠와 아이만</b><br />오는 콘서트를 엽니다</h2>
+  </div>
+  <div class="checks">
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>유모차 · 아기띠 대환영</strong>
+        <span>접지 않아도 됩니다. 끌고 들어와 그 자리에서 보세요</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>연령 제한 없음</strong>
+        <span>100일 아기도, 다섯 살도 괜찮아요. 우는 소리도 다 같이 듣습니다</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>앉아서만 듣는 공연이 아니에요</strong>
+        <span>제목 그대로 '춤추며 즐기는' 콘서트. 일어나 흔들어도 됩니다</span>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 4. 연주팀 — 신뢰 -->
+<section class="slide" id="c4">
+  <div class="head head--tight">
+    <h2>연주는 <b>킨더리베 앙상블</b><br />전문 연주자 5인</h2>
+  </div>
+  <div class="stage stage--card">
+    <div class="card-shot"><img src="shots-concert/ensemble.jpg" alt="킨더리베 앙상블" /></div>
+    <div class="bubble bubble--tl">피아노 · 플루트 · 비올라<br />바이올린 · 첼로 <b>라이브</b></div>
+    <div class="bubble bubble--br"><b>대전 최초</b>로 유모차 콘서트를<br />열어온 전문 연주팀</div>
+  </div>
+</section>
+
+<!-- 6. 정보 -->
+<section class="slide" id="c6">
+  <div class="head"><h2>언제, 어디서</h2></div>
+  <div class="facts">
+    <div class="fact">
+      <span class="fact__icon">📅</span>
+      <div class="fact__body"><strong>9월 12일 (토) 오전 11:00</strong><span>토요일 오전, 아이 컨디션 좋은 시간대</span></div>
+    </div>
+    <div class="fact">
+      <span class="fact__icon">📍</span>
+      <div class="fact__body"><strong>충북 청주 아트리 연주홀</strong><span>청주시 가로수로1164번길 29</span></div>
+    </div>
+    <div class="fact">
+      <span class="fact__icon">👶</span>
+      <div class="fact__body"><strong>연령 제한 없음</strong><span>아이 수 제한도 없어요. 둘 데려오셔도 됩니다</span></div>
+    </div>
+    <div class="fact">
+      <span class="fact__icon">👨‍👦</span>
+      <div class="fact__body"><strong>아빠와 아이, 약 70명</strong><span>선착순 마감</span></div>
+    </div>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 7. 가격 — 제일 많이 묻는 것 -->
+<section class="slide" id="c7">
+  <div class="head"><h2>티켓은 <b>1인 20,000원</b><br />그런데 <b>선물이 29,000원</b></h2></div>
+  <div class="price-stage">
+    <div class="price">
+      <div class="price__card">
+        <span class="price__label">아빠 1인</span>
+        <span class="price__won">20,000<small>원</small></span>
+      </div>
+      <div class="price__card price__card--main">
+        <span class="price__label">아빠 + 아이</span>
+        <span class="price__won">40,000<small>원</small></span>
+      </div>
+    </div>
+    <p class="price__note">아빠와 아이 <b>각각</b> 1인으로 계산해요. 아이가 둘이면 3인 기준이 됩니다.</p>
+    <div class="gift">
+      <span class="gift__icon">🎁</span>
+      <div class="gift__body">
+        <strong>아이 선물로 텀블러를 드려요</strong>
+        <span>29,000원 상당 · 티켓 한 장 값보다 큽니다</span>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 8. 잔여석 -->
+<section class="slide" id="c8">
+  <div class="head"><h2>지금 남은 자리</h2></div>
+  <div class="stat">
+    <div class="stat__row">
+      <p class="stat__big stat__big--red">25</p>
+      <span class="stat__unit">자리</span>
+    </div>
+    <p class="stat__label">아빠 기준 12분 남았어요</p>
+    <p class="stat__sub">선착순으로 마감돼요. 공연은 <b>9월 12일 토요일</b>,<br />자리가 차면 그날로 신청이 닫힙니다.</p>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 9. 오기 전에 -->
+<section class="slide" id="c9">
+  <div class="head"><h2>오시기 전에</h2></div>
+  <div class="checks">
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>아빠와 아이가 함께 오는 자리예요</strong>
+        <span>엄마 대신 아빠가 데리고 나오는 주말, 그게 이 콘서트의 취지입니다</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>중간에 나갔다 들어와도 괜찮아요</strong>
+        <span>기저귀 갈러, 달래러 나가도 아무도 신경 쓰지 않습니다</span>
+      </div>
+    </div>
+    <div class="check">
+      <div class="check__mark">✓</div>
+      <div class="check__body">
+        <strong>편한 옷으로 오세요</strong>
+        <span>앉아 있기만 하는 공연이 아니라 같이 움직입니다</span>
+      </div>
+    </div>
+  </div>
+  <div class="brandmark"><img src="shots-concert/character-logo-600.png" alt="" />육진대</div>
+</section>
+
+<!-- 10. CTA -->
+<section class="slide cta" id="c10">
+  <div class="cta__inner">
+    <div class="cta__badge"><img src="shots-concert/character-logo-600.png" alt="육진대" /></div>
+    <h2 class="cta__title"><span class="cta__word">콘서트</span> 라고 댓글 남기면<br /><em>신청 링크</em>를 보내드려요!</h2>
+    <p class="cta__sub">9월 12일 (토) 오전 11시 · 청주 아트리 연주홀<br />남은 자리 25석 · 아이 선물(29,000원 상당 텀블러) 증정</p>
+    <span class="cta__note">춤추며 즐기는 유모차 콘서트 · 육진대</span>
+  </div>
+</section>
+
+</body>
+</html>

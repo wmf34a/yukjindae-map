@@ -214,13 +214,16 @@ body {
 
 /* 사진 2~4장을 카드로 */
 .photo-grid {
-  flex: 1; display: grid; gap: 20px; padding: 48px 72px 120px;
+  flex: 1; min-height: 0; display: grid; gap: 20px; padding: 48px 72px 120px;
   grid-template-columns: repeat(2, 1fr);
+  /* 칸 높이를 그리드가 정하게 둔다. 안 그러면 사진의 원래 비율대로 늘어나
+     첫 장이 슬라이드를 통째로 먹는다. */
+  grid-auto-rows: 1fr;
 }
 .photo-grid--3 { grid-template-columns: repeat(2, 1fr); }
 .photo-grid--3 figure:first-child { grid-column: span 2; }
 .photo-grid figure {
-  position: relative; border-radius: 26px; overflow: hidden;
+  position: relative; min-height: 0; border-radius: 26px; overflow: hidden;
   box-shadow: 0 14px 36px rgba(26,47,107,.16);
 }
 .photo-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }

@@ -138,6 +138,11 @@ const NEW_PLACE_FIELD = "신규장소";
 const NEW_NURSING_FIELD = "신규수유실";
 const NURSING_FIX_FIELD = "수유실정보수정";
 const NURSING_FIELDS = new Set([NEW_NURSING_FIELD, NURSING_FIX_FIELD]);
+// 앱 자체가 고장났다는 제보. 장소 데이터가 아니라 우리 잘못을 알려주는 것이라
+// 승인 큐로만 들어가고 어떤 장소에도 반영되지 않는다(report-apply.js가
+// 적용 가능한 필드만 손댄다).
+const BUG_FIELD = "버그제보";
+const BUG_VALUE_MAX = 1000;
 const NEW_PLACE_NAME_MAX = 60;
 
 // 편의시설은 어떤 지도 API도 알려주지 않는다. 좌표·운영시간은 장소명만 있으면
@@ -184,6 +189,14 @@ export function validateNewPlacePayload({ placeName, value, amenities }) {
   if (typeof value !== "string" || !value.trim()) return "어떤 점이 좋았는지 알려주세요.";
   if (value.length > REPORT_VALUE_MAX_LENGTH) return "내용이 너무 깁니다.";
   return validateNewPlaceAmenities(amenities);
+}
+
+// 버그 제보는 장소를 가리키지 않는다. 화면이 깨졌다고 알려주는 사람에게
+// 장소명을 고르게 하면 대부분 그냥 닫는다 — 무슨 일이 있었는지만 받는다.
+export function validateBugPayload({ value }) {
+  if (typeof value !== "string" || !value.trim()) return "어떤 문제가 있었는지 알려주세요.";
+  if (value.length > BUG_VALUE_MAX) return "내용이 너무 깁니다.";
+  return null;
 }
 
 // 사람 확인 토큰을 요구하지 않는 이유는 validateNewPlacePayload 주석 참고.
@@ -920,9 +933,11 @@ async function handleReport(request, env, ctx) {
   const reportField = (body || {}).field;
   const isNewPlace = reportField === NEW_PLACE_FIELD;
   const isNursing = NURSING_FIELDS.has(reportField);
-  const validationError = isNewPlace || isNursing
-    ? validateNewPlacePayload(body || {})
-    : validateReportPayload(body || {});
+  const isBug = reportField === BUG_FIELD;
+  let validationError;
+  if (isBug) validationError = validateBugPayload(body || {});
+  else if (isNewPlace || isNursing) validationError = validateNewPlacePayload(body || {});
+  else validationError = validateReportPayload(body || {});
   if (validationError) {
     return new Response(JSON.stringify({ error: validationError }), { status: 400, headers });
   }
@@ -972,16 +987,24 @@ async function handleReport(request, env, ctx) {
   // 신규 장소는 아직 DB에 없으므로 존재 확인을 건너뛰고, 관계 없이 제보만 남긴다.
   // 운영자가 노션에서 읽고 판단해 장소 DB에 직접 추가한다 — 사용자가 보낸 값이
   // 장소 DB로 곧장 들어가지 않게 하려는 것이다.
-  if (isNewPlace || isNursing) {
-    const reportValue = isNursing ? String(value).trim() : buildNewPlaceValue({ value, amenities });
-    const fieldName = isNursing ? reportField : NEW_PLACE_FIELD;
+  if (isNewPlace || isNursing || isBug) {
+    let reportValue;
+    if (isBug) reportValue = String(value).trim();
+    else if (isNursing) reportValue = String(value).trim();
+    else reportValue = buildNewPlaceValue({ value, amenities });
+    const fieldName = isNursing || isBug ? reportField : NEW_PLACE_FIELD;
+    // 버그 제보에는 장소가 없다. 제목 칸이 비면 노션 목록에서 아무것도 안 보여
+    // 첫 줄을 제목으로 세운다.
+    const reportTitle = isBug
+      ? `🐞 ${String(value).trim().split("\n")[0].slice(0, 60)}`
+      : placeName.trim().slice(0, 200);
     const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
       method: "POST",
       headers: notionHeaders,
       body: JSON.stringify({
         parent: { database_id: env.NOTION_REPORTS_DATABASE_ID },
         properties: {
-          "장소명": { title: [{ text: { content: placeName.trim().slice(0, 200) } }] },
+          "장소명": { title: [{ text: { content: reportTitle } }] },
           "필드명": { select: { name: fieldName } },
           // 편의시설 줄이 붙어 본문 상한보다 길어질 수 있어 넉넉히 자른다.
           "제안값": { rich_text: [{ text: { content: reportValue.slice(0, REPORT_VALUE_MAX_LENGTH * 2) } }] },
@@ -994,6 +1017,15 @@ async function handleReport(request, env, ctx) {
       return upstreamErrorResponse("제보 저장에 실패했습니다.", await res.text());
     }
     const created = await res.json();
+    if (isBug) {
+      ctx.waitUntil(
+        notifySlack(
+          env,
+          `🐞 앱 오류 제보가 들어왔습니다${unverifiedNote}\n${reportValue.slice(0, 800)}`
+        ).catch((err) => console.warn(`버그 제보 알림 실패: ${err.message}`))
+      );
+      return new Response(JSON.stringify({ ok: true, id: created.id }), { headers });
+    }
     // 수유실 제보는 지도에서 실제로 있는 곳인지 먼저 찾아본 뒤 알린다 — 운영자가
     // 좌표를 손으로 찾지 않아도 되게.
     ctx.waitUntil(

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 800">
+  <rect width="390" height="800" fill="#F5F6FA"/>
+  <rect width="390" height="86" fill="#3C4972"/>
+  <rect x="20" y="34" width="150" height="18" rx="9" fill="#fff" fill-opacity=".85"/>
+  <rect x="20" y="110" width="350" height="44" rx="22" fill="#fff"/>
+  <g fill="#fff">
+    <rect x="20" y="176" width="350" height="210" rx="18"/>
+    <rect x="20" y="402" width="168" height="210" rx="18"/>
+    <rect x="202" y="402" width="168" height="210" rx="18"/>
+  </g>
+  <g fill="#C9CFE2">
+    <rect x="40" y="200" width="120" height="14" rx="7"/>
+    <rect x="40" y="228" width="240" height="12" rx="6"/>
+    <rect x="40" y="426" width="90" height="12" rx="6"/>
+    <rect x="222" y="426" width="90" height="12" rx="6"/>
+  </g>
+  <rect y="740" width="390" height="60" fill="#fff"/>
+  <text x="195" y="700" text-anchor="middle" fill="#8B94B4"
+        font-family="Pretendard, sans-serif" font-size="20" font-weight="600">앱 화면 자리</text>
+</svg>

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  matchesQuery, validateReportPayload, validateNewPlacePayload,
+  matchesQuery, validateReportPayload, validateNewPlacePayload, validateBugPayload,
   validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst,
 } from "./worker.js";
 
@@ -252,5 +252,19 @@ describe("제보 검증", () => {
     expect(validateNewPlacePayload(
       { placeName: "가", value: "나", amenities: { 수유실: "아마도" } }
     )).toMatch(/편의시설/);
+  });
+});
+
+describe("validateBugPayload", () => {
+  it("내용만 있으면 통과한다 — 장소를 고르게 하지 않는다", () => {
+    expect(validateBugPayload({ value: "지도가 안 떠요" })).toBeNull();
+  });
+
+  it("빈 내용은 막는다", () => {
+    expect(validateBugPayload({ value: "  " })).toBe("어떤 문제가 있었는지 알려주세요.");
+  });
+
+  it("너무 긴 내용은 막는다", () => {
+    expect(validateBugPayload({ value: "가".repeat(1001) })).toBe("내용이 너무 깁니다.");
   });
 });

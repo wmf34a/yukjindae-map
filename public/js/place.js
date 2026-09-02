@@ -173,6 +173,10 @@ function render(place) {
       ${row("✏️ 추천 이유", place.reason)}
       ${row("🅿️ 주차", parking)}
       ${amenitiesHtml}
+      <!-- 가까운 수유실이 뒤늦게 도착해 들어갈 자리. 자리를 미리 비워 두지 않으면
+           편의시설 칸이 없는 장소(청주랜드 등)에서 갈 곳을 잃고 길찾기 버튼
+           아래로 밀려나 화면이 깨졌다. -->
+      <div id="nursing-slot"></div>
       ${eventHtml}
       ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
@@ -230,6 +234,12 @@ async function init() {
     // 있어야 한다. 상세를 먼저 그리고 뒤따라 붙인다 — 공공데이터를 기다리느라
     // 화면이 늦게 뜨면 안 된다.
     renderNearbyNursing(place).catch((err) => console.error(err));
+
+    // 오류 신고 폼은 홈에 있는데 화면이 깨지는 곳은 대개 상세다. 마지막으로 본
+    // 장소를 남겨 두면 신고에 저절로 따라붙어 되묻지 않아도 된다.
+    try {
+      sessionStorage.setItem("last-place", `${place.name} (${place.id})`);
+    } catch { /* 저장소를 막아둔 브라우저 — 없어도 상세는 온전하다 */ }
   } catch (err) {
     console.error(err);
     el.innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
@@ -290,11 +300,10 @@ async function renderNearbyNursing(place) {
     <p class="place-detail__source">수유정보 알리미 등 공공데이터 · 실제와 다를 수 있어요</p>
   `;
 
-  // 편의시설 칸 바로 뒤에 둔다 — 기저귀교환대·수유실을 보고 나서 자연스럽게 읽힌다.
-  const amenities = document.querySelector(".place-detail__amenities");
-  const anchor = amenities ? amenities.closest(".place-detail__section") : null;
-  if (anchor) anchor.after(section);
-  else document.getElementById("place-detail").append(section);
+  // 편의시설 칸 바로 뒤 — 기저귀교환대·수유실을 보고 나서 자연스럽게 읽힌다.
+  // 편의시설이 없는 장소에도 같은 자리가 비어 있어서 순서가 흔들리지 않는다.
+  const slot = document.getElementById("nursing-slot");
+  if (slot) slot.replaceWith(section);
 }
 
 document.addEventListener("DOMContentLoaded", init);

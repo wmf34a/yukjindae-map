@@ -53,3 +53,25 @@ describe("reportImageKey", () => {
     expect(key).toBe("reports/bug/2026-09-02-abc.png");
   });
 });
+
+// 사진 검사는 시간당 허용량을 세기 전에 해야 한다.
+//
+// 순서를 반대로 뒀더니 사진 형식이 틀려 400 을 받은 요청도 허용량을 까먹었다.
+// 실측으로 성공 세 번에 카운터가 5였고, 사진을 몇 번 잘못 고른 사람은 후기를
+// 하나도 못 남긴 채 "한 시간에 5개까지"를 보게 된다.
+//
+// 순서는 코드를 읽어야만 알 수 있어서, worker.js 안에서 사진 디코딩이
+// consumeRateLimit 보다 먼저 나오는지를 직접 확인한다.
+describe("사진 검사와 허용량의 순서", () => {
+  it("후기: decodeImageDataUrl 이 consumeRateLimit 보다 먼저다", async () => {
+    const src = await import("node:fs").then((fs) => fs.readFileSync("src/worker.js", "utf8"));
+    const body = src.slice(src.indexOf("async function handleReviewPost"), src.indexOf("async function handleReviewReport"));
+    expect(body.indexOf("decodeImageDataUrl")).toBeLessThan(body.indexOf('scope: "review"'));
+  });
+
+  it("버그 제보: decodeImageDataUrl 이 consumeRateLimit 보다 먼저다", async () => {
+    const src = await import("node:fs").then((fs) => fs.readFileSync("src/worker.js", "utf8"));
+    const body = src.slice(src.indexOf("async function handleReport"), src.indexOf("async function runScheduledReportApply"));
+    expect(body.indexOf("decodeImageDataUrl")).toBeLessThan(body.indexOf("consumeRateLimit"));
+  });
+});

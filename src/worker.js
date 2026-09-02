@@ -959,6 +959,24 @@ async function handleReviewPost(request, env, ctx) {
     return new Response(JSON.stringify({ error: "잘못된 장소 ID입니다." }), { status: 400, headers });
   }
 
+  // 사진은 허용량을 세기 전에 검사한다.
+  //
+  // 순서를 반대로 뒀더니, 사진 형식이 틀려 400 을 받은 요청도 허용량을 까먹었다.
+  // 실제로 확인해 보니 성공 세 번에 카운터가 5였다 — 사진을 몇 번 잘못 고른
+  // 사람은 후기를 하나도 못 남긴 채 "한 시간에 5개까지"를 보게 된다.
+  //
+  // 여기서 하는 일은 base64 를 바이트로 바꾸는 것뿐이고 2MB 상한이 걸려 있어
+  // 남용에 쓰기 어렵다. 값이 나가는 R2 업로드는 허용량을 통과한 뒤에 한다.
+  const rawPhotos = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : [];
+  const decodedPhotos = [];
+  for (const one of rawPhotos) {
+    const decoded = decodeImageDataUrl(one);
+    if (!decoded) {
+      return new Response(JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 올릴 수 있어요." }), { status: 400, headers });
+    }
+    decodedPhotos.push(decoded);
+  }
+
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
   const allowed = await consumeRateLimit(env, {
     scope: "review", ip, limit: REVIEW_RATE_LIMIT_PER_HOUR, windowSeconds: 3600,
@@ -977,14 +995,8 @@ async function handleReviewPost(request, env, ctx) {
     return new Response(JSON.stringify({ error: "이 장소에는 이미 후기를 남기셨어요." }), { status: 409, headers });
   }
 
-  // 사진은 브라우저에서 이미 줄여 보낸다. 여기서는 형식과 크기만 본다.
   const photoUrls = [];
-  const list = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : [];
-  for (const one of list) {
-    const decoded = decodeImageDataUrl(one);
-    if (!decoded) {
-      return new Response(JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 올릴 수 있어요." }), { status: 400, headers });
-    }
+  for (const decoded of decodedPhotos) {
     if (!env.IMAGES) break;
     const objectKey = reportImageKey("review", decoded.contentType);
     try {
@@ -1227,6 +1239,19 @@ async function handleReport(request, env, ctx) {
   }
   const { placeId, field, value, turnstileToken, placeName, amenities, mode } = body;
 
+  // 스크린샷도 허용량을 세기 전에 검사한다 — 후기와 같은 이유다. 사진 형식이
+  // 틀려 400 을 받은 요청이 허용량을 까먹으면, 제보를 하나도 못 보낸 채 막힌다.
+  let decodedShot = null;
+  if (isBug && body.image) {
+    decodedShot = decodeImageDataUrl(body.image);
+    if (!decodedShot) {
+      return new Response(
+        JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 보낼 수 있어요." }),
+        { status: 400, headers }
+      );
+    }
+  }
+
   const ip = request.headers.get("cf-connecting-ip") || "unknown";
 
   // 사람 확인은 되면 좋지만, 안 된다고 제보를 막지는 않는다.
@@ -1285,17 +1310,10 @@ async function handleReport(request, env, ctx) {
     // 스크린샷이 함께 왔으면 R2 에 넣고 주소를 제안값 끝에 붙인다. 노션에 파일
     // 칸을 새로 만들지 않는 이유는, 운영자가 제안값만 읽어도 되게 하기 위해서다.
     let imageNote = "";
-    if (isBug && body.image && env.IMAGES) {
-      const decoded = decodeImageDataUrl(body.image);
-      if (!decoded) {
-        return new Response(
-          JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 보낼 수 있어요." }),
-          { status: 400, headers }
-        );
-      }
-      const key = reportImageKey("bug", decoded.contentType);
+    if (decodedShot && env.IMAGES) {
+      const key = reportImageKey("bug", decodedShot.contentType);
       try {
-        await env.IMAGES.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
+        await env.IMAGES.put(key, decodedShot.bytes, { httpMetadata: { contentType: decodedShot.contentType } });
         imageNote = `\n\n[스크린샷] ${PUBLIC_BASE_URL}/images/${key}`;
       } catch (err) {
         // 사진을 못 올려도 제보 자체는 살린다 — 글만으로도 고칠 수 있는 것이 많다.

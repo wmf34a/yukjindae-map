@@ -1,46 +1,59 @@
-// 공유누리(eshare.go.kr) 인증키 확인.
+// 공유누리(eshare.go.kr) 공유자원 조회.
 //
-//   node scripts/check-eshare.mjs <인증키>
+//   node scripts/check-eshare.mjs <인증키> [분류코드]
 //
-// 호출 규격은 눈으로 확인한 것이다. 안내 페이지에는 경로만 있고 메서드가 없어
-// 한참 헤맸다 — GET 은 파라미터를 뭘 주든 400 "잘못된요청"이고, POST + JSON 이라야
-// 인증 단계까지 간다.
+// 호출 규격은 안내 페이지에 흩어져 있어 두 번 헤맸다. 둘 다 응답만 보면
+// 키가 잘못된 것처럼 보인다:
 //
-//   POST https://www.eshare.go.kr/eshare-openapi/rsrc/list/{apikey}
-//   Content-Type: application/json
-//   body: {"pageNo":1,"numOfRows":5}
+//   GET 으로 부르면 → 400 "잘못된요청". 아무 문자열을 키 자리에 넣어도 같은 400 이
+//     온다. 키 문제가 아니라 메서드 문제다. POST + application/json 이라야 한다.
+//   승인받지 않은 서비스의 분류코드로 부르면 → 401 "잘못된권한". 이것도 아무
+//     문자열에 같은 401 이라, 키가 승인 대기인 줄 알기 쉽다.
 //
-// 응답으로 무엇이 오는지에 따라 상태를 이렇게 읽는다.
+// 서비스마다 경로가 다르다. 분류코드가 경로에 들어가고, 그 서비스를 따로
+// 승인받아야 한다.
 //
-//   400 잘못된요청  → 메서드나 Content-Type 이 틀렸다. 키와 무관하다.
-//   404 잘못된경로  → 경로가 틀렸다.
-//   401 잘못된권한  → 키가 아직 승인되지 않았거나 무효다. 발급은 담당자 승인을
-//                     거치고 3~5일 걸린다고 안내돼 있다. 아무 문자열을 넣어도
-//                     같은 401 이 오므로, 이 응답만으로 키가 틀렸다고 단정할 수 없다.
-//   200            → 승인됐다. 아래에서 자원분류명을 찍어 준다.
+//   전체 목록  POST /eshare-openapi/rsrc/list/{apikey}
+//   분류별     POST /eshare-openapi/rsrc/list/{분류코드}/{apikey}
+//   상세       POST /eshare-openapi/rsrc/detail/{apikey}   body: {"rsrcNoList":[...]}
 //
-// 자원분류명을 봐야 우리 앱에 쓸 데이터인지 판단할 수 있다. 공유누리가 여는 것은
-// 주차장·체육시설·강의실·회의실·문화숙박 같은 대관 자원이라, "아빠와 아이가
-// 갈만한 곳"과는 결이 다를 수 있다.
+// 2026-09-02 기준 승인된 것은 문화·숙박(010000)과 체육시설(010500) 두 가지다.
+
+const CLASSES = {
+  "010000": "문화·숙박",
+  "010100": "회의실",
+  "010200": "강의실·강당",
+  "010500": "체육시설",
+  "010700": "주차장",
+  "020000": "물품(생활·사무·교통)",
+  "030000": "연구·실험장비",
+  "040000": "교육·강좌",
+};
 
 const key = process.argv[2];
+const only = process.argv[3];
 if (!key) {
-  console.error("사용법: node scripts/check-eshare.mjs <인증키>");
+  console.error("사용법: node scripts/check-eshare.mjs <인증키> [분류코드]");
   process.exit(1);
 }
 
-const res = await fetch(`https://www.eshare.go.kr/eshare-openapi/rsrc/list/${key}`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json", Accept: "application/json" },
-  body: JSON.stringify({ pageNo: 1, numOfRows: 20 }),
-});
-const text = await res.text();
-console.log(res.status, text.slice(0, 600));
+async function call(path, body) {
+  const res = await fetch(`https://www.eshare.go.kr/eshare-openapi/${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, json: await res.json().catch(() => null) };
+}
 
-if (res.ok) {
-  const data = JSON.parse(text);
-  const rows = data.resultList || data.body || data.items || [];
-  for (const r of rows) {
-    console.log("-", r.rsrcNm, "|", r.rsrcClsNm || r.rsrcClsCd, "|", r.addr);
+const codes = only ? [only] : Object.keys(CLASSES);
+for (const code of codes) {
+  const { status, json } = await call(`rsrc/list/${code}/${key}`, { pageNo: 1, numOfRows: 5 });
+  const name = CLASSES[code] || code;
+  if (status !== 200) {
+    console.log(`${code} ${name}: ${status} ${json?.resultMsg || ""} — 이 서비스는 승인되지 않았다`);
+    continue;
   }
+  console.log(`${code} ${name}: 총 ${json.resultCount}건`);
+  for (const r of json.data || []) console.log(`   - ${r.rsrcNm} | ${r.addr}`);
 }

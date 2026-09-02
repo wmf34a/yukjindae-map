@@ -847,11 +847,26 @@ async function handleImage(env, request, key) {
 // 공공데이터 수유실은 부모가 직접 큐레이션하는 장소 DB와 성격이 달라(구청/보건소
 // 등 일반 공공시설) 노션에 넣지 않고, 주변지도에 얹는 별도 레이어로만 캐싱해서
 // 보여준다. 데이터가 자주 바뀌지 않아 엣지 캐시를 길게(하루) 잡는다.
-async function handleNursingRooms(env) {
+// 전국 수유실이 2,900곳을 넘으면서 통째로 내려보내면 압축해도 157KB다. 지도를 켠
+// 사람은 자기 화면에 보이는 것만 필요하므로, 좌표 범위를 주면 그만큼만 잘라 준다.
+// 범위를 안 주면 예전처럼 전부 준다 — 옛 화면이 아직 그렇게 부른다.
+export function clipToBounds(rooms, url) {
+  const raw = ["minLat", "maxLat", "minLng", "maxLng"].map((k) => url.searchParams.get(k));
+  // 파라미터가 아예 없으면 전부 준다. Number(null)이 0이라 그냥 Number로 바꾸면
+  // 범위를 안 준 요청이 (0,0) 한 점으로 좁혀져 빈 배열이 나간다.
+  if (raw.some((v) => v === null || v.trim() === "")) return rooms;
+  const nums = raw.map(Number);
+  if (nums.some((n) => !Number.isFinite(n))) return rooms;
+  const [minLat, maxLat, minLng, maxLng] = nums;
+  return rooms.filter((r) => r.lat >= minLat && r.lat <= maxLat && r.lng >= minLng && r.lng <= maxLng);
+}
+
+async function handleNursingRooms(env, url) {
   const headers = { "content-type": "application/json; charset=utf-8" };
   try {
-    const rooms = await fetchAllNursingRooms(env);
-    return new Response(JSON.stringify({ rooms }), { status: 200, headers });
+    const all = await fetchAllNursingRooms(env);
+    const rooms = clipToBounds(all, url);
+    return new Response(JSON.stringify({ rooms, total: all.length }), { status: 200, headers });
   } catch (err) {
     // 여기서 던지면 요청 전체가 1101로 죽어 지도 탭이 통째로 깨진다 —
     // 레이어만 비어 보이도록 빈 배열로 응답한다.
@@ -1635,7 +1650,7 @@ async function handleRequest(request, env, ctx) {
   if (url.pathname === "/api/nursing-rooms") {
     // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
     // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
-    return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env));
+    return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env, url));
   }
   if (url.pathname === "/api/today") {
     // 좌표를 소수점 2자리(약 1.1km)로 뭉갠다. 같은 동네 사용자가 캐시를 함께

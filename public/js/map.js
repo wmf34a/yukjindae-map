@@ -404,21 +404,67 @@ function renderNursingMarkers() {
 // 끝나기 전에 불린다) 요청 자체를 하나로 묶는다. 안 그러면 같은 공공데이터를
 // 두 번 부른다.
 let nursingLoadPromise = null;
+let nursingViewTimer = null;
 
 function loadNursingRooms() {
   if (!nursingLoadPromise) nursingLoadPromise = fetchNursingRooms();
   return nursingLoadPromise;
 }
 
+// 지금까지 받아 둔 화면 범위. 이 안에 머무는 동안에는 다시 부르지 않는다.
+let nursingLoadedBounds = null;
+
+// 전국 수유실이 2,900곳을 넘어 통째로 받으면 압축해도 157KB다. 주변 탭에 들어가면
+// 이 레이어가 기본으로 켜지므로, 그 무게를 모든 사람이 치르게 된다.
+// 그래서 화면에 보이는 범위만 받는다. 조금 넓게 잡아 두면 지도를 살짝 움직일 때마다
+// 다시 부르지 않는다.
+function boundsWithMargin(ratio = 0.6) {
+  const b = map && map.getBounds && map.getBounds();
+  if (!b) return null;
+  const sw = b.getSW();
+  const ne = b.getNE();
+  const padLat = (ne.lat() - sw.lat()) * ratio;
+  const padLng = (ne.lng() - sw.lng()) * ratio;
+  return {
+    minLat: sw.lat() - padLat,
+    maxLat: ne.lat() + padLat,
+    minLng: sw.lng() - padLng,
+    maxLng: ne.lng() + padLng,
+  };
+}
+
+function insideLoaded(view) {
+  const b = nursingLoadedBounds;
+  if (!b || !view) return false;
+  return view.minLat >= b.minLat && view.maxLat <= b.maxLat
+    && view.minLng >= b.minLng && view.maxLng <= b.maxLng;
+}
+
 async function fetchNursingRooms() {
+  const area = boundsWithMargin();
   try {
-    const data = await fetchJson("/api/nursing-rooms");
+    // 지도가 아직 안 떴으면 범위를 모른다. 그때는 예전처럼 전부 받는다.
+    const query = area
+      ? `?minLat=${area.minLat}&maxLat=${area.maxLat}&minLng=${area.minLng}&maxLng=${area.maxLng}`
+      : "";
+    const data = await fetchJson(`/api/nursing-rooms${query}`);
     nursingRooms = data.rooms || [];
+    nursingLoadedBounds = area;
     nursingLoaded = true;
   } catch (err) {
     console.error(err);
     showToast("수유실 정보를 불러오지 못했어요.");
   }
+}
+
+// 지도를 크게 옮기면 그 동네 수유실을 새로 받아 온다.
+async function refreshNursingForView() {
+  if (!nursingVisible) return;
+  const view = boundsWithMargin(0);
+  if (insideLoaded(view)) return;
+  nursingLoadPromise = fetchNursingRooms();
+  await nursingLoadPromise;
+  renderNursingMarkers();
 }
 
 async function toggleNursingLayer() {
@@ -598,6 +644,13 @@ function init() {
     logoControlOptions: { position: naver.maps.Position.TOP_LEFT },
   });
   naver.maps.Event.addListener(map, "click", closeSheet);
+  // 지도를 옮기면 그 범위의 수유실을 받는다. 손이 멈춘 뒤에만 부른다.
+  naver.maps.Event.addListener(map, "idle", () => {
+    clearTimeout(nursingViewTimer);
+    nursingViewTimer = setTimeout(() => {
+      refreshNursingForView().catch((err) => console.error(err));
+    }, 500);
+  });
 
   renderRegionChips();
   initTrackButton();

@@ -46,6 +46,15 @@
       <span class="header__title">아빠, 어디가? <span class="header__subtitle">by 육진대</span></span>
     </a>
     <div class="header__actions">
+      <!-- 오류 신고는 공유 왼쪽. 화면이 깨졌을 때 목록 맨 아래까지 내려가
+           찾게 하면 아무도 안 쓴다 — 어느 화면에서 왔든 눈에 걸리게 둔다. -->
+      <button class="header__bug" id="bug-btn" type="button" aria-label="앱 오류 신고">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 6a3 3 0 0 1 6 0"/>
+          <rect x="8" y="7" width="8" height="11" rx="4"/>
+          <path d="M8 11H4M8 15H5M16 11h4M16 15h3M9.5 18.5L8 21M14.5 18.5L16 21M12 7V4"/>
+        </svg>
+      </button>
       <button class="header__share" id="share-btn" type="button" aria-label="친구에게 공유하기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/>
@@ -127,7 +136,6 @@
     <div class="foot-links">
       <button type="button" class="about-link" id="tour-again">사용법 다시 보기</button>
       <a class="about-link" href="about.html">육진대는 어떤 팀인가요?</a>
-      <button type="button" class="about-link" id="bug-btn">앱이 이상해요 (오류 신고)</button>
     </div>
   </section>
 

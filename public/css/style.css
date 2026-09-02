@@ -120,6 +120,7 @@ body {
 
 /* 공유·알림은 헤더에서 같은 무게로 보여야 한다 — 하나만 튀면 다른 하나를 못 본다. */
 .header__bell,
+.header__bug,
 .header__share {
   position: relative;
   border: none;
@@ -129,6 +130,7 @@ body {
   color: rgba(255, 255, 255, 0.7);
 }
 
+.header__bug svg,
 .header__share svg {
   width: 19px;
   height: 19px;

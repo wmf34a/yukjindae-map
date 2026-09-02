@@ -778,28 +778,11 @@ body {
 
 /* 사진이 아직 없는 장소. 빈 회색 칸으로 두면 이미지를 못 불러온 것처럼 보인다 —
    앱의 색을 그대로 쓰고 로고를 흐리게 깔아 "준비 중"으로 읽히게 한다. */
-.place-grid__thumb--empty,
-.place-detail__hero--empty {
+.place-grid__thumb--empty {
   background:
     url("../assets/logo/character-logo-96.png") center / 44px no-repeat,
     linear-gradient(135deg, var(--color-bg) 0%, var(--color-border) 100%);
-}
-
-.place-grid__thumb--empty {
   opacity: 0.75;
-}
-
-.place-detail__hero--empty {
-  background-size: 64px, auto;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 22px;
-}
-
-.place-detail__hero--empty span {
-  font-size: 13px;
-  color: var(--color-text-secondary);
 }
 
 .place-grid__favorite-btn {

@@ -20,6 +20,23 @@
   display: block;
 }
 
+/* 사진이 아직 없는 장소. 같은 특이성이라 반드시 .place-detail__hero 뒤에 둔다 —
+   앞에 두면 위의 background/display 가 이겨 로고도 안 깔리고 문구가 위로 붙는다. */
+.place-detail__hero--empty {
+  background:
+    url("../assets/logo/character-logo-96.png") center 42% / 64px no-repeat,
+    linear-gradient(135deg, var(--color-bg) 0%, var(--color-border) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 22px;
+}
+
+.place-detail__hero--empty span {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
 .place-detail__body {
   padding: 16px;
 }

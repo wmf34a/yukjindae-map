@@ -554,14 +554,35 @@ function renderBellBadge() {
   bell.classList.toggle("has-unread", hasUnreadNotices());
 }
 
+// 언제 있었던 일인지 알려 준다.
+//
+// 소식이 다섯 줄 쌓이면 어느 것이 오늘 것이고 어느 것이 지난주 것인지 구분이 안 돼서,
+// 이미 본 것을 또 눌러 보게 된다. 갓 올라온 것은 "방금"처럼 읽고, 오래된 것은 날짜로
+// 보여준다 — "12일 전"보다 "8월 21일"이 머리에 남는다.
+function noticeWhen(iso) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const mins = Math.floor((Date.now() - at.getTime()) / 60000);
+  if (mins < 1) return "방금";
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return "어제";
+  if (days < 7) return `${days}일 전`;
+  return `${at.getMonth() + 1}월 ${at.getDate()}일`;
+}
+
 function noticeItemHtml(notice) {
   // 기능 소식은 배지를 달아 장소 알림과 구분한다.
   const badge = notice.type === "feature"
     ? `<span class="notices-panel__badge">새 기능</span>`
     : "";
+  const when = noticeWhen(notice.createdAt);
   const inner = `
     <p class="notices-panel__item-title">${badge}${escapeHtml(notice.title)}</p>
     ${notice.subtitle ? `<p class="notices-panel__item-sub">${escapeHtml(notice.subtitle)}</p>` : ""}
+    ${when ? `<p class="notices-panel__item-when">${escapeHtml(when)}</p>` : ""}
   `;
   // 이벤트 소식의 링크는 노션 배너에서 온 외부 URL이라 스킴 검사가 필요하고,
   // 신규 장소 소식은 우리가 만든 내부 상대경로(place.html?id=...)라 그대로 쓴다.

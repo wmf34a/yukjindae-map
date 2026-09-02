@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  validateReview, averageRating, summarize, alreadyReviewed,
+  validateReview, averageRating, summarize,
   readPublicReviews, REVIEW_TEXT_MAX, MAX_PHOTOS, MIN_AGE_BAND_COUNT,
 } from "./reviews.js";
 
@@ -88,22 +88,6 @@ describe("summarize", () => {
 
   it("빈 목록도 안전하다", () => {
     expect(summarize([])).toEqual({ count: 0, average: null, byAge: [], revisit: 0, stayTimes: [] });
-  });
-});
-
-describe("alreadyReviewed", () => {
-  const reviews = [{ placeId: "a", authorKey: "k1" }];
-
-  it("같은 기기가 같은 장소에 또 쓰면 막는다", () => {
-    expect(alreadyReviewed(reviews, "a", "k1")).toBe(true);
-  });
-
-  it("다른 장소면 쓸 수 있다", () => {
-    expect(alreadyReviewed(reviews, "b", "k1")).toBe(false);
-  });
-
-  it("기기 키가 없으면 막지 않는다 — 저장소가 막힌 브라우저를 배제하지 않는다", () => {
-    expect(alreadyReviewed(reviews, "a", "")).toBe(false);
   });
 });
 

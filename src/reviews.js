@@ -74,12 +74,6 @@ export function summarize(reviews) {
   };
 }
 
-/** 같은 기기가 같은 장소에 이미 남겼는지. 도배를 막는 최소한의 장치다. */
-export function alreadyReviewed(reviews, placeId, authorKey) {
-  if (!authorKey) return false;
-  return (reviews || []).some((r) => r.placeId === placeId && r.authorKey === authorKey);
-}
-
 export async function readPublicReviews(env) {
   if (!env.RATE_LIMIT) return [];
   const raw = await env.RATE_LIMIT.get(REVIEWS_KV_KEY);

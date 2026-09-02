@@ -14,7 +14,7 @@ import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties }
 import { readChangingToilets } from "./toilets.js";
 import { decodeImageDataUrl, reportImageKey } from "./report-image.js";
 import {
-  REVIEWS_KV_KEY, validateReview, summarize, alreadyReviewed, readPublicReviews, MAX_PHOTOS,
+  REVIEWS_KV_KEY, validateReview, summarize, readPublicReviews, MAX_PHOTOS,
 } from "./reviews.js";
 
 // 제보 스크린샷 주소를 노션에 적을 때 쓴다. 운영자가 노션에서 바로 눌러 볼 수
@@ -988,11 +988,41 @@ async function handleReviewPost(request, env, ctx) {
     );
   }
 
-  // 같은 기기가 같은 장소에 이미 남겼으면 막는다. 공개된 것만 보므로 검수 대기 중인
-  // 내 후기와는 겹칠 수 있는데, 그건 검수자가 걸러낸다.
+  // 같은 기기가 같은 장소에 이미 남겼으면 막는다.
+  //
+  // 처음에는 공개된 후기(KV)만 봤는데, 그러면 검수 대기 중에는 얼마든지 더 쓸 수
+  // 있다. 실제로 테스트하다 같은 기기로 같은 장소에 두 건이 들어갔다. 검수까지
+  // 시간이 걸리므로 이 구멍이 작지 않다 — 노션에 직접 물어 대기 중인 것까지 본다.
+  // 후기 제출은 드문 일이라 조회 한 번이 더 붙는 것은 감당할 수 있다.
   const key = String(authorKey || "").slice(0, 64).replace(/[^A-Za-z0-9-]/g, "");
-  if (alreadyReviewed(await readPublicReviews(env), placeId, key)) {
-    return new Response(JSON.stringify({ error: "이 장소에는 이미 후기를 남기셨어요." }), { status: 409, headers });
+  if (key) {
+    const dupe = await fetchWithTimeout(
+      `https://api.notion.com/v1/databases/${env.NOTION_REVIEWS_DATABASE_ID}/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.NOTION_API_KEY}`,
+          "Notion-Version": "2022-06-28",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          page_size: 1,
+          filter: {
+            and: [
+              { property: "작성자키", rich_text: { equals: key } },
+              { property: "장소", relation: { contains: placeId } },
+            ],
+          },
+        }),
+      }
+    );
+    // 못 물어보면 막지 않는다. 노션이 잠깐 느리다고 후기를 못 쓰게 할 이유가 없다.
+    if (dupe.ok) {
+      const found = await dupe.json();
+      if ((found.results || []).length > 0) {
+        return new Response(JSON.stringify({ error: "이 장소에는 이미 후기를 남기셨어요." }), { status: 409, headers });
+      }
+    }
   }
 
   const photoUrls = [];

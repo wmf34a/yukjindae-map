@@ -1,0 +1,67 @@
+/* 테마 B — 써니 (Sunny)
+ *
+ * 크림 종이 위에 둥근 글씨. 아이 행사·모집처럼 말랑한 소식에 쓴다.
+ * carousel.css 다음에 링크하면 토큰만 덮어써서 전체 톤이 바뀐다.
+ *
+ *   <link rel="stylesheet" href="carousel.css" />
+ *   <link rel="stylesheet" href="themes/theme-b-sunny.css" />
+ *   그리고 <head> 에 Jua 폰트 링크를 추가한다.
+ */
+
+:root {
+  --navy: #E2622A;        /* 강조 = 주황 */
+  --navy-soft: #C2511F;
+  --primary: #6BA368;     /* 보조 = 잎사귀 초록 */
+  --text: #4A3B2A;
+  --sub: #8A7A66;
+  --bg: #FBF3E4;          /* 크림 종이 */
+  --pop: #F5C542;         /* 노랑 */
+  --ink: #4A3B2A;
+}
+
+body { font-family: "Jua", "Pretendard", -apple-system, sans-serif; }
+
+/* 둥글둥글하게 — 모서리를 키우고 그림자는 옅게, 테두리로 형태를 잡는다 */
+.check, .fact, .step, .quote, .card-shot, .course-card, .item, .day, .cat, .always, .fest__shot {
+  border-radius: 34px;
+  box-shadow: 0 8px 0 rgba(226, 98, 42, .10);
+  border: 3px solid #F0E2C8;
+}
+.check__mark, .step__n { border-radius: 50%; box-shadow: 0 4px 0 rgba(0,0,0,.08); }
+.head h2 { letter-spacing: -.02em; line-height: 1.34; }
+.head h2 b { color: var(--navy); }
+
+/* 말풍선도 종이 위 스티커처럼 */
+.bubble {
+  background: #FFFFFF; color: var(--text);
+  border: 3px solid var(--text);
+  box-shadow: 6px 6px 0 rgba(74, 59, 42, .18);
+  border-radius: 26px; font-weight: 400;
+}
+.bubble b { color: var(--navy); }
+
+.brandmark { color: #B8A88F; }
+
+/* 표지는 딤 대신 크림 밴드 */
+.cover { background: #F2E4C9; }
+.cover__veil {
+  background: linear-gradient(180deg, rgba(74,59,42,.18) 0%, rgba(74,59,42,.10) 32%, rgba(251,243,228,.92) 72%, #FBF3E4 100%);
+}
+.cover__title { color: var(--text); text-shadow: none; }
+.cover__title em { color: var(--navy); }
+.cover__eyebrow {
+  background: var(--pop); color: var(--text); border-color: var(--text); border-width: 3px;
+}
+.cover__brand {
+  background: #fff; border: 3px solid var(--text);
+  box-shadow: 5px 5px 0 rgba(74,59,42,.18);
+}
+.cover__brand span { color: var(--text); }
+.cover__brand small { color: var(--sub); }
+
+/* 마지막 CTA */
+.cta { background: linear-gradient(165deg, #F7A24B 0%, #E2622A 60%, #C2511F 100%); }
+.cta__badge { border-radius: 50%; border: 4px solid #fff; }
+.cta__title em { color: #FFF0B8; }
+.cta__word { background: #fff; color: var(--navy); }
+.cta__note { border-color: rgba(255,255,255,.6); }

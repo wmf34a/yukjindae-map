@@ -19,6 +19,12 @@
     padding: 10px 22px; border-radius: 999px;
   }
   .fest__tag--live { background: #E23B3B; }
+  /* 표지 헤드라인 — 글자를 줄인 만큼 크게 */
+  .cover__title--xl { font-size: 104px; line-height: 1.16; letter-spacing: -.045em; }
+  /* 글자가 위에 몰려 있으니 딤도 위쪽만 짙게 — 아래는 사진이 보이게 둔다 */
+  .cover__veil--top {
+    background: linear-gradient(180deg, rgba(16,26,53,.86) 0%, rgba(16,26,53,.72) 34%, rgba(16,26,53,.42) 62%, rgba(16,26,53,.30) 100%);
+  }
   /* 아직 사진이 없는 축제 — 컬러 블록으로 자리를 채운다 */
   .fest__shot--blank {
     aspect-ratio: 16 / 10; background: linear-gradient(140deg, #35507F 0%, #1A2F6B 60%, #101A35 100%);
@@ -108,52 +114,11 @@
     <img src="shots-festival/hwaseong.jpg" alt="" /><img src="shots-festival/sinjeongho.jpg" alt="" /><img src="shots-festival/jeonju.jpg" alt="" />
     <img src="shots-festival/namdang.jpg" alt="" /><img src="shots-festival/dalseong.jpg" alt="" /><img src="shots-festival/hwaseong.jpg" alt="" />
   </div>
-  <div class="cover__veil cover__veil--light"></div>
+  <div class="cover__veil cover__veil--top"></div>
   <div class="cover__top">
-    <span class="cover__eyebrow">9월 5일 · 6일 주말</span>
-    <h1 class="cover__title">이번 주말,<br />아빠랑 <em>어디 가지?</em></h1>
+    <span class="cover__eyebrow">9월 첫째주 아이와 갈만한 축제정보</span>
+    <h1 class="cover__title cover__title--xl">이번 주말,<br />아빠랑<br /><em>어디 가지?</em></h1>
   </div>
-  <div class="cover__bottom" style="padding-bottom: 190px;">
-    <p style="font-size:32px;font-weight:600;color:rgba(255,255,255,.88);letter-spacing:-.02em;line-height:1.5;">
-      9월 4일 ~ 6일에 열리는 축제 중<br />아이 데리고 갈 만한 다섯 곳
-    </p>
-  </div>
-  <div class="cover__brand">
-    <img src="shots-festival/character-logo-600.png" alt="육진대" />
-    <span>육진대 맵<small>아빠와 아이가 갈만한 곳</small></span>
-  </div>
-</section>
-
-<!-- 2. 한눈에 -->
-<section class="slide" id="f2">
-  <div class="head"><h2>이번 주말 <b>다섯 곳</b><br />개막 가까운 순</h2></div>
-  <div class="list">
-    <div class="item">
-      <img src="shots-festival/namdang.jpg" alt="" />
-      <div class="item__body"><strong>홍성 남당항 대하축제</strong><span>충남 홍성 · 맨손 대하잡기 · 무료</span></div>
-      <span class="item__when">9/4 (금)</span>
-    </div>
-    <div class="item">
-      <img src="shots-festival/fireworks.jpg" alt="" />
-      <div class="item__body"><strong>서울세계불꽃축제</strong><span>서울 여의도 한강공원 · 불꽃쇼</span></div>
-      <span class="item__when">9/5 (토)</span>
-    </div>
-    <div class="item">
-      <img src="shots-festival/dalseong.jpg" alt="" />
-      <div class="item__body"><strong>달성가족문화축제 YES! 키즈존</strong><span>대구 달성 · 국립대구과학관 · 무료</span></div>
-      <span class="item__when">9/5~6</span>
-    </div>
-    <div class="item">
-      <img src="shots-festival/hwaseong.jpg" alt="" />
-      <div class="item__body"><strong>화성송산포도축제</strong><span>경기 화성 · 포도밟기 체험</span></div>
-      <span class="item__when">9/5~6</span>
-    </div>
-    <div class="item">
-      <img src="shots-festival/sinjeongho.jpg" alt="" />
-      <div class="item__body"><strong>한여름 밤의 신정호 별빛축제</strong><span>충남 아산 · 별자리 관측</span></div>
-      <span class="item__when">9/5~6</span>
-    </div>
-<div class="brandmark"><img src="shots-festival/character-logo-600.png" alt="" />육진대 맵</div>
 </section>
 
 <!-- 4. 남당항 대하축제 (사진 없음 → 컬러 블록) -->

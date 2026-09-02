@@ -182,6 +182,7 @@ function render(place) {
            편의시설 칸이 없는 장소(청주랜드 등)에서 갈 곳을 잃고 길찾기 버튼
            아래로 밀려나 화면이 깨졌다. -->
       <div id="nursing-slot"></div>
+      <div id="toilet-slot"></div>
       ${eventHtml}
       ${nearbyRow("🍴 근처 맛집", place.nearbyRestaurant, place)}
       ${nearbyRow("☕ 근처 카페", place.nearbyCafe, place)}
@@ -239,6 +240,7 @@ async function init() {
     // 있어야 한다. 상세를 먼저 그리고 뒤따라 붙인다 — 공공데이터를 기다리느라
     // 화면이 늦게 뜨면 안 된다.
     renderNearbyNursing(place).catch((err) => console.error(err));
+    renderNearbyToilets(place).catch((err) => console.error(err));
 
     // 오류 신고 폼은 홈에 있는데 화면이 깨지는 곳은 대개 상세다. 마지막으로 본
     // 장소를 남겨 두면 신고에 저절로 따라붙어 되묻지 않아도 된다.
@@ -281,7 +283,10 @@ async function renderNearbyNursing(place) {
     .filter((x) => x.m <= NURSING_RADIUS_M)
     .toSorted((a, b) => a.m - b.m)
     .slice(0, 3);
-  if (near.length === 0) return;
+  if (near.length === 0) {
+    document.getElementById("nursing-slot")?.remove();
+    return;
+  }
 
   const rowsHtml = near.map(({ room, m }) => `
     <div class="nursing-near__item">
@@ -308,6 +313,62 @@ async function renderNearbyNursing(place) {
   // 편의시설 칸 바로 뒤 — 기저귀교환대·수유실을 보고 나서 자연스럽게 읽힌다.
   // 편의시설이 없는 장소에도 같은 자리가 비어 있어서 순서가 흔들리지 않는다.
   const slot = document.getElementById("nursing-slot");
+  if (slot) slot.replaceWith(section);
+}
+
+// 기저귀교환대가 있는 공중화장실.
+//
+// 수유실과 따로 그린다. 젖을 먹일 곳과 기저귀를 갈 곳은 같은 자리가 아니고,
+// 아이를 데리고 나오면 대개 둘 다 필요하다. 여기서도 아빠가 갈 수 있는지를
+// 먼저 말해 준다 — 전국 기저귀교환대의 절반 이상이 여자화장실에만 있다.
+async function renderNearbyToilets(place) {
+  if (!place.lat || !place.lng) return;
+  const pad = 0.004;
+  const query = new URLSearchParams({
+    minLat: place.lat - pad, maxLat: place.lat + pad,
+    minLng: place.lng - pad, maxLng: place.lng + pad,
+  });
+
+  let rooms = [];
+  try {
+    const data = await fetchJson(`/api/toilets?${query}`);
+    rooms = data.rooms || [];
+  } catch {
+    return;
+  }
+
+  const near = rooms
+    .map((room) => ({ room, m: Math.round(window.distanceKm(place, room) * 1000) }))
+    .filter((x) => x.m <= NURSING_RADIUS_M)
+    .toSorted((a, b) => a.m - b.m)
+    .slice(0, 3);
+  const slot = document.getElementById("toilet-slot");
+  if (near.length === 0) {
+    if (slot) slot.remove();
+    return;
+  }
+
+  const rowsHtml = near.map(({ room, m }) => `
+    <div class="nursing-near__item">
+      <p class="nursing-near__name">
+        ${escapeHtml(room.name)}
+        <span class="nursing-near__dist">${m}m</span>
+      </p>
+      <p class="nursing-father nursing-father--${room.dad ? "yes" : "no"}">
+        ${room.dad ? "👨‍👧 남자화장실에도 있어요" : "🚻 여자화장실에만 있어요"}
+      </p>
+      ${room.hours ? `<p class="nursing-near__where">⏰ ${escapeHtml(room.hours)}</p>` : ""}
+      ${room.tel ? `<p class="nursing-near__where">☎️ <a href="tel:${escapeHtml(window.formatTel(room.tel).replace(/-/g, ""))}">${escapeHtml(window.formatTel(room.tel))}</a></p>` : ""}
+    </div>
+  `).join("");
+
+  const section = document.createElement("div");
+  section.className = "place-detail__section";
+  section.innerHTML = `
+    <p class="place-detail__label">🚼 가까운 기저귀교환대</p>
+    <div class="nursing-near">${rowsHtml}</div>
+    <p class="place-detail__source">공중화장실 표준데이터 · 실제와 다를 수 있어요</p>
+  `;
   if (slot) slot.replaceWith(section);
 }
 

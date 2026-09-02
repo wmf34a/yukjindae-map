@@ -11,6 +11,7 @@ import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festi
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilRooms } from "./nursing-rooms.js";
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
+import { readChangingToilets } from "./toilets.js";
 import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
@@ -884,6 +885,19 @@ export function clipToBounds(rooms, url) {
   return rooms.filter((r) => r.lat >= minLat && r.lat <= maxLat && r.lng >= minLng && r.lng <= maxLng);
 }
 
+async function handleToilets(env, url) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  try {
+    const all = await readChangingToilets(env);
+    const rooms = clipToBounds(all, url);
+    return new Response(JSON.stringify({ rooms, total: all.length }), { status: 200, headers });
+  } catch (err) {
+    // 수유실과 같은 이유로 삼킨다 — 레이어 하나 때문에 지도 탭이 통째로 깨지면 안 된다.
+    console.error("[toilets]", err);
+    return new Response(JSON.stringify({ rooms: [] }), { status: 200, headers });
+  }
+}
+
 async function handleNursingRooms(env, url) {
   const headers = { "content-type": "application/json; charset=utf-8" };
   try {
@@ -1706,6 +1720,9 @@ async function handleRequest(request, env, ctx) {
     // 24시간 캐싱 중에 주간 크론이 KV를 갱신하면 다음 캐시 만료 전까지 최대
     // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
     return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env, url));
+  }
+  if (url.pathname === "/api/toilets") {
+    return withEdgeCache(request, ctx, 3600, () => handleToilets(env, url));
   }
   if (url.pathname === "/api/today") {
     // 좌표를 소수점 2자리(약 1.1km)로 뭉갠다. 같은 동네 사용자가 캐시를 함께

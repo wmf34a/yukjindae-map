@@ -220,6 +220,29 @@ function openNursingSheet(room) {
   }
 }
 
+function openToiletSheet(room) {
+  const query = encodeURIComponent(room.address || room.name);
+  presentSheet(`
+    <div class="map-sheet__card">
+      <div class="map-sheet__name-row">
+        <p class="map-sheet__name">🚼 ${escapeHtml(room.name)}</p>
+      </div>
+      <p class="nursing-father nursing-father--${room.dad ? "yes" : "no"}">
+        ${room.dad ? "👨‍👧 남자화장실에도 있어요" : "🚻 여자화장실에만 있어요"}
+      </p>
+      ${room.place ? `<p class="map-sheet__row">📍 ${escapeHtml(room.place)}</p>` : ""}
+      ${room.hours ? `<p class="map-sheet__row">⏰ ${escapeHtml(room.hours)}</p>` : ""}
+      ${room.address ? `<p class="map-sheet__row">${escapeHtml(room.address)}</p>` : ""}
+      ${room.tel ? `<p class="map-sheet__row">☎️ <a href="tel:${escapeHtml(window.formatTel(room.tel).replace(/-/g, ""))}">${escapeHtml(window.formatTel(room.tel))}</a></p>` : ""}
+      <p class="map-sheet__meta">공중화장실 표준데이터 자료</p>
+      <div class="map-sheet__actions">
+        <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(room))}">네이버지도 길찾기</a>
+        <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>
+      </div>
+    </div>
+  `);
+}
+
 function closeSheet() {
   document.getElementById("map-sheet").classList.remove("is-open");
   if (sheetHistoryPushed) {
@@ -323,8 +346,15 @@ const NURSING_CLUSTER_ICONS = [
   clusterIcon(54, "linear-gradient(135deg,#2A73E0,#1740B8)", "#fff"),
 ];
 
+const TOILET_CLUSTER_ICONS = [
+  clusterIcon(38, "linear-gradient(135deg,#59C08A,#2F9E63)", "#fff"),
+  clusterIcon(46, "linear-gradient(135deg,#46B37B,#248B52)", "#fff"),
+  clusterIcon(54, "linear-gradient(135deg,#329E68,#1B7443)", "#fff"),
+];
+
 let placeClusterer = null;
 let nursingClusterer = null;
+let toiletClusterer = null;
 
 function clearMarkers() {
   if (placeClusterer) {
@@ -407,6 +437,114 @@ function renderNursingMarkers() {
   });
   nursingClusterer = createClusterer(nursingMarkers, NURSING_CLUSTER_ICONS);
   if (!nursingClusterer) nursingMarkers.forEach((m) => m.setMap(map));
+}
+
+// 기저귀교환대가 있는 공중화장실.
+//
+// 수유실과 나란히 두는 이유는, 둘이 서로를 대신하지 못하기 때문이다. 젖을 먹일
+// 곳과 기저귀를 갈 곳은 다른 자리에 있고, 아이를 데리고 나오면 대개 둘 다 필요하다.
+//
+// 그리고 여기에도 같은 문제가 있다. 전국 기저귀교환대 9,800곳 중 절반 이상이
+// 여자화장실에만 있다. 아빠가 갈 수 있는 곳은 따로 표시해야 헛걸음하지 않는다.
+const TOILET_ICON = {
+  content: `<div style="width:26px;height:26px;border-radius:50%;background:#2F9E63;border:2px solid #fff;box-shadow:0 2px 5px rgba(13,27,62,0.35);display:flex;align-items:center;justify-content:center;font-size:13px;">🚼</div>`,
+  anchor: new naver.maps.Point(13, 13),
+};
+
+let toiletMarkers = [];
+let toilets = [];
+let toiletLoaded = false;
+let toiletVisible = false;
+let toiletLoadPromise = null;
+let toiletLoadedBounds = null;
+let toiletViewTimer = null;
+
+function clearToiletMarkers() {
+  if (toiletClusterer) {
+    toiletClusterer.setMap(null);
+    toiletClusterer = null;
+  }
+  toiletMarkers.forEach((m) => m.setMap(null));
+  toiletMarkers = [];
+}
+
+function renderToiletMarkers() {
+  clearToiletMarkers();
+  toilets.forEach((room) => {
+    const marker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(room.lat, room.lng),
+      title: room.name,
+      icon: TOILET_ICON,
+      zIndex: 49,
+    });
+    naver.maps.Event.addListener(marker, "click", () => openToiletSheet(room));
+    toiletMarkers.push(marker);
+  });
+  toiletClusterer = createClusterer(toiletMarkers, TOILET_CLUSTER_ICONS);
+  if (!toiletClusterer) toiletMarkers.forEach((m) => m.setMap(map));
+}
+
+async function fetchToilets() {
+  const area = boundsWithMargin();
+  try {
+    const query = area
+      ? `?minLat=${area.minLat}&maxLat=${area.maxLat}&minLng=${area.minLng}&maxLng=${area.maxLng}`
+      : "";
+    const data = await fetchJson(`/api/toilets${query}`);
+    toilets = data.rooms || [];
+    toiletLoadedBounds = area;
+    toiletLoaded = true;
+  } catch (err) {
+    console.error(err);
+    showToast("기저귀교환대 정보를 불러오지 못했어요.");
+  }
+}
+
+function insideToiletLoaded(view) {
+  const b = toiletLoadedBounds;
+  if (!b || !view) return false;
+  return view.minLat >= b.minLat && view.maxLat <= b.maxLat
+    && view.minLng >= b.minLng && view.maxLng <= b.maxLng;
+}
+
+async function refreshToiletsForView() {
+  if (!toiletVisible) return;
+  const view = boundsWithMargin(0);
+  if (insideToiletLoaded(view)) return;
+  toiletLoadPromise = fetchToilets();
+  await toiletLoadPromise;
+  renderToiletMarkers();
+}
+
+function updateToiletButton() {
+  const btn = document.getElementById("toilet-layer-btn");
+  if (!btn) return;
+  btn.classList.toggle("is-active", toiletVisible);
+  btn.setAttribute("aria-pressed", String(toiletVisible));
+  btn.title = toiletVisible ? "기저귀교환대 숨기기" : "기저귀교환대 보기";
+}
+
+// 수유실과 달리 기본은 꺼짐이다. 둘 다 켜 두면 도심에서 핀이 서로 겹쳐 어느
+// 쪽을 누르는지 알 수 없다.
+async function toggleToiletLayer() {
+  toiletVisible = !toiletVisible;
+  updateToiletButton();
+  if (!toiletVisible) {
+    clearToiletMarkers();
+    return;
+  }
+  if (!toiletLoaded) {
+    if (!toiletLoadPromise) toiletLoadPromise = fetchToilets();
+    await toiletLoadPromise;
+  }
+  renderToiletMarkers();
+}
+
+function initToiletLayer() {
+  const btn = document.getElementById("toilet-layer-btn");
+  if (!btn) return;
+  btn.addEventListener("click", toggleToiletLayer);
+  updateToiletButton();
 }
 
 // 큐레이션된 장소 목록과 달리 자주 안 바뀌는 공공데이터라, 한 번만
@@ -671,11 +809,16 @@ function init() {
     nursingViewTimer = setTimeout(() => {
       refreshNursingForView().catch((err) => console.error(err));
     }, 500);
+    clearTimeout(toiletViewTimer);
+    toiletViewTimer = setTimeout(() => {
+      refreshToiletsForView().catch((err) => console.error(err));
+    }, 500);
   });
 
   renderRegionChips();
   initTrackButton();
   initNursingLayer();
+  initToiletLayer();
   initSheetDrag();
   loadPlaces();
   // 기억한 위치에서 열었더라도 GPS로 다시 맞춘다 — 그새 움직였을 수 있다.

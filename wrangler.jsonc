@@ -2,8 +2,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "yukjindae-map",
   "compatibility_date": "2024-09-23",
-  // 서울시 공공서비스예약 API가 8088 포트라 이 플래그 없이는 Worker에서 못 부른다.
-  "compatibility_flags": ["allow_custom_ports"],
+  // 서울시 공공서비스예약 API가 8088 포트라 커스텀 포트 호출이 필요하다.
+  // allow_custom_ports 플래그는 2024-09-02부터 기본값이라 위 compatibility_date
+  // 에서 이미 켜져 있다 — 명시하면 최신 런타임이 거부해서 로컬 dev가 안 뜬다.
   "main": "src/worker.js",
   "observability": {
     "enabled": true

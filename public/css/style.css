@@ -2161,3 +2161,74 @@ body {
   font-size: 12.5px;
   color: var(--color-text-secondary);
 }
+
+/* 축제 목록 — 지역 칩과 진행중/곧 시작 구분.
+   축제는 장소와 달리 "지금 열리는지"가 먼저라, 지도 대신 가로 스크롤 칩을 쓴다. */
+.region-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 16px;
+  scrollbar-width: none;
+}
+
+.region-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.region-chips:empty {
+  display: none;
+}
+
+.region-chip {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.region-chip.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-white);
+}
+
+.festival-section__title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0 0 12px;
+}
+
+/* 두 번째 섹션(곧 시작) 앞에만 간격을 준다 */
+.place-grid + .festival-section__title {
+  margin-top: 26px;
+}
+
+/* D-day 배지는 왼쪽 위라 요금은 오른쪽 위에 둔다 */
+.festival-fee {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--color-white);
+  box-shadow: 0 2px 6px rgba(58, 67, 99, 0.18);
+}
+
+.festival-fee--free {
+  background: #4C9A7A;
+}
+
+.festival-fee--paid {
+  background: var(--color-accent);
+}

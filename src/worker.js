@@ -607,15 +607,18 @@ async function handleFestivals(env) {
 
     const data = await res.json();
     // 공개여부 체크만으로는 담당자가 종료 후 체크 해제를 깜빡하면 지난 축제가 계속
-    // 노출된다 — top 10을 뽑기 전에 종료일이 지난 항목부터 걸러낸다.
+    // 노출된다 — 종료일이 지난 항목부터 걸러낸다.
     const todayStr = new Date().toISOString().slice(0, 10);
     const upcoming = data.results.filter((page) => {
       const { periodEnd, periodStart } = toFestival(page);
       const end = (periodEnd || periodStart || "").slice(0, 10);
       return !end || end >= todayStr;
     });
+    // 예전에는 상위 10건만 내려보냈는데, 승인된 축제가 그보다 많아지면서 뒤쪽이
+    // 조용히 잘려나갔다. 지금은 진행 중인 축제를 전부 내려보내고 지역 필터는
+    // 프론트에서 한다. 상한은 노션 한 페이지(100건)를 넘지 않기 위한 안전장치다.
     const festivals = await Promise.all(
-      upcoming.slice(0, 10).map((page) => festivalToPayload(env, page))
+      upcoming.slice(0, 100).map((page) => festivalToPayload(env, page))
     );
 
     return new Response(JSON.stringify({ festivals: festivals.filter((f) => f.title) }), { status: 200, headers });

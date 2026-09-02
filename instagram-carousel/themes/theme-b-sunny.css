@@ -42,13 +42,14 @@ body { font-family: "Jua", "Pretendard", -apple-system, sans-serif; }
 
 .brandmark { color: #B8A88F; }
 
-/* 표지는 딤 대신 크림 밴드 */
-.cover { background: #F2E4C9; }
+/* 표지 — 사진 위에 얹히므로 글자는 흰색을 유지하고, 딤만 따뜻한 갈색으로 바꾼다.
+   (크림색 글자로 두면 어두운 사진에서 안 보인다) */
+.cover { background: #3A2A1C; }
 .cover__veil {
-  background: linear-gradient(180deg, rgba(74,59,42,.18) 0%, rgba(74,59,42,.10) 32%, rgba(251,243,228,.92) 72%, #FBF3E4 100%);
+  background: linear-gradient(180deg, rgba(58,42,28,.82) 0%, rgba(58,42,28,.62) 34%, rgba(58,42,28,.34) 64%, rgba(58,42,28,.30) 100%);
 }
-.cover__title { color: var(--text); text-shadow: none; }
-.cover__title em { color: var(--navy); }
+.cover__title { color: #FFF7E8; text-shadow: 0 6px 24px rgba(0,0,0,.45); }
+.cover__title em { color: var(--pop); }
 .cover__eyebrow {
   background: var(--pop); color: var(--text); border-color: var(--text); border-width: 3px;
 }

@@ -1966,29 +1966,8 @@ const CSP = [
   "form-action 'self'",
 ].join("; ");
 
-// 정적 자산의 캐시 수명.
-//
-// Static Assets 는 기본으로 `max-age=0, must-revalidate` 를 준다. 그래서 CSS·JS·
-// 아이콘이 방문마다 다시 확인되고, 그 확인 하나하나가 Worker 요청으로 잡힌다.
-// 런칭 첫날 요청이 127,793건이었고 무료 한도는 하루 100,000건이다.
-//
-// 파일 이름에 버전이 없어 immutable 은 못 준다. 대신 짧게 준다 — 5분이면 한
-// 사람의 한 번 방문 동안에는 다시 묻지 않는다. 배포로 파일이 바뀌어도 5분 뒤엔
-// 새것을 받고, 홈 화면에 설치해 쓰는 사람은 서비스워커가 따로 관리한다.
-//
-// HTML 과 서비스워커는 제외한다. HTML 을 캐시하면 배포한 화면이 안 바뀌고,
-// sw.js 를 캐시하면 새 버전 감지 자체가 늦어진다.
-const ASSET_CACHE_SECONDS = 300;
-const NO_CACHE_ASSETS = /\.html?$|^\/sw\.js$|^\/manifest\.json$|^\/$/;
-
-export function withAssetCache(url, response) {
-  if (response.status !== 200) return response;
-  if (NO_CACHE_ASSETS.test(url.pathname)) return response;
-  const headers = new Headers(response.headers);
-  headers.set("cache-control", `public, max-age=${ASSET_CACHE_SECONDS}`);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
+// 정적 자산의 캐시 헤더는 여기서 못 붙인다 — 자산은 Worker 를 거치지 않고
+// 곧장 서빙된다. `public/_headers` 에 적혀 있다.
 function withSecurityHeaders(response) {
   const headers = new Headers(response.headers);
   headers.set("x-content-type-options", "nosniff");
@@ -2159,7 +2138,7 @@ async function handleRequest(request, env, ctx) {
     return handleImage(env, request, url.pathname.slice("/images/".length));
   }
 
-  return withSecurityHeaders(withAssetCache(url, await env.ASSETS.fetch(request)));
+  return withSecurityHeaders(await env.ASSETS.fetch(request));
 }
 
 export default {

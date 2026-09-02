@@ -8,10 +8,12 @@
 ```
 instagram-carousel/
   carousel.css         # ★ 디자인 시스템 — 색·글자·컴포넌트 전부 여기
+  themes/              # ★ 테마 3종(클린·써니·나이트) + 미리보기 페이지
   template.html        # ★ 새 캐러셀 시작점(아빠 운동회 예시로 채워둠)
   템플릿-미리보기.html   # 더블클릭하면 바로 열리는 단독 파일(CSS·이미지 내장)
-  slides.html          # 2026-09 '육진대 맵 오픈' 캐러셀 원본
-  caption.md           # 게시용 캡션 + 해시태그 + 수치 확인표
+  slides*.html         # 실제 작업 파일들 (맵 오픈 · 유모차 콘서트 · 축제)
+  caption*.md          # 각 편의 게시용 캡션
+  examples/            # 스킬 패키지로 넘길 때 함께 담는 본보기 모음
   shots/               # 사진·앱 캡처 원본(3배 해상도)
   out/                 # 완성물 01~09-slide.png, 영상 슬라이드 mp4/gif
   tools/
@@ -65,6 +67,29 @@ cd out-운동회 && i=1; for f in t*.png; do mv "$f" "$(printf '%02d' $i)-slide.
 
 글자는 Pretendard, 헤드라인은 800 weight에 `letter-spacing: -.04em`. 색을 새로
 만들지 않는다 — 강조가 필요하면 노랑 하나로 해결한다.
+
+## 테마
+
+`carousel.css` 는 색·글자 크기를 토큰으로만 쓰기 때문에, 테마 파일이 토큰을 덮어쓰면
+슬라이드 HTML을 건드리지 않고 톤 전체가 바뀐다.
+
+| 테마 | 파일 | 톤 | 어울리는 소식 |
+|---|---|---|---|
+| A 클린 | (기본) | 밝은 회백 + 네이비 + 노랑 | 정보 전달·앱 소개·공지 |
+| B 써니 | `themes/theme-b-sunny.css` | 크림 종이 + 둥근 글씨(Jua) + 두꺼운 테두리 | 아이 행사·모집·후기 |
+| C 나이트 | `themes/theme-c-night.css` | 짙은 남색 + 민트·노랑 형광 | 야간 축제·불꽃놀이·공연 |
+
+```html
+<link rel="stylesheet" href="carousel.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap" />
+<link rel="stylesheet" href="themes/theme-b-sunny.css" />
+```
+
+`themes/preview-a.html` · `preview-b.html` · `preview-c.html` 을 렌더하면 네 종류
+슬라이드(표지·사진카드·글카드·CTA)로 톤을 비교할 수 있다.
+
+**표지만 다른 테마로 섞어도 된다.** 2026-09 축제 캐러셀은 표지를 나이트, 본문을
+써니로 뽑았다 — 테마별로 한 벌씩 렌더한 뒤 필요한 장만 한 폴더에 모으면 된다.
 
 ## 컴포넌트 카탈로그
 

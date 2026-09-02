@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { withEdgeCache, withAssetCache } from "./worker.js";
+import { withEdgeCache } from "./worker.js";
 
 // caches.default 를 흉내낸다. put/match 만 쓴다.
 function fakeCache() {
@@ -140,32 +140,5 @@ describe("긴 TTL", () => {
       async () => new Response("ok", { status: 200 })
     );
     expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
-  });
-});
-
-// 정적 자산 캐시. Static Assets 는 기본이 max-age=0, must-revalidate 라
-// CSS·JS 가 방문마다 다시 확인되고 그 확인이 Worker 요청으로 잡힌다.
-describe("withAssetCache", () => {
-  const ok = (type) => new Response("x", { status: 200, headers: { "content-type": type } });
-
-  it("CSS·JS 에는 캐시 수명을 준다", () => {
-    for (const path of ["/css/style.css", "/js/app.js", "/assets/logo/character-logo-96.png"]) {
-      const res = withAssetCache(new URL(`https://x${path}`), ok("text/css"));
-      expect(res.headers.get("cache-control")).toBe("public, max-age=300");
-    }
-  });
-
-  // HTML 을 캐시하면 배포한 화면이 안 바뀌고, sw.js 를 캐시하면 새 버전 감지가 늦어진다.
-  it("HTML·서비스워커·매니페스트는 그대로 둔다", () => {
-    for (const path of ["/", "/place.html", "/sw.js", "/manifest.json"]) {
-      const res = withAssetCache(new URL(`https://x${path}`), ok("text/html"));
-      expect(res.headers.get("cache-control")).toBeNull();
-    }
-  });
-
-  it("200 이 아니면 손대지 않는다", () => {
-    const res = withAssetCache(new URL("https://x/js/app.js"), new Response("", { status: 404 }));
-    expect(res.status).toBe(404);
-    expect(res.headers.get("cache-control")).toBeNull();
   });
 });

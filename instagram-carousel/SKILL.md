@@ -11,12 +11,13 @@ description: 육진대 인스타 캐러셀(1080×1350)을 만든다. "캐러셀 
 | 파일 | 무엇 |
 |---|---|
 | `carousel.css` | 디자인 시스템 — 색·글자 크기·컴포넌트 전부 |
+| `themes/` | 테마 3종(클린·써니·나이트)과 미리보기. 링크 한 줄로 톤을 바꾼다 |
 | `template.html` | 새 캐러셀 시작점(아빠 운동회 예시로 9장 채워져 있음) |
 | `README.md` | 형식·컴포넌트 카탈로그·함정. **작업 전에 읽는다** |
 | `tools/render.mjs` | HTML → 슬라이드 PNG |
 | `tools/serve.mjs`, `tools/shoot.mjs` | 앱 화면 캡처용(육진대 맵 저장소가 있을 때만) |
 | `tools/record.mjs`, `tools/slide/` | 움직이는 슬라이드 녹화 |
-| `slides.html`, `caption.md` | 실제로 나갔던 캐러셀과 캡션(2026-09 육진대 맵 오픈) — 본보기 |
+| `examples/` | 실제로 나갔던 캐러셀 세 편과 캡션, 인포그래픽 패턴 모음 — 본보기 |
 | `설치와-사용법.md` | 비개발자용 설치·사용 안내(운영진에게 이 파일을 알려준다) |
 
 ## 순서
@@ -43,6 +44,32 @@ mkdir -p <작업폴더>/shots
 cp <스킬폴더>/carousel.css <스킬폴더>/template.html <작업폴더>/
 cd <작업폴더> && mv template.html slides.html      # 사진은 shots/ 로
 ```
+
+### 2-1. 테마 고르기
+
+기본은 **A 클린**(`carousel.css` 만 링크). 소식 성격에 맞으면 바꾼다.
+
+| 테마 | 톤 | 어울리는 소식 | `<head>` 에 추가할 것 |
+|---|---|---|---|
+| A 클린 | 밝은 회백 + 네이비 | 정보 전달·앱 소개·공지 | (없음) |
+| B 써니 | 크림 종이 + 둥근 글씨 | 아이 행사·모집·후기 | Jua 폰트 + `themes/theme-b-sunny.css` |
+| C 나이트 | 짙은 남색 + 형광 | 야간 축제·불꽃놀이·공연 | `themes/theme-c-night.css` |
+
+```html
+<link rel="stylesheet" href="carousel.css" />
+<!-- B 써니 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap" />
+<link rel="stylesheet" href="<스킬폴더>/themes/theme-b-sunny.css" />
+<!-- C 나이트 -->
+<link rel="stylesheet" href="<스킬폴더>/themes/theme-c-night.css" />
+```
+
+**표지만 다른 테마로 섞어도 된다.** 실제로 축제 캐러셀은 표지를 나이트로, 본문을
+써니로 뽑아 썼다 — 어두운 표지에서 밝은 본문으로 넘어가는 리듬이 산다.
+그럴 땐 테마별로 한 벌씩 렌더한 뒤 필요한 장만 골라 한 폴더에 모은다.
+
+어떤 톤이 나은지 판단이 서지 않으면 세 벌 다 뽑아 사용자에게 보여주고 고르게 한다.
+`themes/preview-a.html` · `preview-b.html` · `preview-c.html` 을 렌더하면 톤 비교가 된다.
 
 ### 3. 슬라이드 작성
 
@@ -84,6 +111,28 @@ cd out && i=1; for f in t*.png; do mv "$f" "$(printf '%02d' $i)-slide.png"; i=$(
 - 캡션 전문
 - (가능하면) 슬라이드를 한 페이지에서 넘겨보는 미리보기 아티팩트 링크.
   영상 슬라이드는 **GIF 로** 넣는다 — 아티팩트 뷰어는 `data:` mp4 재생을 막는다.
+
+## 축제·행사 정보로 만들 때 (공개 데이터)
+
+사진과 정보를 직접 만들지 말고 **원본 데이터에서 받아온다.**
+
+```bash
+# 1) 육진대 맵에 등록된 축제 (사진 경로까지 함께 온다)
+curl -s https://yukjindae-map.wmf34a.workers.dev/api/festivals | jq '.festivals[] | {title, periodStart, periodEnd, region, image}'
+
+# 2) 앱에 없는 축제는 한국관광공사 TourAPI 에서 찾는다 (앱과 같은 키를 쓴다)
+#    searchKeyword2 로 contentid·사진, detailIntro2 로 기간·시간·요금·프로그램
+```
+
+- 사진은 **한국관광공사(TourAPI)·지자체 공식 제공·직접 촬영본**만 쓴다.
+  블로그·뉴스 기사 사진은 쓰지 않는다. 슬라이드에 출처를 적는다("사진: 한국관광공사").
+- TourAPI 저작권 구분이 `Type3` 면 출처표시+변경금지다. 사진 위에 글을 얹거나
+  과하게 자르는 건 피하고, 카드에 그대로 넣는다.
+- **데이터가 작년 회차로 남아 있는 경우가 있다.** 날짜가 오늘과 안 맞으면 공식
+  홈페이지나 문화체육관광부 지역축제 페이지에서 확인하고, 확인된 것만 쓴다.
+- 입장료·주차·예약 여부는 데이터에 없으면 **적지 않는다.**
+- 이번 주 것만 담고 개막 가까운 순으로 배치한다. 기간이 긴 상시 축제를 섞으면
+  "이번 주말"이라는 메시지가 흐려진다.
 
 ## 앱 화면이 들어갈 때
 

@@ -1,20 +1,29 @@
-# Workers Static Assets용 응답 헤더 규칙.
+# 정적 자산의 캐시 수명.
 #
-# public/의 HTML/JS/CSS는 Worker 코드를 거치지 않고 자산 서버가 바로 내려주기
-# 때문에(자산 경로에 매칭되면 fetch 핸들러가 아예 호출되지 않음), worker.js에서
-# 헤더를 붙이는 방식으로는 페이지에 보안 헤더를 적용할 수 없다 — 이 파일이
-# Cloudflare가 제공하는 공식 경로다.
+# Static Assets 는 기본으로 `max-age=0, must-revalidate` 를 준다. 그래서 CSS·JS·
+# 이미지가 방문마다 다시 확인된다. 런칭 첫날 요청이 127,793건이었고 무료 한도는
+# 하루 100,000건이다 — 홈 한 번 여는 데 37건이 나가고 그중 30건이 정적 자산이다.
 #
-# CSP는 실제로 쓰고 있는 외부 출처만 허용한다:
-#   - 네이버 지도 SDK(oapi.map.naver.com) + 타일/이미지(*.pstatic.net, *.map.naver.net)
-#   - Turnstile(challenges.cloudflare.com) — 제보 폼 봇 차단
-#   - Pretendard 폰트(cdn.jsdelivr.net)
-# 인라인 <script>(스플래시 제어)와 인라인 style 속성을 쓰고 있어서 'unsafe-inline'이
-# 필요하다. 이걸 떼려면 먼저 인라인 코드를 외부 파일로 옮겨야 한다.
+# 이 파일이 필요한 이유는, 정적 자산이 Worker 를 거치지 않기 때문이다.
+# withSecurityHeaders 같은 코드로는 여기에 헤더를 붙일 수 없다.
+#
+# 파일 이름에 버전이 없어 immutable 은 못 준다. 대신 짧게 준다 — 한 사람의 한 번
+# 방문 동안에는 다시 묻지 않고, 배포로 파일이 바뀌어도 5분 뒤엔 새것을 받는다.
 
-/*
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  X-Frame-Options: DENY
-  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), interest-cohort=()
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://oapi.map.naver.com https://*.pstatic.net https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https:; connect-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.map.naver.net; frame-src https://challenges.cloudflare.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+/css/*
+  Cache-Control: public, max-age=300
+
+/js/*
+  Cache-Control: public, max-age=300
+
+# 로고와 아이콘은 거의 바뀌지 않는다. 바꿀 때는 파일명을 바꾼다.
+/assets/*
+  Cache-Control: public, max-age=86400
+
+# HTML·서비스워커·매니페스트는 캐시하지 않는다. HTML 을 캐시하면 배포한 화면이
+# 안 바뀌고, sw.js 를 캐시하면 새 버전 감지 자체가 늦어진다.
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.json
+  Cache-Control: no-cache

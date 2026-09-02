@@ -44,7 +44,10 @@ export function decodeImageDataUrl(dataUrl) {
  * R2 키를 만든다. 접두어를 나눠 두면 30일 뒤 자동 삭제 규칙을 이 접두어에만
  * 걸 수 있다 — 장소 사진은 지우면 안 된다.
  */
-export function reportImageKey(kind, now = new Date(), random = crypto.randomUUID()) {
+export function reportImageKey(kind, contentType = "image/jpeg", now = new Date(), random = crypto.randomUUID()) {
   const date = now.toISOString().slice(0, 10);
-  return `reports/${kind}/${date}-${random}.jpg`;
+  // 확장자는 실제 형식을 따른다. 늘 .jpg 로 두면 PNG 가 .jpg 라는 이름으로 남아,
+  // 나중에 파일만 보고 판단하는 사람이나 도구가 헷갈린다.
+  const ext = contentType === "image/png" ? "png" : "jpg";
+  return `reports/${kind}/${date}-${random}.${ext}`;
 }

@@ -25,18 +25,46 @@ export function scoreCandidate(item) {
   return FAMILY_KEYWORDS.reduce((score, kw) => (haystack.includes(kw) ? score + 1 : score), 0);
 }
 
-// 가점 높은 순 → 같은 점수면 시작일이 이른(임박한) 순으로 정렬해 상위 limit개만 남긴다.
-export function rankCandidates(items, { limit = 10 } = {}) {
+// 왕궁수문장 교대의식·상설 공연처럼 사실상 연중 열리는 것은 "이번에 가볼 만한
+// 축제"가 아니라 상시 볼거리다. 기간이 이만큼 길면 상설로 본다.
+const LONG_RUN_DAYS = 180;
+
+function daysBetween(startYyyymmdd, endYyyymmdd) {
+  if (!startYyyymmdd || !endYyyymmdd) return 0;
+  const toDate = (v) => Date.parse(`${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T00:00:00Z`);
+  const diff = toDate(endYyyymmdd) - toDate(startYyyymmdd);
+  return Number.isNaN(diff) ? 0 : diff / 86400000;
+}
+
+// "임박한 순" 비교자. 상설(장기) 행사를 뒤로 밀고, 나머지는 시작일이 이른 순으로 본다.
+// 이미 시작했더라도 아직 진행 중이면 후보로 유효하다 — 홍성남당항 대하축제처럼
+// 두 달 넘게 하는 축제를 "이미 시작했다"는 이유로 밀어내면 영영 못 올라온다.
+function byImminence(a, b) {
+  const longA = daysBetween(a.item.eventStartDate, a.item.eventEndDate) >= LONG_RUN_DAYS;
+  const longB = daysBetween(b.item.eventStartDate, b.item.eventEndDate) >= LONG_RUN_DAYS;
+  if (longA !== longB) return longA ? 1 : -1;
+  return (a.item.eventStartDate || "").localeCompare(b.item.eventStartDate || "");
+}
+
+// 가점 높은 순 → 같은 점수면 임박한 순으로 정렬해 상위 limit개를 뽑고,
+// 그 뒤에 0점 후보도 임박한 순으로 zeroScoreLimit개까지 덧붙인다.
+//
+// 0점 몫을 따로 두는 이유: 키워드 목록은 아무리 늘려도 샌다. 실제로 "홍성남당항
+// 대하축제"처럼 지역을 대표하는 먹거리 축제는 걸리는 키워드가 하나도 없어
+// 248건 중 234건이 0점으로 통째로 탈락했다. 어차피 노션에는 공개여부=false로만
+// 들어가고 사람이 검토하므로, 검토거리 몇 건 더 보는 쪽이 놓치는 쪽보다 싸다.
+export function rankCandidates(items, { limit = 10, zeroScoreLimit = 10 } = {}) {
   const scored = items
     .map((item) => ({ item, score: scoreCandidate(item) }))
     .filter(({ score }) => score !== null);
 
-  scored.sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    return (a.item.eventStartDate || "").localeCompare(b.item.eventStartDate || "");
-  });
+  const positive = scored.filter(({ score }) => score > 0);
+  positive.sort((a, b) => (b.score !== a.score ? b.score - a.score : byImminence(a, b)));
 
-  return scored.slice(0, limit).map(({ item }) => item);
+  const zero = scored.filter(({ score }) => score === 0);
+  zero.sort(byImminence);
+
+  return [...positive.slice(0, limit), ...zero.slice(0, zeroScoreLimit)].map(({ item }) => item);
 }
 
 // TourAPI는 areacode를 비워서 주는 경우가 많아 addr1 문자열로 우리 DB의 10개
@@ -117,8 +145,9 @@ export function toNotionProperties(item, order) {
 }
 
 // 이미 노션에 들어있는 TourAPI_ID는 다시 만들지 않는다(주간 배치가 매번
-// 중복 생성하는 것을 막기 위함). 최종적으로 최대 limit개까지만 새로 만든다.
-export function selectNewCandidates(rankedItems, existingTourApiIds, { limit = 10 } = {}) {
+// 중복 생성하는 것을 막기 위함). limit을 주면 그만큼만 남긴다 — 기본값은 제한
+// 없음이라 rankCandidates가 정한 몫(가점 상위 + 0점 몫)이 그대로 살아남는다.
+export function selectNewCandidates(rankedItems, existingTourApiIds, { limit = Infinity } = {}) {
   const existing = new Set(existingTourApiIds.filter(Boolean));
   return rankedItems.filter((item) => !existing.has(item.contentId)).slice(0, limit);
 }

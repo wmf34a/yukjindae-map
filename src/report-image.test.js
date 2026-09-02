@@ -43,7 +43,13 @@ describe("decodeImageDataUrl", () => {
 describe("reportImageKey", () => {
   // 접두어를 나눠야 30일 자동 삭제를 여기에만 걸 수 있다. 장소 사진은 지우면 안 된다.
   it("reports/ 아래에 날짜와 함께 넣는다", () => {
-    const key = reportImageKey("bug", new Date("2026-09-02T05:00:00Z"), "abc");
+    const key = reportImageKey("bug", "image/jpeg", new Date("2026-09-02T05:00:00Z"), "abc");
     expect(key).toBe("reports/bug/2026-09-02-abc.jpg");
+  });
+
+  // 늘 .jpg 로 두면 PNG 가 .jpg 라는 이름으로 남아 파일만 보고 판단하는 쪽이 헷갈린다.
+  it("PNG 은 확장자도 png 로 남긴다", () => {
+    const key = reportImageKey("bug", "image/png", new Date("2026-09-02T05:00:00Z"), "abc");
+    expect(key).toBe("reports/bug/2026-09-02-abc.png");
   });
 });

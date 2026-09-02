@@ -2069,3 +2069,95 @@ body {
   color: var(--color-text-secondary);
   opacity: 0.85;
 }
+
+/* 개인정보처리방침. 읽으라고 만든 화면이라 본문 폭과 줄간격을 다른 화면보다 넉넉히 준다. */
+.policy {
+  padding: 20px 18px calc(var(--tabbar-height) + 40px);
+  line-height: 1.8;
+  font-size: 14.5px;
+  color: var(--color-text);
+}
+
+.policy__lead {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin: 0 0 28px;
+  color: var(--color-text-secondary);
+}
+
+.policy__lead strong {
+  color: var(--color-text);
+}
+
+.policy__section {
+  margin-bottom: 34px;
+}
+
+.policy h2 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.policy h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  margin: 20px 0 8px;
+}
+
+.policy p {
+  margin: 0 0 12px;
+}
+
+.policy ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+}
+
+.policy li {
+  margin-bottom: 7px;
+}
+
+/* 항목과 설명이 짝지어 나오는 표. 좁은 화면에서 칸이 눌리지 않게 첫 칸을 고정한다. */
+.policy__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 14px;
+}
+
+.policy__table th,
+.policy__table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 400;
+}
+
+.policy__table th {
+  width: 96px;
+  padding-right: 12px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.policy__contact {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.policy__contact a {
+  color: var(--color-primary);
+}
+
+.policy__meta {
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+}

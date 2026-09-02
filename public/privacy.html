@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>개인정보처리방침 | 육진대</title>
+<link rel="icon" type="image/png" href="assets/logo/character-logo-96.png" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#1A2F6B" />
+<link rel="apple-touch-icon" href="/assets/icons/apple-touch-icon.png" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="css/place.css" />
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <a href="about.html" class="header__back" aria-label="뒤로가기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5"/>
+        <path d="M11 18l-6-6 6-6"/>
+      </svg>
+    </a>
+    <span class="header__title">개인정보처리방침</span>
+  </header>
+
+  <article class="policy">
+    <p class="policy__lead">
+      육진대는 아이와 갈 만한 곳을 모아 두는 지도 앱입니다.
+      <strong>회원가입이 없고, 이름·이메일·전화번호를 받지 않습니다.</strong>
+      아래는 그럼에도 남는 정보들에 대한 안내입니다.
+    </p>
+
+    <section class="policy__section">
+      <h2>1. 수집하는 정보</h2>
+
+      <h3>가. 자동으로 남는 것</h3>
+      <table class="policy__table">
+        <tr>
+          <th>기기 식별값</th>
+          <td>브라우저에 무작위로 만든 값 하나를 저장해 둡니다. 방문자를 하루 한 번만 세기 위한 것이며, 이 값으로 개인을 알아볼 수 없습니다.</td>
+        </tr>
+        <tr>
+          <th>IP 주소 해시</th>
+          <td>제보가 들어오면 IP 주소를 되돌릴 수 없는 형태(SHA-256 앞 10자)로 바꿔 남깁니다. <strong>원래 IP 주소는 저장하지 않습니다.</strong> 같은 사람이 짧은 시간에 수백 건을 보내는 것을 막기 위한 것입니다.</td>
+        </tr>
+        <tr>
+          <th>접속 국가</th>
+          <td>어느 나라에서 들어왔는지만 남깁니다(예: KR). 도시나 상세 위치는 남기지 않습니다.</td>
+        </tr>
+      </table>
+
+      <h3>나. 직접 보내주시는 것</h3>
+      <table class="policy__table">
+        <tr>
+          <th>제보 내용</th>
+          <td>장소 추천, 정보 정정, 수유실 제보에 적어 주신 글입니다.</td>
+        </tr>
+        <tr>
+          <th>화면 캡처</th>
+          <td>앱 오류를 신고할 때 붙여 주신 사진입니다. 선택 사항이며, <strong>30일이 지나면 자동으로 삭제</strong>됩니다.</td>
+        </tr>
+      </table>
+
+      <h3>다. 기기 안에만 있고 저희에게 오지 않는 것</h3>
+      <p>
+        찜한 장소, 마지막으로 본 위치, 안내를 봤는지 여부는 <strong>사용하시는 기기에만 저장</strong>됩니다.
+        저희 서버로 보내지 않으며, 브라우저 저장소를 비우면 사라집니다.
+      </p>
+      <p>
+        현재 위치는 지도에 내 위치를 표시하고 가까운 장소를 찾는 데에만 씁니다.
+        <strong>위치를 저장하지 않습니다.</strong> 날씨를 가져올 때는 좌표를 소수점 두 자리(약 1km)로 뭉개서 씁니다.
+      </p>
+    </section>
+
+    <section class="policy__section">
+      <h2>2. 무엇에 쓰나</h2>
+      <ul>
+        <li>방문자 수를 세는 데 (기기 식별값, 접속 국가)</li>
+        <li>제보를 확인하고 지도에 반영하는 데 (제보 내용, 화면 캡처)</li>
+        <li>도배와 스팸을 막는 데 (IP 주소 해시)</li>
+      </ul>
+      <p>광고에 쓰지 않습니다. 팔지 않습니다. 광고 추적기를 넣지 않았습니다.</p>
+    </section>
+
+    <section class="policy__section">
+      <h2>3. 얼마나 보관하나</h2>
+      <table class="policy__table">
+        <tr><th>방문 기록</th><td>3개월 (이후 자동 삭제)</td></tr>
+        <tr><th>IP 주소 해시</th><td>제보와 함께 보관. 제보가 처리된 뒤에도 같은 사람의 반복 도배를 확인하는 데 쓰입니다</td></tr>
+        <tr><th>화면 캡처</th><td>30일 (이후 자동 삭제)</td></tr>
+        <tr><th>제보 내용</th><td>지도에 반영된 뒤에도 기록으로 남깁니다. 삭제를 요청하시면 지웁니다</td></tr>
+      </table>
+    </section>
+
+    <section class="policy__section">
+      <h2>4. 어디에 맡기나</h2>
+      <p>서비스를 운영하기 위해 아래 업체의 시스템을 씁니다.</p>
+      <table class="policy__table">
+        <tr><th>Cloudflare</th><td>서버·저장소·방문자 집계 (미국)</td></tr>
+        <tr><th>Notion Labs</th><td>장소 정보와 제보 보관 (미국)</td></tr>
+        <tr><th>네이버 · 카카오</th><td>지도 표시와 주변 검색. 지도를 볼 때 좌표가 전달됩니다</td></tr>
+        <tr><th>Slack</th><td>제보가 들어왔을 때 운영진에게 알림 (미국)</td></tr>
+      </table>
+      <p>
+        이 밖에 개인정보를 제3자에게 제공하지 않습니다.
+        법령에 따라 요구받는 경우에만 예외입니다.
+      </p>
+    </section>
+
+    <section class="policy__section">
+      <h2>5. 삭제를 원하시면</h2>
+      <p>
+        회원가입이 없어 계정 삭제라는 절차가 없습니다. 대신 이렇게 하실 수 있습니다.
+      </p>
+      <ul>
+        <li><strong>기기에 저장된 것</strong> — 브라우저 설정에서 이 사이트의 데이터를 지우면 찜 목록과 기기 식별값이 함께 사라집니다.</li>
+        <li><strong>보내신 제보나 사진</strong> — 아래 연락처로 알려주시면 확인 후 지웁니다. 어떤 제보인지 알 수 있도록 내용이나 보내신 날짜를 함께 알려주세요.</li>
+      </ul>
+    </section>
+
+    <section class="policy__section">
+      <h2>6. 아이의 개인정보</h2>
+      <p>
+        이 앱은 아이와 함께 갈 곳을 찾는 어른을 위한 것입니다.
+        <strong>만 14세 미만 아동의 개인정보를 의도적으로 수집하지 않습니다.</strong>
+      </p>
+      <p>
+        제보에 사진을 붙여 주실 때는 <strong>다른 집 아이의 얼굴이 나오지 않도록</strong> 살펴 주세요.
+        얼굴이 식별되는 사진은 확인 과정에서 사용하지 않고 지웁니다.
+      </p>
+    </section>
+
+    <section class="policy__section">
+      <h2>7. 문의</h2>
+      <p>
+        개인정보와 관련한 문의, 삭제 요청, 신고는 아래로 보내주세요.
+      </p>
+      <p class="policy__contact">
+        <a href="mailto:wmf34a@naver.com">wmf34a@naver.com</a>
+      </p>
+      <p>
+        인스타그램 <a href="https://www.instagram.com/yookjindae/" target="_blank" rel="noopener noreferrer">@yookjindae</a> 메시지로도 받습니다.
+      </p>
+    </section>
+
+    <section class="policy__section">
+      <h2>8. 바뀔 때</h2>
+      <p>
+        내용이 바뀌면 이 화면과 앱 알림으로 알려드립니다.
+      </p>
+      <p class="policy__meta">
+        시행일 2026년 9월 2일 · 최종 수정일 2026년 9월 2일
+      </p>
+    </section>
+  </article>
+
+  <nav class="tabbar">
+    <a class="tabbar__item" href="index.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5L12 4l8 7.5"/><path d="M6 10.5V19a1 1 0 0 0 1 1h3v-5h4v5h3a1 1 0 0 0 1-1v-8.5"/></svg></span>홈</a>
+    <a class="tabbar__item" href="map.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.6 7-11.5A7 7 0 0 0 5 9.5C5 14.4 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg></span>주변</a>
+    <a class="tabbar__item" href="favorite.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.5-9.3C1.2 8 2.7 4.8 6 4.2c2-.4 3.7.5 6 2.8 2.3-2.3 4-3.2 6-2.8 3.3.6 4.8 3.8 3.5 7-2 4.7-9.5 9.3-9.5 9.3z"/></svg></span>찜</a>
+    <a class="tabbar__item" href="courses.html"><span class="tabbar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h6a2 2 0 0 1 2 2v11a2 2 0 0 0-2-2H4z"/><path d="M20 6h-6a2 2 0 0 0-2 2v11a2 2 0 0 1 2-2h6z"/></svg></span>코스</a>
+  </nav>
+
+</div>
+</body>
+</html>

@@ -689,8 +689,10 @@ async function runScheduledFestivalImport(env) {
     endDate: yyyymmdd(windowEnd),
   });
 
-  const ranked = rankCandidates(candidates, { limit: 10 });
-  const fresh = selectNewCandidates(ranked, existingIds, { limit: 10 });
+  // 중복 제거를 먼저 한다 — 순위를 매긴 뒤에 걸러내면 이미 노션에 있는 축제가
+  // 상위 몫을 차지해 그만큼 신규가 덜 올라온다.
+  const unseen = selectNewCandidates(candidates, existingIds);
+  const fresh = rankCandidates(unseen, { limit: 10, zeroScoreLimit: 5 });
 
   let order = maxOrder;
   // 순서(순번)를 겹치지 않게 이어서 매기려면 이전 생성 결과를 알아야 해서
@@ -1031,7 +1033,7 @@ async function handleReport(request, env, ctx) {
           { status: 400, headers }
         );
       }
-      const key = reportImageKey("bug");
+      const key = reportImageKey("bug", decoded.contentType);
       try {
         await env.IMAGES.put(key, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
         imageNote = `\n\n[스크린샷] ${PUBLIC_BASE_URL}/images/${key}`;

@@ -48,9 +48,34 @@ describe("rankCandidates", () => {
     expect(rankCandidates(items)).toEqual([]);
   });
 
-  it("limit만큼만 반환한다", () => {
+  it("limit은 가점 후보에만 적용된다", () => {
     const items = Array.from({ length: 5 }, (_, i) => baseItem({ contentId: `${i}` }));
-    expect(rankCandidates(items, { limit: 2 })).toHaveLength(2);
+    expect(rankCandidates(items, { limit: 2, zeroScoreLimit: 0 })).toHaveLength(2);
+  });
+
+  it("0점 후보도 임박한 순으로 zeroScoreLimit개까지 뒤에 붙는다", () => {
+    const items = [
+      baseItem({ contentId: "z2", title: "홍성남당항 대하축제", eventStartDate: "20260910" }),
+      baseItem({ contentId: "p", title: "가족 체험 축제", eventStartDate: "20261001" }),
+      baseItem({ contentId: "z1", title: "지역 문화 페스티벌", eventStartDate: "20260905" }),
+      baseItem({ contentId: "z3", title: "군민의 날 행사", eventStartDate: "20260920" }),
+    ];
+    const ranked = rankCandidates(items, { limit: 10, zeroScoreLimit: 2, today: "20260902" });
+    expect(ranked.map((i) => i.contentId)).toEqual(["p", "z1", "z2"]);
+  });
+
+  it("연중 상설처럼 이미 시작한 행사는 아직 시작 안 한 행사 뒤로 밀린다", () => {
+    const items = [
+      baseItem({ contentId: "상설", title: "서울 왕궁수문장 교대의식", eventStartDate: "20260101" }),
+      baseItem({ contentId: "대하", title: "홍성남당항 대하축제", eventStartDate: "20260904" }),
+    ];
+    const ranked = rankCandidates(items, { zeroScoreLimit: 5, today: "20260902" });
+    expect(ranked.map((i) => i.contentId)).toEqual(["대하", "상설"]);
+  });
+
+  it("zeroScoreLimit이 0이면 0점 후보는 빠진다", () => {
+    const items = [baseItem({ contentId: "z", title: "지역 문화 페스티벌" })];
+    expect(rankCandidates(items, { zeroScoreLimit: 0 })).toEqual([]);
   });
 });
 
@@ -128,5 +153,10 @@ describe("selectNewCandidates", () => {
   it("limit만큼만 반환한다", () => {
     const items = Array.from({ length: 5 }, (_, i) => baseItem({ contentId: `${i}` }));
     expect(selectNewCandidates(items, [], { limit: 2 })).toHaveLength(2);
+  });
+
+  it("limit이 없으면 전부 남긴다", () => {
+    const items = Array.from({ length: 30 }, (_, i) => baseItem({ contentId: `${i}` }));
+    expect(selectNewCandidates(items, [])).toHaveLength(30);
   });
 });

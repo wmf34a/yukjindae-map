@@ -681,6 +681,8 @@ async function createFestivalPage(env, properties) {
 // 모아 가족 단위 키워드로 걸러 순위를 매기고, 새로운 것만 "공개여부=false"
 // (검토 대기) 상태로 노션에 만든다. 실제 노출은 사람이 확인 후 체크박스를
 // 켜야 한다 — 키워드 필터는 완벽하지 않아 자동 공개는 하지 않는다.
+const MAX_NEW_FESTIVALS_PER_RUN = 15;
+
 async function runScheduledFestivalImport(env) {
   if (!env.NOTION_API_KEY || !env.NOTION_FESTIVAL_DATABASE_ID || !env.TOUR_API_KEY) return;
 
@@ -698,7 +700,11 @@ async function runScheduledFestivalImport(env) {
   // 중복 제거를 먼저 한다 — 순위를 매긴 뒤에 걸러내면 이미 노션에 있는 축제가
   // 상위 몫을 차지해 그만큼 신규가 덜 올라온다.
   const unseen = selectNewCandidates(candidates, existingIds);
-  const fresh = rankCandidates(unseen, { limit: 10, zeroScoreLimit: 10 });
+  // 한 회차에 만드는 개수는 Workers 의 서브리퀘스트 예산이 정한다. 축제 하나마다
+  // 요금 조회 + 노션 생성으로 2회를 쓰고, 목록 조회·검색 페이지·슬랙 알림에 5회쯤
+  // 더 든다 — 20건이면 45회로 한도(50)에 여유가 거의 없다. 주간 배치라 남은 후보는
+  // 다음 회차에 올라온다.
+  const fresh = rankCandidates(unseen, { limit: 10, zeroScoreLimit: 10 }).slice(0, MAX_NEW_FESTIVALS_PER_RUN);
 
   let order = maxOrder;
   // 순서(순번)를 겹치지 않게 이어서 매기려면 이전 생성 결과를 알아야 해서
@@ -767,7 +773,10 @@ async function notifyFestivalCandidates(env, items) {
   await notifySlack(env, text);
 }
 
-async function festivalToPayload(env, page) {
+// 목록에서는 설명·주소를 빼고 내려보낸다. 카드에 쓰지 않는데도 축제가 24건으로
+// 늘면서 응답이 34KB까지 커졌다 — 대부분이 TourAPI 개요 본문이다. 상세페이지는
+// 설명을 쓰고 비어 있으면 TourAPI로 채워 노션에 써넣기까지 하므로 full 로 받는다.
+async function festivalToPayload(env, page, { full = false } = {}) {
   const festival = toFestival(page);
   const image = await ensureMirroredImage(env, "festivals", festival.id, festival.imageSource);
   return {
@@ -781,9 +790,8 @@ async function festivalToPayload(env, page) {
     link: festival.link,
     region: festival.region,
     order: festival.order,
-    description: festival.description,
-    address: festival.address,
     useFee: festival.useFee,
+    ...(full ? { description: festival.description, address: festival.address } : {}),
   };
 }
 
@@ -817,7 +825,7 @@ async function handleFestivalDetail(env, id, ctx) {
       return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
     }
 
-    const festival = await festivalToPayload(env, page);
+    const festival = await festivalToPayload(env, page, { full: true });
     if (!festival.title) {
       return new Response(JSON.stringify({ error: "존재하지 않는 축제입니다." }), { status: 404, headers });
     }

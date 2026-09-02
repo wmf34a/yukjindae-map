@@ -448,3 +448,29 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
+
+/* 아빠가 들어갈 수 있는지. 이 앱에서 수유실을 볼 때 가장 먼저 알아야 하는 것이라
+   주소나 전화번호보다 위에 두고 색으로 구분한다. 아이를 안고 갔다가 문 앞에서
+   돌아서는 일이 없도록. */
+.nursing-father {
+  margin: 8px 0 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.nursing-father--yes {
+  background: #E7F0EA;
+  color: #2F6B4A;
+}
+
+.nursing-father--no {
+  background: #F6F0E2;
+  color: #7A5C23;
+}
+
+.map-sheet__row a {
+  color: var(--color-primary);
+  text-decoration: none;
+}

@@ -197,10 +197,13 @@ function openNursingSheet(room) {
       <div class="map-sheet__name-row">
         <p class="map-sheet__name">🍼 ${escapeHtml(room.name)}</p>
       </div>
-      <p class="map-sheet__meta">${escapeHtml(room.source)} 공공데이터 · ${room.fatherAllowed ? "아빠도 이용 가능" : "이용 대상 확인 필요"}</p>
+      <p class="nursing-father nursing-father--${room.fatherAllowed ? "yes" : "no"}">
+        ${room.fatherAllowed ? "👨‍👧 아빠도 들어갈 수 있어요" : "🚻 여성 전용일 수 있어요"}
+      </p>
       ${room.place ? `<p class="map-sheet__row">📍 ${escapeHtml(room.place)}</p>` : ""}
       ${room.address ? `<p class="map-sheet__row">${escapeHtml(room.address)}</p>` : ""}
-      ${room.tel ? `<p class="map-sheet__row">☎️ ${escapeHtml(room.tel)}</p>` : ""}
+      ${room.tel ? `<p class="map-sheet__row">☎️ <a href="tel:${escapeHtml(window.formatTel(room.tel).replace(/-/g, ""))}">${escapeHtml(window.formatTel(room.tel))}</a></p>` : ""}
+      <p class="map-sheet__meta">${escapeHtml(room.source)} 자료</p>
       <div class="map-sheet__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl(room))}">네이버지도 길찾기</a>
         <a class="btn-secondary" target="_blank" rel="noopener" href="https://map.kakao.com/link/search/${query}">카카오맵</a>

@@ -372,3 +372,31 @@ function initialMapView(fallback, now = Date.now()) {
 window.readLastLocation = readLastLocation;
 window.saveLastLocation = saveLastLocation;
 window.initialMapView = initialMapView;
+
+// 공공데이터 전화번호는 하이픈 없이 오고, 앞의 0이 빠진 것도 많다.
+// "261102361"은 02-6110-2361이고 "221874650"은 02-2187-4650이다. 그대로 두면
+// 읽기도 어렵고 눌러도 전화가 안 걸린다.
+//
+// 앞자리가 0이 아니면 붙여 준다 — 국내 유선·휴대전화는 모두 0으로 시작한다.
+// 대표번호(15xx·16xx·18xx)만 예외라 따로 본다.
+// 서울(02)은 지역번호가 두 자리, 나머지는 세 자리다.
+// 형태를 모르겠으면 손대지 않고 그대로 보여준다 — 잘못 끊어 놓는 것보다 낫다.
+function formatTel(raw) {
+  let digits = String(raw || "").replace(/[^0-9]/g, "");
+  if (!digits) return "";
+
+  const isTollFree = /^1[5678]\d{2}/.test(digits) && digits.length === 8;
+  if (isTollFree) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+
+  if (!digits.startsWith("0")) digits = `0${digits}`;
+
+  if (digits.startsWith("02")) {
+    if (digits.length === 9) return `02-${digits.slice(2, 5)}-${digits.slice(5)}`;
+    if (digits.length === 10) return `02-${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+  if (digits.length === 10) return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
+  return String(raw).trim();
+}
+
+window.formatTel = formatTel;

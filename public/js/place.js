@@ -226,10 +226,75 @@ async function init() {
       return;
     }
     render(place);
+    // 지도를 열지 않아도 이 장소의 수유실이 아빠도 들어갈 수 있는 곳인지 알 수
+    // 있어야 한다. 상세를 먼저 그리고 뒤따라 붙인다 — 공공데이터를 기다리느라
+    // 화면이 늦게 뜨면 안 된다.
+    renderNearbyNursing(place).catch((err) => console.error(err));
   } catch (err) {
     console.error(err);
     el.innerHTML = `<p class="place-list__empty">장소 정보를 불러오지 못했어요.</p>`;
   }
+}
+
+// 이 장소에 딸린 수유실을 찾아 붙인다.
+//
+// 우리 DB의 "수유실" 표시는 있다/없다뿐이라 아빠가 들어갈 수 있는지를 모른다.
+// 그건 수유실 명부에만 있어서, 좌표로 근처를 뒤져 가져온다.
+//
+// 250m 로 잡는다. 같은 건물이나 같은 부지에 있는 것만 이 장소의 수유실이라고
+// 말할 수 있고, 그보다 멀면 옆 건물 것을 이 장소 것처럼 보여주게 된다.
+const NURSING_RADIUS_M = 250;
+
+async function renderNearbyNursing(place) {
+  if (!place.lat || !place.lng) return;
+  const pad = 0.004; // 위도 기준 약 440m — 반경보다 넉넉히 받아 거리로 다시 거른다
+  const query = new URLSearchParams({
+    minLat: place.lat - pad, maxLat: place.lat + pad,
+    minLng: place.lng - pad, maxLng: place.lng + pad,
+  });
+
+  let rooms = [];
+  try {
+    const data = await fetchJson(`/api/nursing-rooms?${query}`);
+    rooms = data.rooms || [];
+  } catch {
+    return; // 못 불러오면 조용히 넘어간다. 없어도 상세는 온전하다.
+  }
+
+  const near = rooms
+    .map((room) => ({ room, m: Math.round(window.distanceKm(place, room) * 1000) }))
+    .filter((x) => x.m <= NURSING_RADIUS_M)
+    .toSorted((a, b) => a.m - b.m)
+    .slice(0, 3);
+  if (near.length === 0) return;
+
+  const rowsHtml = near.map(({ room, m }) => `
+    <div class="nursing-near__item">
+      <p class="nursing-near__name">
+        ${escapeHtml(room.name)}
+        <span class="nursing-near__dist">${m}m</span>
+      </p>
+      <p class="nursing-father nursing-father--${room.fatherAllowed ? "yes" : "no"}">
+        ${room.fatherAllowed ? "👨‍👧 아빠도 들어갈 수 있어요" : "🚻 여성 전용일 수 있어요"}
+      </p>
+      ${room.place ? `<p class="nursing-near__where">📍 ${escapeHtml(room.place)}</p>` : ""}
+      ${room.tel ? `<p class="nursing-near__where">☎️ <a href="tel:${escapeHtml(window.formatTel(room.tel).replace(/-/g, ""))}">${escapeHtml(window.formatTel(room.tel))}</a></p>` : ""}
+    </div>
+  `).join("");
+
+  const section = document.createElement("div");
+  section.className = "place-detail__section";
+  section.innerHTML = `
+    <p class="place-detail__label">🍼 가까운 수유실</p>
+    <div class="nursing-near">${rowsHtml}</div>
+    <p class="place-detail__source">수유정보 알리미 등 공공데이터 · 실제와 다를 수 있어요</p>
+  `;
+
+  // 편의시설 칸 바로 뒤에 둔다 — 기저귀교환대·수유실을 보고 나서 자연스럽게 읽힌다.
+  const amenities = document.querySelector(".place-detail__amenities");
+  const anchor = amenities ? amenities.closest(".place-detail__section") : null;
+  if (anchor) anchor.after(section);
+  else document.getElementById("place-detail").append(section);
 }
 
 document.addEventListener("DOMContentLoaded", init);

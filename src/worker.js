@@ -13,6 +13,9 @@ import { announceNursingReport, applyApprovedNursingReports } from "./nursing-re
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { readChangingToilets } from "./toilets.js";
 import { decodeImageDataUrl, reportImageKey } from "./report-image.js";
+import {
+  REVIEWS_KV_KEY, validateReview, summarize, alreadyReviewed, readPublicReviews, MAX_PHOTOS,
+} from "./reviews.js";
 
 // 제보 스크린샷 주소를 노션에 적을 때 쓴다. 운영자가 노션에서 바로 눌러 볼 수
 // 있어야 하므로 상대경로로는 안 된다.
@@ -777,6 +780,7 @@ async function festivalToPayload(env, page) {
     order: festival.order,
     description: festival.description,
     address: festival.address,
+    useFee: festival.useFee,
   };
 }
 
@@ -895,6 +899,187 @@ export function clipToBounds(rooms, url) {
   if (nums.some((n) => !Number.isFinite(n))) return rooms;
   const [minLat, maxLat, minLng, maxLng] = nums;
   return rooms.filter((r) => r.lat >= minLat && r.lat <= maxLat && r.lng >= minLng && r.lng <= maxLng);
+}
+
+// ---- 후기 -------------------------------------------------------------
+//
+// 제보와 같은 길을 탄다. 앱은 노션 승인 큐에 넣기만 하고, 크론이 "공개"로 바뀐
+// 것만 KV 로 옮긴다. 화면은 KV 만 읽는다 — 상세를 열 때마다 노션을 부르면
+// 초당 3요청 제한에 바로 걸린다.
+//
+// KV 를 장소별로 쪼개지 않는다. 260개 장소마다 키를 따로 두면 상세를 열 때마다
+// KV 읽기가 나가는데, 오늘 이미 KV 하루 한도 경고를 한 번 받았다. 전체를 한
+// 덩어리로 두고(후기 1,000건이 300KB쯤이다) Worker 가 장소별로 거른다.
+const REVIEW_RATE_LIMIT_PER_HOUR = 5;
+
+async function handleReviewsGet(env, url) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  try {
+    const placeId = url.searchParams.get("placeId");
+    const all = await readPublicReviews(env);
+    const list = placeId ? all.filter((r) => r.placeId === placeId) : all;
+    // 최신 것을 먼저 보여준다. 오래된 후기가 위에 있으면 지금 상태와 다를 수 있다.
+    const reviews = list.toSorted((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return new Response(JSON.stringify({ reviews, summary: summarize(reviews) }), { status: 200, headers });
+  } catch (err) {
+    console.error("[reviews]", err);
+    return new Response(JSON.stringify({ reviews: [], summary: summarize([]) }), { status: 200, headers });
+  }
+}
+
+async function handleReviewPost(request, env, ctx) {
+  const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+  if (!env.NOTION_API_KEY || !env.NOTION_REVIEWS_DATABASE_ID) {
+    return new Response(JSON.stringify({ error: "후기 기능이 아직 준비 중이에요." }), { status: 503, headers });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "잘못된 요청 본문입니다." }), { status: 400, headers });
+  }
+
+  const invalid = validateReview(body || {});
+  if (invalid) return new Response(JSON.stringify({ error: invalid }), { status: 400, headers });
+
+  const { placeId, placeName, rating, ageBand, stayTime, revisit, text, photos, authorKey } = body;
+  if (!isNotionId(placeId)) {
+    return new Response(JSON.stringify({ error: "잘못된 장소 ID입니다." }), { status: 400, headers });
+  }
+
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  const allowed = await consumeRateLimit(env, {
+    scope: "review", ip, limit: REVIEW_RATE_LIMIT_PER_HOUR, windowSeconds: 3600,
+  });
+  if (!allowed) {
+    return new Response(
+      JSON.stringify({ error: `후기는 한 시간에 ${REVIEW_RATE_LIMIT_PER_HOUR}개까지 남길 수 있어요.` }),
+      { status: 429, headers }
+    );
+  }
+
+  // 같은 기기가 같은 장소에 이미 남겼으면 막는다. 공개된 것만 보므로 검수 대기 중인
+  // 내 후기와는 겹칠 수 있는데, 그건 검수자가 걸러낸다.
+  const key = String(authorKey || "").slice(0, 64).replace(/[^A-Za-z0-9-]/g, "");
+  if (alreadyReviewed(await readPublicReviews(env), placeId, key)) {
+    return new Response(JSON.stringify({ error: "이 장소에는 이미 후기를 남기셨어요." }), { status: 409, headers });
+  }
+
+  // 사진은 브라우저에서 이미 줄여 보낸다. 여기서는 형식과 크기만 본다.
+  const photoUrls = [];
+  const list = Array.isArray(photos) ? photos.slice(0, MAX_PHOTOS) : [];
+  for (const one of list) {
+    const decoded = decodeImageDataUrl(one);
+    if (!decoded) {
+      return new Response(JSON.stringify({ error: "사진은 JPEG·PNG 2MB 이하만 올릴 수 있어요." }), { status: 400, headers });
+    }
+    if (!env.IMAGES) break;
+    const objectKey = reportImageKey("review", decoded.contentType);
+    try {
+      /* oxlint-disable no-await-in-loop -- 최대 3장이라 순차로 넣어도 된다. */
+      await env.IMAGES.put(objectKey, decoded.bytes, { httpMetadata: { contentType: decoded.contentType } });
+      photoUrls.push(`${PUBLIC_BASE_URL}/images/${objectKey}`);
+    } catch (err) {
+      // 사진을 못 올려도 후기 자체는 살린다.
+      console.warn(`후기 사진 저장 실패: ${err.message}`);
+    }
+  }
+
+  const properties = {
+    "장소명": { title: [{ text: { content: String(placeName || "").trim().slice(0, 200) || "(장소명 없음)" } }] },
+    "장소": { relation: [{ id: placeId }] },
+    "별점": { select: { name: String(rating) } },
+    "상태": { select: { name: "대기중" } },
+    "작성자키": { rich_text: [{ text: { content: key } }] },
+    "제보자IP해시": { rich_text: [{ text: { content: await hashIp(ip) } }] },
+  };
+  if (ageBand) properties["아이나이"] = { select: { name: ageBand } };
+  if (stayTime) properties["머문시간"] = { select: { name: stayTime } };
+  if (revisit) properties["재방문의사"] = { select: { name: revisit } };
+  if (text && text.trim()) properties["후기"] = { rich_text: [{ text: { content: text.trim() } }] };
+  if (photoUrls.length) {
+    properties["사진"] = {
+      files: photoUrls.map((u, i) => ({
+        type: "external", name: `photo-${i + 1}.jpg`, external: { url: u },
+      })),
+    };
+  }
+
+  const res = await fetchWithTimeout("https://api.notion.com/v1/pages", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.NOTION_API_KEY}`,
+      "Notion-Version": "2022-06-28",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ parent: { database_id: env.NOTION_REVIEWS_DATABASE_ID }, properties }),
+  });
+  if (!res.ok) return upstreamErrorResponse("후기 저장에 실패했습니다.", await res.text());
+
+  ctx.waitUntil(
+    notifySlack(
+      env,
+      `⭐ 후기가 들어왔습니다 (${rating}점)\n• ${String(placeName || "").trim()}` +
+      `${ageBand ? ` · ${ageBand}` : ""}${photoUrls.length ? ` · 사진 ${photoUrls.length}장` : ""}` +
+      `${text ? `\n• ${String(text).slice(0, 120)}` : ""}`
+    ).catch((err) => console.warn(`후기 알림 실패: ${err.message}`))
+  );
+
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
+}
+
+// 노션에서 "공개"로 바꾼 후기만 KV 로 옮긴다. 검수를 통과하지 않은 후기는
+// 어디에도 보이지 않는다 — 이것이 App Store 1.2 의 필터링 요건에 대한 우리 답이다.
+async function refreshPublicReviews(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_REVIEWS_DATABASE_ID || !env.RATE_LIMIT) return 0;
+  const headers = {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+  const rows = [];
+  let cursor;
+  do {
+    /* oxlint-disable no-await-in-loop -- 페이지네이션이라 순차로 돈다. */
+    const res = await fetchWithTimeout(
+      `https://api.notion.com/v1/databases/${env.NOTION_REVIEWS_DATABASE_ID}/query`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          page_size: 100,
+          start_cursor: cursor,
+          filter: { property: "상태", select: { equals: "공개" } },
+        }),
+      }
+    );
+    if (!res.ok) return 0;
+    const data = await res.json();
+    rows.push(...(data.results || []));
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+
+  const reviews = rows.map((page) => {
+    const p = page.properties;
+    const pick = (name) => (p[name]?.select || {}).name || null;
+    return {
+      id: page.id,
+      placeId: (p["장소"]?.relation || [])[0]?.id || null,
+      placeName: (p["장소명"]?.title || []).map((t) => t.plain_text).join(""),
+      rating: Number(pick("별점")) || null,
+      ageBand: pick("아이나이"),
+      stayTime: pick("머문시간"),
+      revisit: pick("재방문의사"),
+      text: (p["후기"]?.rich_text || []).map((t) => t.plain_text).join(""),
+      photos: (p["사진"]?.files || []).map((f) => f.external?.url || f.file?.url).filter(Boolean),
+      authorKey: (p["작성자키"]?.rich_text || []).map((t) => t.plain_text).join(""),
+      createdAt: page.created_time,
+    };
+  }).filter((r) => r.placeId && r.rating);
+
+  await env.RATE_LIMIT.put(REVIEWS_KV_KEY, JSON.stringify(reviews));
+  return reviews.length;
 }
 
 async function handleToilets(env, url) {
@@ -1755,6 +1940,10 @@ async function handleRequest(request, env, ctx) {
     // 하루 동안 옛 데이터가 보일 수 있어서(오늘 실제로 겪음) 1시간으로 줄였다.
     return withEdgeCache(request, ctx, 3600, () => handleNursingRooms(env, url));
   }
+  if (url.pathname === "/api/reviews") {
+    if (request.method === "POST") return handleReviewPost(request, env, ctx);
+    return withEdgeCache(request, ctx, 300, () => handleReviewsGet(env, url));
+  }
   if (url.pathname === "/api/toilets") {
     return withEdgeCache(request, ctx, 3600, () => handleToilets(env, url));
   }
@@ -1847,6 +2036,11 @@ export default {
     }
     if (event.cron === REPORT_APPLY_CRON) {
       ctx.waitUntil(runScheduledReportApply(env));
+      // 검수를 통과한 후기를 KV 로 옮긴다. 제보와 같은 주기로 돈다 —
+      // 후기를 공개했는데 앱에 안 보이는 시간이 길면 검수자가 불안해진다.
+      ctx.waitUntil(
+        refreshPublicReviews(env).catch((err) => console.warn(`후기 갱신 실패: ${err.message}`))
+      );
       // 방문자 수 갱신도 여기 얹는다. 크론은 워커당 5개까지라 자리가 없다.
       //
       // 다만 30분에 한 번만 센다. 이 크론은 10분마다 도는데, 그때마다 KV에 쓰면

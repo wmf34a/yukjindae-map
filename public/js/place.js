@@ -118,7 +118,12 @@ function render(place) {
         <img class="place-detail__hero" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" />
         ${place.photoCredit ? `<figcaption class="place-detail__photo-credit">사진 ${escapeHtml(place.photoCredit)}</figcaption>` : ""}
       </figure>`
-    : "";
+    // 사진이 없다고 자리를 통째로 비우면 상단이 무너져 다른 장소와 다른 화면처럼
+    // 보인다. 남의 시설 사진을 대신 넣지는 않는다 — 청주랜드 기후변화체험교육관에
+    // 같은 부지의 어린이체험관 사진을 넣으면 다른 건물을 보여주는 것이 된다.
+    : `<div class="place-detail__hero place-detail__hero--empty">
+        <span>사진을 준비하고 있어요</span>
+      </div>`;
 
   const tags = [place.region, ...(place.categories || [])]
     .filter(Boolean)

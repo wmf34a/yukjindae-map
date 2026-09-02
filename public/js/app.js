@@ -259,7 +259,7 @@ function freeBadgeText(place) {
 function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
   const thumb = place.image
     ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
-    : `<div class="place-grid__thumb"></div>`;
+    : `<div class="place-grid__thumb place-grid__thumb--empty" aria-hidden="true"></div>`;
   const freeBadge = freeBadgeText(place);
   const badge = freeBadge ? `<span class="place-grid__free-badge">${escapeHtml(freeBadge)}</span>` : "";
   const rank = showRank ? monthlyRank(place) : null;

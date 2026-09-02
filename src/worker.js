@@ -1182,6 +1182,21 @@ async function handleReviewReport(request, env, ctx) {
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers });
 }
 
+// 자주 열리는 목록을 미리 받아 엣지 캐시에 채워 둔다.
+//
+// 우리 자신을 부르는 것이 이상해 보이지만, 그래야 withEdgeCache 가 평소와 똑같이
+// 동작해 같은 캐시 키에 값이 들어간다. 여기서 노션을 직접 부르면 캐시는 그대로
+// 비어 있다.
+//
+// KV 를 쓰지 않으므로 하루 쓰기 한도와 무관하다.
+export async function warmCaches(env, base = PUBLIC_BASE_URL) {
+  const paths = ["/api/places", "/api/festivals", "/api/banners", "/api/courses"];
+  const results = await Promise.allSettled(
+    paths.map((path) => fetchWithTimeout(`${base}${path}`, {}, 20_000))
+  );
+  return results.filter((r) => r.status === "fulfilled" && r.value.ok).length;
+}
+
 // 노션에서 "공개"로 바꾼 후기만 KV 로 옮긴다. 검수를 통과하지 않은 후기는
 // 어디에도 보이지 않는다 — 이것이 App Store 1.2 의 필터링 요건에 대한 우리 답이다.
 async function refreshPublicReviews(env) {
@@ -2209,6 +2224,15 @@ export default {
     }
     if (event.cron === REPORT_APPLY_CRON) {
       ctx.waitUntil(runScheduledReportApply(env));
+      // 목록 캐시를 데워 둔다.
+      //
+      // 사람이 없는 시간에는 캐시가 통째로 비어서, 새벽에 처음 들어온 한 사람이
+      // 노션 응답을 그대로 뒤집어쓴다. 실측 로그에 19.8초짜리가 있다 — 그 사람은
+      // 앱이 고장난 줄 알았을 것이다.
+      //
+      // 상세(/api/places/{id})도 이 목록 캐시에서 꺼내므로, 이것만 살아 있으면
+      // 장소 화면 전체가 함께 빨라진다.
+      ctx.waitUntil(warmCaches(env).catch((err) => console.warn(`캐시 예열 실패: ${err.message}`)));
       // 검수를 통과한 후기를 KV 로 옮긴다. 제보와 같은 주기로 돈다 —
       // 후기를 공개했는데 앱에 안 보이는 시간이 길면 검수자가 불안해진다.
       ctx.waitUntil(

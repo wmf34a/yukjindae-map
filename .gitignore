@@ -14,3 +14,10 @@ dist/
 
 # 장소 발굴 스크립트 중간 산출물
 tmp/
+
+# 인스타 캐러셀 렌더 산출물. tools/render.mjs · shoot.mjs 로 다시 만든다.
+instagram-carousel/out/
+instagram-carousel/out-*/
+instagram-carousel/shots/
+instagram-carousel/shots-*/
+instagram-carousel/미리보기/

@@ -15,7 +15,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- R2 업로드와 노션 쓰기는 순차로 돈다. */
 
@@ -29,11 +29,7 @@ if (!dir) {
 }
 const BASE = "https://yukjindae-map.wmf34a.workers.dev";
 const BUCKET = "yukjindae-map-images";
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 const CREDIT = process.env.PHOTO_CREDIT || "육진대 제공";
 
 const PROMPT = `이 사진을 장소 소개 카드에 쓸 수 있는지 판단해라. JSON만 출력한다.
@@ -60,20 +56,13 @@ async function check(buf) {
 }
 
 const places = [];
-let cursor;
-do {
-  const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of data.results) {
-    places.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      credit: p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "",
-    });
-  }
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    credit: p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "",
+  });
+}
 
 // macOS 는 한글 파일명을 자모 분리(NFD)로 저장한다 — "농"이 ㄴ+ㅗ+ㅇ 세 글자다.
 // 노션에서 온 "농"(한 글자)과 그대로 비교하면 열여섯 장이 모두 짝을 못 찾는다.

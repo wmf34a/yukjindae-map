@@ -12,7 +12,7 @@
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { loadVars, sleep, clean, tourApi } from "./lib/sources.mjs";
+import { loadVars, sleep, clean, tourApi, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- TourAPI 호출량 때문에 순차로 돈다. */
 
@@ -21,11 +21,7 @@ const apply = process.argv.includes("--apply");
 const tour = tourApi(vars.TOUR_API_KEY);
 const BASE = "https://yukjindae-map.wmf34a.workers.dev";
 const BUCKET = "yukjindae-map-images";
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 
 // --no-credit 을 주면 감사 파일 없이 "사진출처가 빈 곳"을 대상으로 삼는다.
 // 사진 자체는 멀쩡해도 어디서 왔는지 모르면 나중에 또 전수로 뒤져야 한다.
@@ -39,24 +35,15 @@ if (byCredit) {
   targets = audit.filter((r) => r.usable === false || r.error);
 }
 const places = [];
-{
-  let cursor;
-  do {
-    const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-      method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-    })).json();
-    for (const p of data.results) {
-      if (p.properties["공개여부"]?.checkbox !== true) continue;
-      places.push({
-        id: p.id,
-        name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-        credit: p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "",
-        lat: p.properties["위도"]?.number,
-        lng: p.properties["경도"]?.number,
-      });
-    }
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  if (p.properties["공개여부"]?.checkbox !== true) continue;
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    credit: p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "",
+    lat: p.properties["위도"]?.number,
+    lng: p.properties["경도"]?.number,
+  });
 }
 const byId = new Map(places.map((p) => [p.id, p]));
 if (byCredit) targets = places.filter((p) => !p.credit);

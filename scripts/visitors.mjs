@@ -64,7 +64,7 @@ function bar(n, max) {
 
 if (hourly) {
   // 어제(한국 기준)를 시간대별로. blob1 이 한국 날짜라 그대로 고르면 된다.
-  const yesterday = new Date(Date.now() + 9 * 3600e3 - 86400e3).toISOString().slice(0, 10);
+  const yesterday = todayInKst(new Date(Date.now() - 86400e3));
   const rows = (await query(`
     SELECT toHour(toDateTime(timestamp + 32400)) AS hour,
            COUNT(DISTINCT blob2) AS visitors,

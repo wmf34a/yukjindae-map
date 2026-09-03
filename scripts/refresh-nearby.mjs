@@ -9,38 +9,31 @@
 
 import fs from "node:fs";
 import { pickNearby, formatNearby } from "../src/place-pipeline.js";
-import { loadVars, sleep, makeKakaoNearby } from "./lib/sources.mjs";
+import { loadVars, sleep, makeKakaoNearby, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 카카오·노션 호출량 때문에 순차로 돈다. */
 
 const vars = loadVars();
 const apply = process.argv.includes("--apply");
-const H = { Authorization: `Bearer ${vars.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "content-type": "application/json" };
+const H = notionHeaders(vars);
 const findNearby = makeKakaoNearby(vars.KAKAO_REST_API_KEY);
 
 // 기계가 채운 곳만 다시 고른다. 등록자가 사람이면 직접 다녀와 적은 값이다.
 const MACHINE_AUTHORS = /공공데이터|TourAPI|자동/;
 
 const places = [];
-let cursor;
-do {
-  const d = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of d.results) {
-    places.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      lat: p.properties["위도"]?.number,
-      lng: p.properties["경도"]?.number,
-      author: p.properties["등록자"]?.rich_text?.[0]?.plain_text || "",
-      addr: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
-      맛집: p.properties["근처맛집"]?.rich_text?.[0]?.plain_text || "",
-      카페: p.properties["근처카페"]?.rich_text?.[0]?.plain_text || "",
-    });
-  }
-  cursor = d.has_more ? d.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    lat: p.properties["위도"]?.number,
+    lng: p.properties["경도"]?.number,
+    author: p.properties["등록자"]?.rich_text?.[0]?.plain_text || "",
+    addr: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
+    맛집: p.properties["근처맛집"]?.rich_text?.[0]?.plain_text || "",
+    카페: p.properties["근처카페"]?.rich_text?.[0]?.plain_text || "",
+  });
+}
 
 const targets = places.filter((p) => typeof p.lat === "number" && MACHINE_AUTHORS.test(p.author));
 console.log(`전체 ${places.length}곳 중 기계가 채운 ${targets.length}곳을 다시 고릅니다\n`);

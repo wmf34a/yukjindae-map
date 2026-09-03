@@ -9,7 +9,7 @@
 // 잘못된 정보가 그대로 노출되므로, 무엇이 켜지는지 먼저 눈으로 보게 한다.
 
 import fs from "node:fs";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- Notion 쓰기는 초당 제한이 있어 순차로 돈다. */
 
@@ -19,11 +19,7 @@ const apply = args.includes("--apply");
 const all = args.includes("--all");
 const region = args.find((a) => !a.startsWith("--")) || "";
 
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 
 const text = (p, k) => p.properties[k]?.rich_text?.[0]?.plain_text || "";
 
@@ -50,22 +46,9 @@ function missingEssentials(p) {
 }
 
 const pending = [];
-let cursor;
-do {
-  const res = await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST",
-    headers: H,
-    body: JSON.stringify({
-      page_size: 100,
-      start_cursor: cursor,
-      filter: { property: "공개여부", checkbox: { equals: false } },
-    }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(JSON.stringify(data).slice(0, 200));
-  pending.push(...data.results);
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+pending.push(...await queryAll(vars, vars.NOTION_DATABASE_ID, {
+  filter: { property: "공개여부", checkbox: { equals: false } },
+}));
 
 const targets = pending
   .map((p) => ({

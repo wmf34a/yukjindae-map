@@ -22,6 +22,41 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const clean = (s) =>
   String(s || "").replace(/<[^>]*>/g, " ").replace(/&[a-z]+;/g, " ").replace(/\s+/g, " ").trim();
 
+// ── Notion ──────────────────────────────────────────────
+//
+// 스크립트 열여섯 개가 저마다 같은 헤더 리터럴과 같은 do/while 페이지네이션을
+// 적고 있었다. 그중 절반은 res.ok 를 안 봐서, 키가 틀리면 빈 배열을 "장소 0곳"
+// 이라는 정상 결과로 착각했다 — 여기서는 던진다.
+
+export function notionHeaders(vars) {
+  return {
+    Authorization: `Bearer ${vars.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+}
+
+/** DB를 끝까지 훑어 페이지를 전부 모은다. body 로 filter·sorts 를 얹을 수 있다. */
+export async function queryAll(vars, databaseId, body = {}) {
+  const headers = notionHeaders(vars);
+  const pages = [];
+  let cursor;
+  do {
+    /* oxlint-disable-next-line no-await-in-loop -- 커서 페이지네이션은 순차일 수밖에 없다. */
+    const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ page_size: 100, start_cursor: cursor, ...body }),
+    });
+    /* oxlint-disable-next-line no-await-in-loop -- 위와 같다. */
+    const data = await res.json();
+    if (!res.ok) throw new Error(`노션 조회 실패: ${JSON.stringify(data).slice(0, 200)}`);
+    pages.push(...data.results);
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+  return pages;
+}
+
 // ── TourAPI ─────────────────────────────────────────────
 const TOUR_BASE = "https://apis.data.go.kr/B551011/KorService2";
 const TOUR_COMMON = { MobileOS: "ETC", MobileApp: "yukjindaemap", _type: "json" };

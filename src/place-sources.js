@@ -38,41 +38,7 @@ export function tourApi(key) {
   };
 }
 
-// 이름만 아는 장소를 TourAPI에서 찾는다. 동명 시설이 다른 지역에 있으므로 주소로
-// 지역을 확인한 것만 통과시킨다 — "아쿠아플라넷 광교"가 제주 검색에 걸린 적이 있다.
-export function pickKeywordMatch(items, { name, region }) {
-  const token = String(name).replace(/\s/g, "");
-  const scored = (items || [])
-    .filter((x) => x && x.title)
-    .filter((x) => !region || String(x.addr1 || "").includes(region.slice(0, 2)))
-    .map((x) => ({
-      item: x,
-      exact: clean(x.title).replace(/\s/g, "") === token,
-      hasImage: Boolean(x.firstimage),
-    }));
-  if (!scored.length) return null;
-  const best = scored.find((s) => s.exact && s.hasImage)
-    || scored.find((s) => s.exact)
-    || scored.find((s) => s.hasImage)
-    || scored[0];
-  return best.item;
-}
 
-// 운영시간·요금·주차는 콘텐츠 타입마다 필드 이름이 달라 두 벌을 같이 본다.
-export async function fetchTourDetail(tour, contentId, contentTypeId) {
-  const intro = tour.items(await tour.call("detailIntro2", { contentId, contentTypeId }))[0] || {};
-  const common = tour.items(await tour.call("detailCommon2", { contentId }))[0] || {};
-  const homepage = clean(common.homepage).match(/https?:\/\/[^\s"'<]+/);
-  return {
-    hours: clean(intro.usetime || intro.usetimeculture),
-    rest: clean(intro.restdate || intro.restdateculture),
-    fee: clean(intro.usefee || intro.usefeeculture),
-    parking: clean(intro.parking || intro.parkingculture),
-    tel: clean(intro.infocenter || intro.infocenterculture),
-    overview: clean(common.overview).slice(0, 300),
-    homepage: homepage ? homepage[0] : "",
-  };
-}
 
 // ── 카카오 ──────────────────────────────────────────────
 const KAKAO_FOOD = "FD6";
@@ -198,18 +164,3 @@ export function makeSearchPosts({ searchClientId, searchClientSecret }) {
   };
 }
 
-// env에서 필요한 키를 뽑아 어댑터 한 벌을 만든다. Worker와 CLI가 같은 것을 쓴다.
-export function makeSources(env) {
-  return {
-    tour: tourApi(env.TOUR_API_KEY),
-    findNearby: makeKakaoNearby(env.KAKAO_REST_API_KEY),
-    geocode: makeGeocode({
-      mapClientId: env.NAVER_MAP_CLIENT_ID,
-      mapClientSecret: env.NAVER_MAP_CLIENT_SECRET,
-    }),
-    searchPosts: makeSearchPosts({
-      searchClientId: env.NAVER_SEARCH_CLIENT_ID,
-      searchClientSecret: env.NAVER_SEARCH_CLIENT_SECRET,
-    }),
-  };
-}

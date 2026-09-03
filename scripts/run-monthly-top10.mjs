@@ -11,7 +11,7 @@
 
 import { runMonthlyTop10 } from "../src/monthly-top10.js";
 import { toPlace } from "../src/notion.js";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- Notion 페이징과 Claude 호출은 순차로 돈다. */
 
@@ -24,26 +24,12 @@ if (!/^\d{4}-\d{2}$/.test(monthKey || "")) {
   process.exit(1);
 }
 
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 
 async function fetchPlaces() {
-  const results = [];
-  let cursor;
-  do {
-    const body = { page_size: 100, filter: { property: "공개여부", checkbox: { equals: true } } };
-    if (cursor) body.start_cursor = cursor;
-    const res = await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-      method: "POST", headers: H, body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(JSON.stringify(data).slice(0, 200));
-    results.push(...data.results);
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
+  const results = await queryAll(vars, vars.NOTION_DATABASE_ID, {
+    filter: { property: "공개여부", checkbox: { equals: true } },
+  });
   return results.map(toPlace).filter((p) => p.name);
 }
 

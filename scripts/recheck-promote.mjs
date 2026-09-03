@@ -9,6 +9,7 @@
 
 import fs from "node:fs";
 import { loadVars, sleep } from "./lib/sources.mjs";
+import { todayInKst } from "../src/kst.js";
 
 /* oxlint-disable no-await-in-loop -- 호출량 때문에 순차로 돈다. */
 
@@ -19,7 +20,7 @@ const H = {
   "Notion-Version": "2022-06-28",
   "content-type": "application/json",
 };
-const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const today = todayInKst();
 
 const retryOnly = process.argv.includes("--retry-failed");
 const judged = JSON.parse(fs.readFileSync("tmp/승격판정.json", "utf8"));

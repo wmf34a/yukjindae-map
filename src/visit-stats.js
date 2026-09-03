@@ -9,6 +9,8 @@
 // 도는 크론이 미리 계산해 KV 에 넣어 두고, 화면은 그 값을 읽는다 — KV 쓰기가
 // 하루 144번뿐이라 한도에 걸릴 일이 없다.
 
+import { todayInKst } from "./kst.js";
+
 export const STATS_KV_KEY = "visit:stats";
 export const ACCOUNT_ID = "4f082846f63415e0d1300ec9c6e5c6cb";
 export const DATASET = "yukjindae_visits";
@@ -35,9 +37,7 @@ export const TOTAL_BASELINE = 1300;
 // 이 실제로 센 값이 더해진다.
 export const BASELINE_UNTIL = "2026-09-01";
 
-export function todayInKst(now = new Date()) {
-  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
+export { todayInKst };
 
 async function runSql(token, sql) {
   const res = await fetch(

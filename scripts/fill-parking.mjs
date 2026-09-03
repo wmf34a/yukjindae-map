@@ -12,7 +12,7 @@ import {
   inferParking, pickParkingSnippets, nameVariants, buildParkingWebPrompt, parseParking, PLACES_PER_CALL,
 } from "../src/parking-infer.js";
 import { districtOf, sidoOf } from "../src/place-pipeline.js";
-import { loadVars, sleep, makeSearchPosts } from "./lib/sources.mjs";
+import { loadVars, sleep, makeSearchPosts, notionHeaders } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 네이버·Claude 호출량 때문에 순차로 돈다. */
 
@@ -25,11 +25,7 @@ const applyOnly = args.includes("--apply-only");
 // 블로그 근거로 못 채운 곳에 쓴다. 네이버 블로그 대신 웹 검색 모델에게 직접 묻는다.
 const web = args.includes("--web");
 const file = args.find((a) => !a.startsWith("--")) || "tmp/주차_검색필요.json";
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 const searchPosts = makeSearchPosts(vars);
 
 async function askWeb(prompt) {

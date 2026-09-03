@@ -11,7 +11,8 @@
 // 것은 사람이 판단해야 한다. 이번 검수에서 조회 답이 틀렸던 적이 여러 번 있다.
 
 import fs from "node:fs";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
+import { todayInKst } from "../src/kst.js";
 
 /* oxlint-disable no-await-in-loop -- 검색 호출량 때문에 순차로 돈다. */
 
@@ -19,12 +20,8 @@ const vars = loadVars();
 const apply = process.argv.includes("--apply");
 const limitArg = process.argv.indexOf("--limit");
 const limit = limitArg === -1 ? Infinity : Number(process.argv[limitArg + 1]) || Infinity;
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
-const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const H = notionHeaders(vars);
+const today = todayInKst();
 
 async function ask(q) {
   for (let i = 0; i < 3; i += 1) {
@@ -47,25 +44,18 @@ async function ask(q) {
 
 const text = (p) => p?.rich_text?.map((t) => t.plain_text).join("") || "";
 const places = [];
-let cursor;
-do {
-  const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of data.results) {
-    if (p.properties["공개여부"]?.checkbox !== true) continue;
-    if (p.properties["확인상태"]?.select?.name !== "블로그힌트") continue;
-    places.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      addr: text(p.properties["주소"]),
-      hours: text(p.properties["운영시간"]),
-      fee: text(p.properties["입장료"]),
-      parking: p.properties["주차가능여부"]?.select?.name || "",
-    });
-  }
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  if (p.properties["공개여부"]?.checkbox !== true) continue;
+  if (p.properties["확인상태"]?.select?.name !== "블로그힌트") continue;
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    addr: text(p.properties["주소"]),
+    hours: text(p.properties["운영시간"]),
+    fee: text(p.properties["입장료"]),
+    parking: p.properties["주차가능여부"]?.select?.name || "",
+  });
+}
 
 const queue = places.slice(0, limit);
 console.log(`블로그힌트 ${places.length}곳 · 이번에 볼 곳 ${queue.length}\n`);

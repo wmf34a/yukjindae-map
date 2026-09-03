@@ -8,18 +8,14 @@
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- Notion 쓰기는 초당 3건 제한이 있어 일부러 순차로 돈다. */
 
 const vars = loadVars();
 const BASE = "https://yukjindae-map.wmf34a.workers.dev";
 const BUCKET = "yukjindae-map-images";
-const headers = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const headers = notionHeaders(vars);
 const rt = (s) => (s ? [{ text: { content: String(s).slice(0, 2000) } }] : []);
 
 const file = process.argv[2];

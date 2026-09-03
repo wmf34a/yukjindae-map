@@ -12,17 +12,13 @@ import {
   AMENITY_FIELDS, PLACES_PER_CALL,
 } from "../src/amenity-infer.js";
 import { districtOf, sidoOf } from "../src/place-pipeline.js";
-import { loadVars, sleep, makeSearchPosts } from "./lib/sources.mjs";
+import { loadVars, sleep, makeSearchPosts, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 네이버·Claude 호출량 때문에 순차로 돈다. */
 
 const vars = loadVars();
 const apply = process.argv.includes("--apply");
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 const searchPosts = makeSearchPosts(vars);
 
 async function askClaude(prompt) {
@@ -47,23 +43,16 @@ async function askClaude(prompt) {
 
 // 세 항목 중 하나라도 비어 있으면 대상이다.
 const targets = [];
-let cursor;
-do {
-  const d = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of d.results) {
-    const has = Object.fromEntries(AMENITY_FIELDS.map((f) => [f, Boolean(p.properties[f]?.checkbox)]));
-    if (AMENITY_FIELDS.every((f) => has[f])) continue;
-    targets.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      address: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
-      has,
-    });
-  }
-  cursor = d.has_more ? d.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  const has = Object.fromEntries(AMENITY_FIELDS.map((f) => [f, Boolean(p.properties[f]?.checkbox)]));
+  if (AMENITY_FIELDS.every((f) => has[f])) continue;
+  targets.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    address: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
+    has,
+  });
+}
 
 console.log(`편의시설이 덜 채워진 장소 ${targets.length}곳\n`);
 

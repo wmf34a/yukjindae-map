@@ -10,17 +10,13 @@
 // 아니라 주기적으로 확인해야 한다.
 
 import fs from "node:fs";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 남의 서버를 두드리는 일이라 순차로 돈다. */
 
 const vars = loadVars();
 const apply = process.argv.includes("--apply");
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 // 봇을 막는 곳이 많아 평범한 브라우저처럼 요청한다.
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126 Safari/537.36" };
 
@@ -47,17 +43,10 @@ async function probe(url) {
 }
 
 const places = [];
-let cursor;
-do {
-  const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of data.results) {
-    const url = p.properties["공식사이트"]?.url;
-    if (url) places.push({ id: p.id, name: p.properties["장소명"]?.title?.[0]?.plain_text || "", url });
-  }
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  const url = p.properties["공식사이트"]?.url;
+  if (url) places.push({ id: p.id, name: p.properties["장소명"]?.title?.[0]?.plain_text || "", url });
+}
 
 console.log(`공식사이트 ${places.length}곳 확인\n`);
 const dead = [];

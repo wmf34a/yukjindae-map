@@ -88,7 +88,7 @@ export function normalizeBusanItem(item) {
 
 // data.go.kr 서비스키는 이미 URL 인코딩된 형태라 URLSearchParams에 그대로 넣으면
 // 이중 인코딩되므로(tourapi.js의 callTourApi와 동일한 이유) 먼저 디코딩한다.
-export async function fetchBusanNursingRooms(env) {
+async function fetchBusanNursingRooms(env) {
   if (!env.TOUR_API_KEY) return [];
 
   const query = new URLSearchParams({
@@ -122,7 +122,7 @@ export function filterNursingStations(items) {
   return items.filter((item) => item.nrsrm_estnc === "Y" && item.stn_nm).map((item) => ({ name: item.stn_nm }));
 }
 
-export async function fetchKorailNursingStations(env) {
+async function fetchKorailNursingStations(env) {
   if (!env.TOUR_API_KEY) return [];
 
   const query = new URLSearchParams({
@@ -148,7 +148,7 @@ export async function fetchKorailNursingStations(env) {
 // 못 찾는다 — 실제로 써보니 항상 0건이었다. 대신 /api/nearby-place가 쓰는
 // 지역검색 API(local.json)를 쓴다: 장소명으로 검색되고 mapx/mapy(WGS84 좌표에
 // 10^7을 곱한 정수)를 바로 준다.
-export async function geocodeStation(env, stationName) {
+async function geocodeStation(env, stationName) {
   if (!env.NAVER_SEARCH_CLIENT_ID || !env.NAVER_SEARCH_CLIENT_SECRET) return null;
 
   try {
@@ -195,7 +195,7 @@ export function parseSeoulMetroNursingItems(xml) {
     .filter((item) => item.stnNm);
 }
 
-export async function fetchSeoulMetroNursingRooms(env) {
+async function fetchSeoulMetroNursingRooms(env) {
   if (!env.TOUR_API_KEY) return [];
 
   const query = new URLSearchParams({

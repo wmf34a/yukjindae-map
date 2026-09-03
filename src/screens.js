@@ -19,9 +19,18 @@ export const SCREENS = new Set([
   "privacy",
 ]);
 
+// 파일 이름과 화면 이름이 다른 것들. 화면 이름을 정하는 곳은 여기 하나여야 해서
+// 브라우저가 보내는 경로 조각을 여기서 받는다 — 예전에는 util.js 가 같은 표를 한 벌
+// 더 들고 있었고, 미니앱 번들은 스냅샷이라 옛 표를 든 번들이 한동안 돌아다닌다.
+const ALIASES = {
+  index: "home",
+  "festival-detail": "festival",
+};
+
 /** 목록에 없는 이름은 "other" 로 뭉갠다 — 버리지는 않는다. 새 화면이 생겼다는 신호일 수 있다. */
 export function normalizeScreen(value) {
-  const name = String(value || "").trim().toLowerCase().slice(0, 20);
-  if (!name) return "home"; // 화면을 안 보낸 옛 번들은 홈으로 본다
+  const raw = String(value || "").trim().toLowerCase().slice(0, 20);
+  if (!raw) return "home"; // 화면을 안 보낸 옛 번들은 홈으로 본다
+  const name = ALIASES[raw] || raw;
   return SCREENS.has(name) ? name : "other";
 }

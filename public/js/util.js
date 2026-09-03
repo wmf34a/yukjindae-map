@@ -70,9 +70,15 @@ function festivalDday(festival) {
 // 매월 1일 크론이 매기는 "이달의 지역별 Top 10" 순위. 갱신이 실패하면 지난달
 // 순위가 노션에 그대로 남으므로, 추천월이 이번 달과 같을 때만 순위로 인정한다 —
 // 8월에 뽑은 물놀이장이 9월에도 1위로 서 있으면 추천이 아니라 방해가 된다.
+// 한국 기준 지금. 서버가 UTC라 그냥 Date 를 쓰면 자정 무렵 아홉 시간 동안
+// 어제로 판단한다. util.js 는 클래식 스크립트라 src/kst.js 를 import 할 수 없어
+// 여기에 한 벌 둔다 — 흩어져 있던 두 벌을 이걸로 합쳤다.
+function kstNow() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000);
+}
+
 function currentMonthKey() {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().slice(0, 7);
+  return kstNow().toISOString().slice(0, 7);
 }
 
 // 막아야 하는 것은 "지난달 순위가 남아 있는 것"이지 "다음 달 것이 미리 매겨진 것"이
@@ -172,7 +178,7 @@ function activeEvent(place) {
   const info = String(place?.eventInfo || "").trim();
   const end = String(place?.eventEndDate || "").slice(0, 10);
   if (!info || !end) return null;
-  const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = kstNow().toISOString().slice(0, 10);
   if (end < today) return null;
   return { info, end, source: place.eventSourceUrl || "" };
 }
@@ -329,23 +335,11 @@ function trackScreen(name) {
 
 // 페이지마다 호출을 심지 않는다. util.js 는 모든 화면이 싣는 파일이라, 여기서
 // 경로를 보고 한 번만 남기면 새 화면이 생겨도 빠뜨릴 일이 없다.
-const SCREEN_BY_PATH = {
-  "": "home",
-  "index": "home",
-  "map": "map",
-  "place": "place",
-  "courses": "courses",
-  "course": "course",
-  "favorite": "favorite",
-  "festival": "festival",
-  "festival-detail": "festival",
-  "about": "about",
-  "privacy": "privacy",
-};
-
+//
+// 이름을 아는 것은 서버(src/screens.js)다. 여기서 표를 한 벌 더 들면 새 화면이
+// 생길 때마다 두 곳을 고쳐야 하고, 미니앱 번들은 스냅샷이라 한쪽만 갱신된다.
 function currentScreen() {
-  const last = location.pathname.split("/").pop() || "";
-  return SCREEN_BY_PATH[last.replace(/\.html$/, "")] || "other";
+  return (location.pathname.split("/").pop() || "").replace(/\.html$/, "");
 }
 
 // document 가 없는 곳에서도 이 파일이 읽힌다(테스트가 순수 함수만 꺼내 쓴다).
@@ -354,7 +348,6 @@ if (typeof document !== "undefined") {
   document.addEventListener("DOMContentLoaded", () => trackScreen(currentScreen()));
 }
 
-window.trackScreen = trackScreen;
 window.deviceId = deviceId;
 window.naverDirectionsUrl = naverDirectionsUrl;
 window.escapeHtml = escapeHtml;

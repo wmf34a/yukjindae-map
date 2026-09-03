@@ -25,3 +25,11 @@ describe("normalizeScreen", () => {
     expect(normalizeScreen("a".repeat(200))).toBe("other");
   });
 });
+
+// 화면 이름을 정하는 곳이 서버 하나가 되면서, 브라우저는 경로 조각을 그대로 보낸다.
+describe("파일 이름 별칭", () => {
+  it("경로 조각을 화면 이름으로 옮긴다", () => {
+    expect(normalizeScreen("index")).toBe("home");
+    expect(normalizeScreen("festival-detail")).toBe("festival");
+  });
+});

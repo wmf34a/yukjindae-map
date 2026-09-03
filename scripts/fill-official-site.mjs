@@ -11,17 +11,13 @@
 // 없으니, 사용자가 직접 확인할 길을 열어 둔다.
 
 import fs from "node:fs";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 네이버 검색은 초당 제한이 있어 순차로 돈다. */
 
 const vars = loadVars();
 const apply = process.argv.includes("--apply");
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 
 // 블로그·카페·SNS는 공식 사이트가 아니다. 지도 링크도 원본이 아니라 중계다.
 const NOT_OFFICIAL = /blog\.|cafe\.|instagram\.|facebook\.|youtube\.|tistory\.|brunch\.|map\.naver|place\.naver|booking\.naver/i;
@@ -40,22 +36,15 @@ async function searchLocal(query) {
 const strip = (s) => String(s || "").replace(/<[^>]+>/g, "").replace(/\s/g, "");
 
 const places = [];
-let cursor;
-do {
-  const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of data.results) {
-    places.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      addr: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
-      official: p.properties["공식사이트"]?.url || "",
-      pub: p.properties["공개여부"]?.checkbox === true,
-    });
-  }
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    addr: p.properties["주소"]?.rich_text?.[0]?.plain_text || "",
+    official: p.properties["공식사이트"]?.url || "",
+    pub: p.properties["공개여부"]?.checkbox === true,
+  });
+}
 
 const targets = places.filter((p) => !p.official);
 console.log(`전체 ${places.length}곳 · 공식사이트 없는 곳 ${targets.length}곳\n`);

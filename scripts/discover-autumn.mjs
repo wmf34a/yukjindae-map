@@ -22,7 +22,7 @@ import {
 import { inferCategories } from "../src/category-infer.js";
 import {
   loadVars, sleep, clean, tourApi, makeKakaoNearby, fetchDetail,
-  makeGeocode, makeSearchPosts, makeRoadDistance,
+  makeGeocode, makeSearchPosts, makeRoadDistance, queryAll,
 } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- TourAPI·네이버 모두 초당 제한이 있어 순차로 돈다. */
@@ -45,7 +45,7 @@ const geocode = makeGeocode(vars);
 const searchPosts = makeSearchPosts(vars);
 const findNearby = makeKakaoNearby(vars.KAKAO_REST_API_KEY);
 const roadDistance = makeRoadDistance(vars);
-const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const today = todayInKst();
 
 // TourAPI 지역코드 → 우리 권역. appRegion 이 주소로 한 번 더 정확히 나눈다.
 const AREAS = {
@@ -56,24 +56,10 @@ const AREAS = {
 
 async function existingNames() {
   const names = new Set();
-  let cursor;
-  do {
-    const res = await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-        "Notion-Version": "2022-06-28",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-    });
-    const data = await res.json();
-    for (const page of data.results || []) {
-      const t = page.properties?.["장소명"]?.title?.[0]?.plain_text;
-      if (t) names.add(t.replace(/\s/g, ""));
-    }
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
+  for (const page of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+    const t = page.properties?.["장소명"]?.title?.[0]?.plain_text;
+    if (t) names.add(t.replace(/\s/g, ""));
+  }
   return names;
 }
 

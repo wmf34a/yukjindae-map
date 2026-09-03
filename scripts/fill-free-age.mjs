@@ -9,7 +9,7 @@
 
 import fs from "node:fs";
 import { inferAges, PLACES_PER_CALL } from "../src/free-age-infer.js";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, notionHeaders } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 검색 호출량 때문에 순차로 돈다. */
 
@@ -24,11 +24,7 @@ const applyOnly = args.includes("--apply-only");
 const one = args.includes("--one");
 const perCall = one ? 1 : PLACES_PER_CALL;
 const file = args.find((a) => !a.startsWith("--")) || "tmp/무료연령_대상.json";
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
+const H = notionHeaders(vars);
 
 async function askWeb(prompt) {
   const res = await fetch("https://api.perplexity.ai/chat/completions", {

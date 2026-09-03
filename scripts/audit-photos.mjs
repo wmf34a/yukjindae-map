@@ -14,7 +14,7 @@
 
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 이미지를 한 장씩 보내야 한다. */
 
@@ -22,11 +22,6 @@ const vars = loadVars();
 const onlyNoCredit = process.argv.includes("--no-credit");
 // 앞선 실행에서 판정에 실패한 것만 다시 본다.
 const onlyFailed = process.argv.includes("--retry-failed");
-const H = {
-  Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-  "Notion-Version": "2022-06-28",
-  "content-type": "application/json",
-};
 
 const PROMPT = `이 사진을 장소 소개 카드에 쓸 수 있는지 판단해라. JSON만 출력한다.
 
@@ -71,21 +66,14 @@ async function classify(buf, mime) {
 }
 
 const places = [];
-let cursor;
-do {
-  const data = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of data.results) {
-    if (p.properties["공개여부"]?.checkbox !== true) continue;
-    const url = p.properties["사진"]?.files?.[0]?.external?.url;
-    if (!url) continue;
-    const credit = p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "";
-    if (onlyNoCredit && credit) continue;
-    places.push({ id: p.id, name: p.properties["장소명"]?.title?.[0]?.plain_text || "", url, credit });
-  }
-  cursor = data.has_more ? data.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  if (p.properties["공개여부"]?.checkbox !== true) continue;
+  const url = p.properties["사진"]?.files?.[0]?.external?.url;
+  if (!url) continue;
+  const credit = p.properties["사진출처"]?.rich_text?.map((t) => t.plain_text).join("") || "";
+  if (onlyNoCredit && credit) continue;
+  places.push({ id: p.id, name: p.properties["장소명"]?.title?.[0]?.plain_text || "", url, credit });
+}
 
 let queue = places;
 if (onlyFailed && fs.existsSync("tmp/사진감사.json")) {

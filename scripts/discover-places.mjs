@@ -18,11 +18,11 @@ import {
 // 비 오는 날 실내 추천에서도 빠졌을 것이다.
 import { inferCategories } from "../src/category-infer.js";
 import {
+  loadVars, sleep, clean, tourApi, makeKakaoNearby, fetchDetail,
+  makeGeocode, makeSearchPosts, makeRoadDistance, queryAll,
+} from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- TourAPI·네이버 모두 초당 호출 제한이 있어 일부러 순차로 돈다. */
-  loadVars, sleep, clean, tourApi, makeKakaoNearby, fetchDetail,
-  makeGeocode, makeSearchPosts, makeRoadDistance,
-} from "./lib/sources.mjs";
 
 const REGION_AREA_CODE = {
   서울: "1", 인천: "2", 대전: "3", 대구: "4", 광주: "5", 부산: "6", 울산: "7", 세종: "8",
@@ -51,29 +51,15 @@ const geocode = makeGeocode(vars);
 const searchPosts = makeSearchPosts(vars);
 const findNearby = makeKakaoNearby(vars.KAKAO_REST_API_KEY);
 const roadDistance = makeRoadDistance(vars);
-const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+const today = todayInKst();
 
 // 이미 등록된 곳은 다시 발굴하지 않는다.
 async function existingNames() {
   const names = new Set();
-  let cursor;
-  do {
-    const res = await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${vars.NOTION_API_KEY}`,
-        "Notion-Version": "2022-06-28",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-    });
-    const data = await res.json();
-    for (const page of data.results || []) {
-      const t = page.properties?.["장소명"]?.title?.[0]?.plain_text;
-      if (t) names.add(t.replace(/\s/g, ""));
-    }
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
+  for (const page of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+    const t = page.properties?.["장소명"]?.title?.[0]?.plain_text;
+    if (t) names.add(t.replace(/\s/g, ""));
+  }
   return names;
 }
 

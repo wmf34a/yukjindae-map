@@ -10,12 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { pickNearest, NEARBY_SEARCH_RADIUS_M } from "../src/nearby-lookup.js";
-import { loadVars, sleep } from "./lib/sources.mjs";
+import { loadVars, sleep, queryAll } from "./lib/sources.mjs";
 
 /* oxlint-disable no-await-in-loop -- 카카오 호출량 때문에 순차로 돈다. */
 
 const vars = loadVars();
-const H = { Authorization: `Bearer ${vars.NOTION_API_KEY}`, "Notion-Version": "2022-06-28", "content-type": "application/json" };
 
 // 화면이 쓰는 것과 똑같은 규칙으로 대표 상호를 뽑아야 한다. 여기서 다르게 자르면
 // 실제로는 멀쩡한 값이 문제로 잡힌다 — 단순 split을 썼다가 괄호 안 주소의 쉼표에서
@@ -50,23 +49,16 @@ async function findNear(query, origin) {
 }
 
 const places = [];
-let cursor;
-do {
-  const d = await (await fetch(`https://api.notion.com/v1/databases/${vars.NOTION_DATABASE_ID}/query`, {
-    method: "POST", headers: H, body: JSON.stringify({ page_size: 100, start_cursor: cursor }),
-  })).json();
-  for (const p of d.results) {
-    places.push({
-      id: p.id,
-      name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
-      lat: p.properties["위도"]?.number,
-      lng: p.properties["경도"]?.number,
-      맛집: p.properties["근처맛집"]?.rich_text?.[0]?.plain_text || "",
-      카페: p.properties["근처카페"]?.rich_text?.[0]?.plain_text || "",
-    });
-  }
-  cursor = d.has_more ? d.next_cursor : null;
-} while (cursor);
+for (const p of await queryAll(vars, vars.NOTION_DATABASE_ID)) {
+  places.push({
+    id: p.id,
+    name: p.properties["장소명"]?.title?.[0]?.plain_text || "",
+    lat: p.properties["위도"]?.number,
+    lng: p.properties["경도"]?.number,
+    맛집: p.properties["근처맛집"]?.rich_text?.[0]?.plain_text || "",
+    카페: p.properties["근처카페"]?.rich_text?.[0]?.plain_text || "",
+  });
+}
 
 console.log(`장소 ${places.length}곳 검증 시작\n`);
 

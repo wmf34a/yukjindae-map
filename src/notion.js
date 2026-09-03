@@ -148,3 +148,13 @@ export function toFestival(page) {
     tourApiId: text(p["TourAPI_ID"]),
   };
 }
+
+// 노션 REST 헤더. worker.js 와 크론이 열일곱 군데에서 같은 리터럴을 적고 있었고,
+// 버전 문자열이 한 곳만 어긋나도 그 경로만 조용히 다르게 동작한다.
+export function notionHeaders(env) {
+  return {
+    Authorization: `Bearer ${env.NOTION_API_KEY}`,
+    "Notion-Version": "2022-06-28",
+    "content-type": "application/json",
+  };
+}

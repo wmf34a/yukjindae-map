@@ -6,16 +6,14 @@
 //
 // 노출기간이 비어 있으면 예전처럼 체크박스만 본다 — 기존 배너를 건드리지 않는다.
 
-// 한국 기준 오늘 날짜(YYYY-MM-DD). 서버가 UTC라 그냥 today를 쓰면 자정 무렵
-// 아홉 시간 동안 어제 날짜로 판단한다.
-export function todayInKst(now = new Date()) {
-  return new Date(now.getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
+import { todayInKst } from "./kst.js";
 
 /**
  * @param {{startDate?: string, endDate?: string}} banner
  * @param {string} [today] YYYY-MM-DD
  */
+export { todayInKst };
+
 export function isWithinWindow(banner, today = todayInKst()) {
   const start = String(banner?.startDate || "").slice(0, 10);
   const end = String(banner?.endDate || "").slice(0, 10);

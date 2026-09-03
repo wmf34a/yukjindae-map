@@ -714,6 +714,12 @@ body {
   text-overflow: ellipsis;
 }
 
+/* 지역을 고른 뒤 목록으로 내려갈 때 제목이 sticky 헤더에 가리지 않게 한다. */
+#place-section,
+#place-heading {
+  scroll-margin-top: 58px;
+}
+
 /* Category tags */
 .tag-filter {
   display: flex;

@@ -82,11 +82,68 @@ function selectRegion(region) {
   const isSelecting = state.region !== region;
   state.region = isSelecting ? region : null;
   state.showAll = false;
-  renderRegionMap();
-  renderRegionLegend();
-  renderPlaces();
-  if (isSelecting) {
-    document.getElementById("place-list").scrollIntoView({ behavior: "smooth", block: "start" });
+  // 누른 지도가 발밑에서 움직이지 않도록 지도를 기준으로 잡는다.
+  keepAnchor(document.getElementById("region-map"), () => {
+    renderRegionMap();
+    renderRegionLegend();
+    renderPlaces();
+    placeResults();
+  });
+  if (isSelecting) revealResults();
+}
+
+// 목록은 찾은 자리에서 나온다.
+//
+// 검색창과 지도는 화면 아래에 있는데 장소 목록은 맨 위에 있었다. 아래에서
+// 지역을 고르면 화면이 저 위로 튀어 올라갔다 — 방금 누른 지도는 화면 밖으로
+// 사라지고, 검색어를 쳐도 결과가 보이지 않는 곳에서 바뀌었다.
+//
+// 그래서 목록을 옮긴다. 검색하면 검색창 바로 밑, 지도에서 지역을 고르면 지도
+// 바로 밑, 아무것도 안 고르면 원래 홈 자리로 돌아온다. 카테고리 칩은 목록에
+// 붙어 있으니 어디에 있든 그 자리를 지킨다.
+const RESULT_SLOTS = { home: "results-slot-home", search: "results-slot-search", region: "results-slot-region" };
+let resultsAt = "home";
+
+function resultsTarget() {
+  if (state.query) return "search";
+  if (state.region) return "region";
+  return "home";
+}
+
+function placeResults() {
+  const where = resultsTarget();
+  if (where === resultsAt) return;
+  const section = document.getElementById("place-section");
+  const slot = document.getElementById(RESULT_SLOTS[where]);
+  if (!section || !slot) return;
+  slot.after(section);
+  resultsAt = where;
+  // 목록이 떠난 자리에 구분선만 남으면, 날씨 바로 밑에 이유 없는 줄이 그어진다.
+  document.getElementById("place-section-break").hidden = where !== "home";
+}
+
+// 화면을 고쳐 그리는 동안 사용자가 보고 있는 것을 제자리에 붙들어 둔다.
+//
+// 목록을 위아래로 옮기거나 배너를 감추면 화면 위쪽 내용의 높이가 통째로
+// 바뀐다. 스크롤 위치는 문서 맨 위에서 잰 거리라, 위쪽이 짧아지면 보던 지점이
+// 그만큼 밀려 올라간다 — 누른 지도가 손끝에서 도망간다. 기준 요소가 화면에서
+// 몇 픽셀에 있었는지 재 두었다가, 바뀐 만큼 스크롤을 되돌린다.
+function keepAnchor(anchor, mutate) {
+  const before = anchor ? anchor.getBoundingClientRect().top : 0;
+  mutate();
+  if (!anchor) return;
+  const delta = anchor.getBoundingClientRect().top - before;
+  if (delta) window.scrollBy(0, delta);
+}
+
+// 고른 지역의 목록이 화면 밖에 있으면 그만큼만 내려 보여준다. 이미 보이면
+// 건드리지 않는다 — 볼 수 있는 것을 다시 움직이면 그게 튀는 것처럼 느껴진다.
+function revealResults() {
+  const heading = document.getElementById("place-heading");
+  if (!heading) return;
+  const top = heading.getBoundingClientRect().top;
+  if (top > window.innerHeight - 120 || top < 58) {
+    heading.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -400,7 +457,7 @@ function renderPlaces() {
   if (!matched.length) {
     list.innerHTML = `<p class="place-list__empty">조건에 맞는 장소가 없어요.</p>`;
     setPlaceListTitle(showRank);
-    renderMoreButton(0);
+    renderMoreButton(0, 0);
     return;
   }
 
@@ -438,7 +495,7 @@ function renderPlaces() {
   // 첫 곳만 크게 그린다. 카드가 다 같은 크기면 눈이 어디에 멈춰야 할지 모른다.
   // 지역별 한 곳씩 모아 보여줄 때만이다 — 검색이나 전체 목록에서는 순위가 없다.
   renderLocationHint(regionDigest);
-  renderMoreButton(rest);
+  renderMoreButton(rest, shown.length);
   list.classList.toggle("place-grid--lead", regionDigest && shown.length > 1);
   list.innerHTML = shown
     .map((place) => placeCard(place, showRank || regionDigest, { hideRankBadge: regionDigest }))
@@ -540,13 +597,16 @@ function setPlaceListTitle(showRank, regionDigest) {
 //
 // 예전에는 목록 아래 큰 버튼이었는데, 축제 섹션은 제목 오른쪽에 "전체 24개 ›"가
 // 있어서 같은 화면에 두 가지 방식이 섞여 있었다. 한쪽으로 맞춘다.
-function renderMoreButton(rest) {
+function renderMoreButton(rest, shownCount) {
   const old = document.getElementById("place-more");
   if (old) old.remove();
   const title = document.querySelector(".section__title--diary");
   if (!title || rest <= 0) return;
 
-  const shown = document.querySelectorAll("#place-list .place-grid__card").length;
+  // 보여준 개수는 인자로 받는다. 예전에는 화면에서 카드를 세었는데, 이 함수가
+  // 목록을 다시 그리기 전에 불려서 직전 화면의 카드 수가 잡혔다 — "공원"을
+  // 검색해 54곳을 본 뒤 검색어를 지우면 "전체 308곳"이 됐다. 254 + 직전 54다.
+  const shown = shownCount;
   const link = document.createElement("button");
   link.type = "button";
   link.id = "place-more";
@@ -963,7 +1023,10 @@ function weatherIcon(tone, kind) {
 function updateSearchModeUI() {
   const searching = Boolean(state.query);
   document.getElementById("hero-banner").hidden = searching;
-  document.getElementById("region-section").hidden = searching;
+  // 지도는 검색 중에도 남겨둔다. 결과가 검색창 바로 밑에 오면서 지도는 그
+  // 아래로 밀려났고, 검색어를 지웠을 때 지도가 없다가 다시 생기면 보던 자리가
+  // 그만큼 흔들린다. 검색으로 좁힌 뒤 지역으로 한 번 더 좁히기도 편하다.
+  document.getElementById("region-section").hidden = false;
 }
 
 // 홈은 페이지가 뜰 때 한 번만 데이터를 부른다. 그래서 앱을 백그라운드에 두었다가
@@ -1001,8 +1064,13 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("search-input").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     state.showAll = false;
-    updateSearchModeUI();
-    renderPlaces();
+    // 치고 있는 검색창을 기준으로 잡는다 — 위의 배너가 사라지고 결과가 아래에
+    // 붙는 동안에도 입력칸이 눈앞에 그대로 있어야 한다.
+    keepAnchor(document.querySelector(".search"), () => {
+      updateSearchModeUI();
+      renderPlaces();
+      placeResults();
+    });
   });
 
   loadHomeData();

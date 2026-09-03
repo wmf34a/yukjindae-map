@@ -80,7 +80,12 @@
        아래로 내렸다 — 지역을 이미 정한 사람에게는 여전히 좋은 도구다. -->
   <div class="today-weather" id="today-weather" hidden></div>
 
-  <section class="section">
+  <!-- 목록이 놓일 자리 세 곳. 홈에서는 여기, 검색하면 검색창 바로 밑, 지도에서
+       지역을 고르면 지도 바로 밑으로 목록을 통째로 옮긴다 (app.js moveResults).
+       아래에서 찾아 놓고 결과를 보려고 맨 위로 올라가야 하는 것이 이상했다. -->
+  <div id="results-slot-home"></div>
+
+  <section class="section" id="place-section">
     <h2 class="section__title section__title--diary" id="place-heading">추천장소</h2>
     <!-- 카테고리 필터는 이 목록을 거르는 것이라 목록과 붙어 있어야 한다.
          목록만 위로 옮기고 필터를 두고 왔더니 화면 맨 아래에 남았다. -->
@@ -92,7 +97,7 @@
     </div>
   </section>
 
-  <div class="section-break" aria-hidden="true"></div>
+  <div class="section-break" id="place-section-break" aria-hidden="true"></div>
 
   <section class="section section--festival">
     <div class="curated-links" id="curated-links">
@@ -128,6 +133,8 @@
     <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
   </div>
 
+  <div id="results-slot-search"></div>
+
   <section class="section" id="region-section">
     <h2 class="section__title">지역별 Top 10<button type="button" class="info-dot" aria-expanded="false" aria-label="이 순위가 언제 바뀌는지 보기" data-info="매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 한여름엔 물놀이와 실내가, 선선해지면 야외와 체험이 위로 올라와요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
     <div class="region-map-wrap">
@@ -139,6 +146,8 @@
     </div>
     <p class="region-map__caption" id="region-map-caption">지도를 눌러 지역을 선택해보세요</p>
   </section>
+
+  <div id="results-slot-region"></div>
 
   <section class="section">
     <button type="button" class="suggest-cta" id="suggest-btn">

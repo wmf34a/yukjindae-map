@@ -818,14 +818,6 @@ function updateSearchModeUI() {
 const REFRESH_MIN_GAP_MS = 30000;
 let lastLoadedAt = 0;
 
-// 방문자 집계. 화면에 보이는 것은 없고, 소개 페이지에서 숫자를 읽어 보여준다.
-// 실패해도 아무 일도 일어나지 않아야 하므로 결과를 기다리지 않는다.
-function countVisit() {
-  const id = window.deviceId();
-  fetchJson(`/api/visit?d=${encodeURIComponent(id)}`, { method: "POST" })
-    .catch(() => {});
-}
-
 function loadHomeData() {
   lastLoadedAt = Date.now();
   Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
@@ -840,7 +832,6 @@ document.addEventListener("visibilitychange", () => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-  countVisit();
   renderRegionMap();
   renderRegionLegend();
   renderFestivals();

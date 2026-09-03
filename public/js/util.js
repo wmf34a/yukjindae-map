@@ -309,6 +309,52 @@ function deviceId() {
   }
 }
 
+// 이 화면을 봤다고 남긴다.
+//
+// 홈에서만 세던 것을 화면마다 남기도록 넓혔다. 하루에 몇 명이 왔는지는 알아도
+// 그 사람이 지도를 열었는지 장소를 눌렀는지 어디서 나갔는지 몰랐고, 재방문이
+// 2.9% 인데 어디서 놓치는지 알 방법이 없었다.
+//
+// 결과를 기다리지 않는다. 집계가 느리거나 실패한다고 화면이 늦어지면 안 된다.
+function trackScreen(name) {
+  try {
+    const id = deviceId();
+    const qs = new URLSearchParams({ s: name });
+    if (id) qs.set("d", id);
+    fetch(apiUrl(`/api/visit?${qs}`), { method: "POST", keepalive: true }).catch(() => {});
+  } catch {
+    // 집계는 있으면 좋은 것이지 화면이 뜨는 조건이 아니다.
+  }
+}
+
+// 페이지마다 호출을 심지 않는다. util.js 는 모든 화면이 싣는 파일이라, 여기서
+// 경로를 보고 한 번만 남기면 새 화면이 생겨도 빠뜨릴 일이 없다.
+const SCREEN_BY_PATH = {
+  "": "home",
+  "index": "home",
+  "map": "map",
+  "place": "place",
+  "courses": "courses",
+  "course": "course",
+  "favorite": "favorite",
+  "festival": "festival",
+  "festival-detail": "festival",
+  "about": "about",
+  "privacy": "privacy",
+};
+
+function currentScreen() {
+  const last = location.pathname.split("/").pop() || "";
+  return SCREEN_BY_PATH[last.replace(/\.html$/, "")] || "other";
+}
+
+// document 가 없는 곳에서도 이 파일이 읽힌다(테스트가 순수 함수만 꺼내 쓴다).
+// 그때 최상위에서 addEventListener 를 부르면 파일 전체가 죽는다.
+if (typeof document !== "undefined") {
+  document.addEventListener("DOMContentLoaded", () => trackScreen(currentScreen()));
+}
+
+window.trackScreen = trackScreen;
 window.deviceId = deviceId;
 window.naverDirectionsUrl = naverDirectionsUrl;
 window.escapeHtml = escapeHtml;

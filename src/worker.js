@@ -12,6 +12,7 @@ import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilR
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { readChangingToilets } from "./toilets.js";
+import { normalizeScreen } from "./screens.js";
 import { decodeImageDataUrl, reportImageKey } from "./report-image.js";
 import {
   REVIEWS_KV_KEY, validateReview, summarize, readPublicReviews, MAX_PHOTOS,
@@ -1533,6 +1534,13 @@ async function handleVisit(request, env, url) {
   const device = String(url.searchParams.get("d") || "").slice(0, 64).replace(/[^A-Za-z0-9-]/g, "");
   const id = device || (await hashIp(request.headers.get("cf-connecting-ip") || "unknown"));
 
+  // 어느 화면인지도 함께 남긴다.
+  //
+  // 앞의 세 칸(날짜·기기·국가)은 그대로 두고 네 번째에만 붙인다 — 지금까지 쌓인
+  // 방문자 통계를 그대로 읽을 수 있어야 하기 때문이다. 오히려 정확해진다:
+  // 예전에는 홈을 거친 사람만 셌는데, 이제 링크로 상세에 바로 들어온 사람도 잡힌다.
+  const screen = normalizeScreen(url.searchParams.get("s"));
+
   // 들어온 사람을 하나도 빠짐없이 적어 둔다.
   //
   // 같은 사람이 여러 번 와도 그대로 적고, 셀 때 기기 ID로 중복을 지운다. 날짜별로
@@ -1540,7 +1548,7 @@ async function handleVisit(request, env, url) {
   if (env.VISITS) {
     try {
       env.VISITS.writeDataPoint({
-        blobs: [today, id, request.headers.get("cf-ipcountry") || "??"],
+        blobs: [today, id, request.headers.get("cf-ipcountry") || "??", screen],
         doubles: [1],
         indexes: [today],
       });

@@ -1759,6 +1759,38 @@ async function askClaude(env, prompt) {
 //
 // 만든 장소는 공개여부를 꺼 둔다. 사람이 추천한 곳이라도 기계가 채운 값이 섞여
 // 있어 한 번은 눈으로 봐야 한다.
+// 같은 이름의 장소가 이미 있는지 찾는다.
+//
+// 노션의 title 검색은 공백과 괄호에 민감해서, 띄어쓰기만 달라도 못 찾는다.
+// 이름에서 공백을 걷어내고 견준다 — "화담 숲"과 "화담숲"은 같은 곳이다.
+export function normalizePlaceName(name) {
+  return String(name || "").replace(/\s+/g, "").toLowerCase();
+}
+
+async function findPlaceByName(env, notionHeaders, name) {
+  const needle = normalizePlaceName(name);
+  if (!needle) return null;
+  // 공백을 뺀 첫 두 글자로 넓게 훑고, 정확한 비교는 우리가 한다.
+  const res = await fetchWithTimeout(
+    `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
+    {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({
+        page_size: 50,
+        filter: { property: "장소명", title: { contains: needle.slice(0, 2) } },
+      }),
+    }
+  );
+  if (!res.ok) return null; // 못 물어보면 막지 않는다 — 중복이 낫지 등록 실패는 아니다.
+  const data = await res.json();
+  for (const page of data.results || []) {
+    const title = (page.properties?.["장소명"]?.title || []).map((t) => t.plain_text).join("");
+    if (normalizePlaceName(title) === needle) return { id: page.id, name: title };
+  }
+  return null;
+}
+
 async function createPlacesFromReports(env, notionHeaders, reports) {
   if (reports.length === 0) return;
 
@@ -1785,9 +1817,33 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
   const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const made = [];
   const failed = [];
+  const duplicated = [];
 
   for (const report of reports) {
     /* oxlint-disable no-await-in-loop */
+    // 이미 있는 곳인지 먼저 본다.
+    //
+    // 없었다. 화담숲을 누가 추천했는데 7월에 등록된 화담숲이 이미 공개 중인데도
+    // 크론이 같은 이름으로 하나 더 만들었다. 좋은 곳일수록 여러 사람이 추천하니
+    // 인기 있는 장소부터 겹친다.
+    const existing = await findPlaceByName(env, notionHeaders, report.placeName);
+    if (existing) {
+      duplicated.push({ ...report, existing });
+      await fetchWithTimeout(`https://api.notion.com/v1/pages/${report.id}`, {
+        method: "PATCH",
+        headers: notionHeaders,
+        body: JSON.stringify({
+          properties: {
+            // 버리지 않는다. 이미 있는 곳이라도 제보에 담긴 편의시설·한줄평이
+            // 지금 값과 다를 수 있어 사람이 읽어봐야 한다.
+            "상태": { select: { name: "대기중" } },
+            "장소": { relation: [{ id: existing.id }] },
+          },
+        }),
+      });
+      continue;
+    }
+
     const prepared = await prepareUserPlace({
       placeName: report.placeName,
       reportValue: report.value,
@@ -1836,6 +1892,10 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
   if (made.length) {
     lines.push(`🆕 추천받은 장소 ${made.length}곳을 등록했습니다. 확인 후 공개여부를 켜주세요.`);
     for (const r of made) lines.push(`• ${r.created.name} — ${r.created.address}`);
+  }
+  if (duplicated.length) {
+    lines.push(`\n🔁 이미 있는 곳이라 새로 만들지 않은 ${duplicated.length}곳 — 제보 내용은 확인해 주세요.`);
+    for (const r of duplicated) lines.push(`• ${r.existing.name}: ${String(r.value || "").split("\n")[0].slice(0, 90)}`);
   }
   if (failed.length) {
     lines.push(`\n⚠️ 등록하지 못한 ${failed.length}곳 — 직접 확인이 필요합니다.`);

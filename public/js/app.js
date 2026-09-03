@@ -404,7 +404,13 @@ function renderPlaces() {
     return;
   }
 
-  const regionDigest = !showRank && !state.showAll;
+  // 검색어나 카테고리를 고른 사람에게는 "지역별 한 곳씩"을 보여주면 안 된다.
+  //
+  // 찾는 것이 정해진 사람인데 지역마다 한 곳씩만 남기고 걸러 버렸다. "공원"으로
+  // 검색하면 54곳이 맞는데 화면에는 세 곳만 떴다. 홈 목록을 열 곳에서 세 곳으로
+  // 줄이면서 눈에 띄게 됐지만, 걸러내는 것 자체는 그 전부터 있던 문제다.
+  const filtering = Boolean(state.query || state.category);
+  const regionDigest = !showRank && !state.showAll && !filtering;
   let shown;
   let rest;
 
@@ -508,7 +514,15 @@ function setPlaceListTitle(showRank, regionDigest) {
     return;
   }
   if (!regionDigest) {
-    writePlaceListTitle(title, "전체 장소", "");
+    // 무엇을 찾고 있는지 제목에 되돌려 준다. "전체 장소"만 떠 있으면 방금 친
+    // 검색어가 먹혔는지 알 수 없다.
+    if (state.query) {
+      writePlaceListTitle(title, `'${state.query}' 검색 결과`, "");
+    } else if (state.category) {
+      writePlaceListTitle(title, state.category, "");
+    } else {
+      writePlaceListTitle(title, "전체 장소", "");
+    }
     return;
   }
   // 제목은 날씨가 오든 안 오든 같다.

@@ -75,24 +75,31 @@
     <div class="notices-panel" id="notices-panel"></div>
   </header>
 
-  <div class="search">
-    <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
-  </div>
+  <!-- 아침 8~10시에 몰린다. 출근길에 "이번 주말 어디 가지"를 찾는 사람이
+       맨 먼저 보는 자리다. 날씨와 갈 만한 곳을 먼저 두고, 지역을 고르는 지도는
+       아래로 내렸다 — 지역을 이미 정한 사람에게는 여전히 좋은 도구다. -->
+  <div class="today-weather" id="today-weather" hidden></div>
 
-  <section class="section" id="region-section">
-    <h2 class="section__title">지역별 Top 10<button type="button" class="info-dot" aria-expanded="false" aria-label="이 순위가 언제 바뀌는지 보기" data-info="매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 한여름엔 물놀이와 실내가, 선선해지면 야외와 체험이 위로 올라와요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
-    <div class="region-map-wrap">
-      <div class="region-map" id="region-map">
-        <!-- 대한민국 인터랙티브 지도(서울강북/서울강남/경기북부/인천·부천/경기남부/
-             강원도/충청도/전라도/경상도/제주), REGION_MAP_PATHS 참고 -->
-      </div>
-      <div class="region-legend" id="region-legend"></div>
+  <section class="section">
+    <h2 class="section__title section__title--diary" id="place-heading">추천장소</h2>
+    <!-- 카테고리 필터는 이 목록을 거르는 것이라 목록과 붙어 있어야 한다.
+         목록만 위로 옮기고 필터를 두고 왔더니 화면 맨 아래에 남았다. -->
+    <div class="tag-filter" id="tag-filter">
+      <!-- 자연/공원, 실내놀이, 맛집, 카페, 체험/문화, 스포츠, 무료 -->
     </div>
-    <p class="region-map__caption" id="region-map-caption">지도를 눌러 지역을 선택해보세요</p>
-    <div class="curated-links" id="curated-links">
-      <!-- 축제·행사 TOP10 / 테마 코스 모음, CURATED_LINKS 참고 -->
+    <div class="place-grid" id="place-list">
+      <p class="place-list__loading" id="place-loading">불러오는 중...</p>
     </div>
   </section>
+
+  <div class="section-break" aria-hidden="true"></div>
+
+  <section class="section section--festival">
+    <div class="curated-links" id="curated-links">
+      <!-- 축제 띠. renderFestivals 가 채운다. -->
+    </div>
+  </section>
+
 
   <section class="banner is-loading" id="hero-banner">
     <div class="banner__track" id="hero-track">
@@ -113,17 +120,27 @@
   </section>
 
 
-  <div class="tag-filter" id="tag-filter">
-    <!-- 자연/공원, 실내놀이, 맛집, 카페, 체험/문화, 스포츠, 무료 -->
+  <div class="section-break" aria-hidden="true"></div>
+
+  <!-- 검색과 지도는 "찾을 것이 정해진 사람"을 위한 한 덩어리다. 사이에 배너가
+       끼면 둘이 갈라져 검색창이 뜬금없이 떠 있는 것처럼 보인다. -->
+  <div class="search">
+    <input class="search__input" id="search-input" type="search" placeholder="지역, 장소를 검색해보세요" />
   </div>
 
-  <section class="section">
-    <h2 class="section__title section__title--diary">추천장소</h2>
-    <!-- 날씨를 못 가져오면 렌더 자체를 건너뛴다(hidden 유지). -->
-    <div class="today-weather" id="today-weather" hidden></div>
-    <div class="place-grid" id="place-list">
-      <p class="place-list__loading" id="place-loading">불러오는 중...</p>
+  <section class="section" id="region-section">
+    <h2 class="section__title">지역별 Top 10<button type="button" class="info-dot" aria-expanded="false" aria-label="이 순위가 언제 바뀌는지 보기" data-info="매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 한여름엔 물놀이와 실내가, 선선해지면 야외와 체험이 위로 올라와요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
+    <div class="region-map-wrap">
+      <div class="region-map" id="region-map">
+        <!-- 대한민국 인터랙티브 지도(서울강북/서울강남/경기북부/인천·부천/경기남부/
+             강원도/충청도/전라도/경상도/제주), REGION_MAP_PATHS 참고 -->
+      </div>
+      <div class="region-legend" id="region-legend"></div>
     </div>
+    <p class="region-map__caption" id="region-map-caption">지도를 눌러 지역을 선택해보세요</p>
+  </section>
+
+  <section class="section">
     <button type="button" class="suggest-cta" id="suggest-btn">
       <span class="suggest-cta__icon">📍</span>
       <span class="suggest-cta__text">

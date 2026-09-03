@@ -256,6 +256,39 @@ function freeBadgeText(place) {
 // showRank: 순위를 근거로 사유를 함께 보여줄지.
 // hideRankBadge: 사유는 두되 숫자 배지만 감춘다 — 지역별 1위 모음에서는 모든
 // 카드가 "1"이라 번호 매긴 목록처럼 읽혀 오히려 방해가 된다.
+// 장소별 후기 요약. 홈에서 한 번 받아 두고 카드마다 꺼내 쓴다.
+//
+// 아직 후기가 없어 아무것도 안 보이지만, 쌓이기 시작하면 사진 위에 바로 뜬다.
+// 카드에서 별점이 보이는 것과 상세까지 들어가야 보이는 것은 다르다.
+const reviewStats = new Map();
+
+async function loadReviewStats() {
+  try {
+    const data = await fetchJson("/api/reviews");
+    const byPlace = new Map();
+    for (const r of data.reviews || []) {
+      if (!r.placeId || !r.rating) continue;
+      const cur = byPlace.get(r.placeId) || { sum: 0, count: 0 };
+      cur.sum += Number(r.rating);
+      cur.count += 1;
+      byPlace.set(r.placeId, cur);
+    }
+    reviewStats.clear();
+    for (const [id, v] of byPlace) {
+      reviewStats.set(id, { average: Math.round((v.sum / v.count) * 10) / 10, count: v.count });
+    }
+    if (reviewStats.size) renderPlaces();
+  } catch {
+    // 후기를 못 받아도 목록은 그대로 뜬다.
+  }
+}
+
+function ratingBadgeHtml(place) {
+  const stat = reviewStats.get(place.id);
+  if (!stat) return "";
+  return `<span class="place-grid__rating">★ ${stat.average} <em>${stat.count}</em></span>`;
+}
+
 function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
   const thumb = place.image
     ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" loading="lazy" />`
@@ -269,10 +302,12 @@ function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
     : "";
   const event = activeEvent(place);
   const eventBadge = event ? `<span class="place-grid__event-badge">🎟 할인</span>` : "";
+  const rating = ratingBadgeHtml(place);
   return `
     <a class="place-grid__card" href="place.html?id=${encodeURIComponent(place.id)}">
       <div class="place-grid__thumb-wrap">
         ${thumb}
+        ${rating}
         ${rankBadge}
         ${badge}
         ${eventBadge}
@@ -286,6 +321,36 @@ function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
     </a>
   `;
 }
+
+// 위치를 안 켠 사람에게 왜 먼 곳이 뜨는지 알려준다.
+//
+// 세 곳만 보여주게 되면서 이 안내가 중요해졌다. 열 곳일 때는 그중 하나쯤 내
+// 근처였는데, 세 곳이면 전부 먼 곳일 수 있다 — 목포·증평·안성이 나란히 뜬다.
+// 날씨 카드에도 "내 주변부터" 버튼이 있지만 그건 날씨를 바꾸는 버튼으로 읽힌다.
+function renderLocationHint(regionDigest) {
+  const list = document.getElementById("place-list");
+  const existing = document.getElementById("place-location-hint");
+  if (existing) existing.remove();
+  if (!regionDigest || state.coords || !navigator.geolocation) return;
+
+  const hint = document.createElement("button");
+  hint.type = "button";
+  hint.id = "place-location-hint";
+  hint.className = "place-location-hint";
+  hint.innerHTML = `📍 <b>가까운 곳부터 보시겠어요?</b> 지금은 전국에서 골라 보여드리고 있어요`;
+  hint.addEventListener("click", () => {
+    hint.textContent = "위치 확인 중...";
+    hint.disabled = true;
+    loadTodayWeather({ ask: true });
+  });
+  list.insertAdjacentElement("afterend", hint);
+}
+
+// 홈에서 지역별 1위를 몇 곳까지 보여줄지. 리드 카드 하나 + 작은 카드 둘이다.
+//
+// 다섯 곳을 깔았더니 장소만 780px 이라 그 뒤의 축제가 첫 화면 밖으로 밀렸다.
+// 세 곳이면 날씨·장소·축제가 한 화면에 들어온다. 나머지는 "더보기"로 이어진다.
+const HOME_DIGEST_COUNT = 3;
 
 function renderPlaces() {
   const list = document.getElementById("place-list");
@@ -325,7 +390,13 @@ function renderPlaces() {
   } else if (regionDigest) {
     // 위치를 알려줬으면 내 지역 1위가 맨 앞에 오게 가까운 순으로 세운다.
     const tops = pickRegionTops(matched, state.weather);
-    shown = state.coords ? sortByDistance(tops, state.coords) : sortByMonthlyRank(tops);
+    const ordered = state.coords ? sortByDistance(tops, state.coords) : sortByMonthlyRank(tops);
+    // 홈 첫 화면에서는 다섯 곳만 보여준다.
+    //
+    // 열 곳을 다 깔면 장소 목록만 1,467px 이라 그 뒤의 축제가 1,657px 까지
+    // 밀린다 — 시기성이 있어 위에 둬야 할 것이 두 화면 아래로 내려간다.
+    // 나머지는 "더보기"로 이어진다.
+    shown = ordered.slice(0, HOME_DIGEST_COUNT);
     rest = matched.length - shown.length;
   } else {
     const all = state.coords ? sortByDistance(matched, state.coords) : sortByWeather(matched, state.weather);
@@ -334,11 +405,15 @@ function renderPlaces() {
   }
 
   setPlaceListTitle(showRank, regionDigest);
+  // 첫 곳만 크게 그린다. 카드가 다 같은 크기면 눈이 어디에 멈춰야 할지 모른다.
+  // 지역별 한 곳씩 모아 보여줄 때만이다 — 검색이나 전체 목록에서는 순위가 없다.
+  renderLocationHint(regionDigest);
+  renderMoreButton(rest);
+  list.classList.toggle("place-grid--lead", regionDigest && shown.length > 1);
   list.innerHTML = shown
     .map((place) => placeCard(place, showRank || regionDigest, { hideRankBadge: regionDigest }))
     .join("");
   bindFavoriteButtons(list);
-  renderMoreButton(rest);
 }
 
 // 무엇을 보고 있는지 제목으로 알려준다. 정렬 기준이 셋이라 제목이 같으면
@@ -348,8 +423,19 @@ function renderPlaces() {
 // 야외면 순위를 양보하고 실내를 고르는데, 제목에 "1위"라고 써두면 사실과 다르다.
 // 제목을 textContent 로 갈아치우면 옆에 붙여둔 안내 물음표가 같이 지워진다.
 // 제목마다 갱신 주기가 다르므로 문구도 함께 갈아 끼운다.
-function writePlaceListTitle(title, text, info) {
+function writePlaceListTitle(title, text, info, note) {
   title.textContent = text;
+  // 무엇을 기준으로 고른 목록인지 제목 아래에 적는다. 제목 오른쪽은 "더보기"
+  // 자리라, 셋을 한 줄에 넣으면 좁은 화면에서 서로를 밀어낸다.
+  const oldNote = document.getElementById("place-note");
+  if (oldNote) oldNote.remove();
+  if (note) {
+    const small = document.createElement("p");
+    small.id = "place-note";
+    small.className = "section__note";
+    small.textContent = note;
+    title.insertAdjacentElement("afterend", small);
+  }
   if (!info) return;
   const dot = document.createElement("button");
   dot.type = "button";
@@ -362,7 +448,33 @@ function writePlaceListTitle(title, text, info) {
 }
 
 const MONTHLY_INFO = "매달 1일에 그 달 계절에 맞춰 순위를 다시 매겨요. 한여름엔 물놀이와 실내가, 선선해지면 야외와 체험이 위로 올라와요.";
-const WEATHER_INFO = "순위는 매달 1일에 계절에 맞춰 다시 매겨요. 여기에 더해 그날 날씨를 보고, 비 오는 날엔 실내를 앞으로 당겨 보여줘요.";
+const WEATHER_INFO = "순위는 매달 1일에 계절에 맞춰 다시 매겨요. 여기에 더해 그날 날씨를 보고, 비 오는 날엔 실내를 앞으로 당겨 보여줘요. 위치를 허용하면 가까운 곳부터, 아니면 전국에서 이달의 1위를 지역마다 한 곳씩 보여드려요.";
+
+// 언제 가는 이야기인지 요일을 보고 정한다.
+//
+// 사람들이 아침 8~10시에 들어온다. 출근길에 "이번 주말 어디 가지"를 찾는
+// 것인데, 화요일에 "이번 주말"이라고 하면 아직 먼 이야기로 읽힌다. 반대로
+// 토요일 아침에 "오늘"이라고 해야 바로 나설 수 있다.
+const DAY_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 무엇을 기준으로 고른 목록인지 한마디로 적는다.
+//
+// 위치를 켠 사람에게는 가까운 순으로, 안 켠 사람에게는 이달의 순위로 보여주는데
+// 그 차이를 말해주지 않으면 왜 목포와 증평이 뜨는지 알 길이 없다.
+function digestBasis() {
+  return state.coords ? `${dayName()} · 가까운 순` : `${dayName()} · 전국`;
+}
+
+function dayName(now = new Date()) {
+  return `${DAY_NAMES[now.getDay()]}요일`;
+}
+
+function outingWhen(now = new Date()) {
+  const day = now.getDay(); // 0=일
+  if (day === 0 || day === 6) return "오늘";
+  if (day >= 4) return "이번 주말"; // 목·금
+  return "오늘";
+}
 
 function setPlaceListTitle(showRank, regionDigest) {
   const title = document.querySelector(".section__title--diary");
@@ -380,28 +492,35 @@ function setPlaceListTitle(showRank, regionDigest) {
   );
   writePlaceListTitle(
     title,
-    weatherApplied ? "오늘 가기 좋은 곳 · 지역별 한 곳씩" : "이달의 지역별 1위",
-    weatherApplied ? WEATHER_INFO : MONTHLY_INFO
+    weatherApplied ? `${outingWhen()} 여기 어때요` : "이달의 지역별 1위",
+    weatherApplied ? WEATHER_INFO : MONTHLY_INFO,
+    weatherApplied ? digestBasis() : ""
   );
 }
 
 // "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해
 // 장소 카드처럼 보인다.
+// "더보기"는 섹션 제목 오른쪽에 둔다.
+//
+// 예전에는 목록 아래 큰 버튼이었는데, 축제 섹션은 제목 오른쪽에 "전체 24개 ›"가
+// 있어서 같은 화면에 두 가지 방식이 섞여 있었다. 한쪽으로 맞춘다.
 function renderMoreButton(rest) {
   const old = document.getElementById("place-more");
   if (old) old.remove();
-  if (rest <= 0) return;
+  const title = document.querySelector(".section__title--diary");
+  if (!title || rest <= 0) return;
 
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.id = "place-more";
-  btn.className = "place-more";
-  btn.textContent = `전체 ${rest + document.querySelectorAll("#place-list .place-grid__card").length}곳 보기`;
-  btn.addEventListener("click", () => {
+  const shown = document.querySelectorAll("#place-list .place-grid__card").length;
+  const link = document.createElement("button");
+  link.type = "button";
+  link.id = "place-more";
+  link.className = "section__more";
+  link.textContent = `전체 ${rest + shown}곳 ›`;
+  link.addEventListener("click", () => {
     state.showAll = true;
     renderPlaces();
   });
-  document.getElementById("place-list").after(btn);
+  title.appendChild(link);
 }
 
 function initHeroSlider() {
@@ -823,6 +942,8 @@ function loadHomeData() {
   Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
   // 장소 로딩과 독립적으로 돈다 — 날씨가 늦거나 실패해도 목록은 그대로 뜬다.
   loadTodayWeather();
+  // 후기도 마찬가지다. 없으면 별점만 안 보일 뿐이다.
+  loadReviewStats();
 }
 
 document.addEventListener("visibilitychange", () => {

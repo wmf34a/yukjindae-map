@@ -346,6 +346,30 @@ function renderLocationHint(regionDigest) {
   list.insertAdjacentElement("afterend", hint);
 }
 
+// 첫 렌더는 날씨를 잠깐 기다린다.
+//
+// 날씨는 제목만 바꾸는 것이 아니라 어느 곳을 고를지까지 바꾼다(비 오는 날엔
+// 실내가 그 지역 1위를 밀어낸다). 그래서 장소만 먼저 그리면 카드가 통째로 다시
+// 그려지는 것이 눈에 보인다.
+//
+// 날씨는 대개 0.5초 안에 온다. 그 정도는 기다렸다가 한 번에 그리고, 그보다
+// 늦으면 기다리지 않고 먼저 보여준다 — 빈 화면을 오래 두는 것이 더 나쁘다.
+const WEATHER_WAIT_MS = 900;
+let firstPlaceRenderDone = false;
+
+function renderPlacesWhenReady() {
+  if (firstPlaceRenderDone || state.weather) {
+    firstPlaceRenderDone = true;
+    renderPlaces();
+    return;
+  }
+  setTimeout(() => {
+    if (firstPlaceRenderDone) return;
+    firstPlaceRenderDone = true;
+    renderPlaces();
+  }, WEATHER_WAIT_MS);
+}
+
 // 홈에서 지역별 1위를 몇 곳까지 보여줄지. 리드 카드 하나 + 작은 카드 둘이다.
 //
 // 다섯 곳을 깔았더니 장소만 780px 이라 그 뒤의 축제가 첫 화면 밖으로 밀렸다.
@@ -487,15 +511,13 @@ function setPlaceListTitle(showRank, regionDigest) {
     writePlaceListTitle(title, "전체 장소", "");
     return;
   }
-  const weatherApplied = Boolean(
-    state.weather && ((state.weather.boost || []).length || (state.weather.avoid || []).length)
-  );
-  writePlaceListTitle(
-    title,
-    weatherApplied ? `${outingWhen()} 여기 어때요` : "이달의 지역별 1위",
-    weatherApplied ? WEATHER_INFO : MONTHLY_INFO,
-    weatherApplied ? digestBasis() : ""
-  );
+  // 제목은 날씨가 오든 안 오든 같다.
+  //
+  // 예전에는 날씨가 도착하기 전 "이달의 지역별 1위"였다가 도착하면 "이번 주말
+  // 여기 어때요"로 바뀌었다. 목록을 보려던 사람 눈앞에서 제목이 따닥 하고
+  // 갈아끼워진다. 어느 쪽이든 지역별 1위를 보여주는 것은 같으니 제목이 바뀔
+  // 이유가 없다.
+  writePlaceListTitle(title, `${outingWhen()} 여기 어때요`, WEATHER_INFO, digestBasis());
 }
 
 // "더보기"는 목록 바로 아래에 둔다 — 카드 그리드 안에 넣으면 칸 하나를 차지해
@@ -781,7 +803,7 @@ async function loadPlaces() {
   }
   renderRegionMap();
   renderRegionLegend();
-  renderPlaces();
+  renderPlacesWhenReady();
 }
 
 // 월간 Top 10은 한 달 내내 같은 목록이라 "오늘 뭐하지"에 답하지 못한다. 오늘 날씨로
@@ -897,6 +919,8 @@ async function loadTodayWeather({ ask = false } = {}) {
         loadTodayWeather({ ask: true });
       });
     }
+    // 기다리던 첫 렌더가 있으면 여기서 끝낸다 — 이제 날씨까지 반영해 한 번에 그린다.
+    firstPlaceRenderDone = true;
     renderPlaces();
   } catch (err) {
     console.error(err);

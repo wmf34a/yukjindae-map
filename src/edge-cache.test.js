@@ -142,3 +142,21 @@ describe("긴 TTL", () => {
     expect(res.headers.get("cache-control")).toContain("s-maxage=3600");
   });
 });
+
+// HEAD 요청은 캐시에 넣을 수 없다. 그대로 두면 cache.put 이
+// "Cannot cache response to non-GET request" 로 터지고 그 예외가 워커 밖으로
+// 나가 1101 이 된다 — 봇이나 상태 확인 도구가 HEAD 를 보낸다.
+describe("GET 이 아닌 요청", () => {
+  it("HEAD 는 캐시를 건너뛰고 그대로 응답한다", async () => {
+    const put = vi.fn();
+    globalThis.caches = { default: { match: async () => undefined, put } };
+    const res = await withEdgeCache(
+      new Request("https://x/api/today?lat=37&lng=127", { method: "HEAD" }),
+      null,
+      3600,
+      async () => new Response("ok", { status: 200 })
+    );
+    expect(res.status).toBe(200);
+    expect(put).not.toHaveBeenCalled();
+  });
+});

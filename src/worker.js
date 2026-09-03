@@ -63,6 +63,11 @@ const PROXY_CACHE_SECONDS = 86400;
 // 그래서 만료돼도 옛 응답을 먼저 돌려주고 새 값은 뒤에서 받는다. 화면에는 최대
 // ttlSeconds 만큼 지난 값이 보일 수 있지만, 노션을 기다리며 멈춰 있는 것보다 낫다.
 export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
+  // GET 이 아니면 캐시에 넣을 수 없다. HEAD 요청이 오면 cache.put 이
+  // "Cannot cache response to non-GET request" 로 터지고, 그 예외가 워커 밖으로
+  // 나가 1101 이 된다 — 봇이나 상태 확인 도구가 HEAD 를 보낸다.
+  if (request.method !== "GET") return handler();
+
   const cache = caches.default;
   const cacheKey = new Request(request.url, request);
 

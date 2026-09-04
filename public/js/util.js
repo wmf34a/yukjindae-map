@@ -188,11 +188,68 @@ function activeEvent(place) {
 // 끊어서 각 화면의 catch가 에러 문구를 띄우게 한다.
 const FETCH_TIMEOUT_MS = 10000;
 
+// 마지막으로 잘 받아온 목록을 남겨 둔다.
+//
+// 엣지 캐시는 Cloudflare 콜로마다 따로인데, 연결마다 다른 콜로로 붙는 날이
+// 있다 — 하룻밤 표본 495회에서 아시아는 99회뿐이었고 나머지는 미국·유럽·호주로
+// 흩어졌다. 처음 받는 콜로는 캐시가 비어 있어 노션까지 갔다 오고, 그러다
+// 타임아웃이 나면 사용자는 빈 화면을 본다. 실제로 축제 목록이 그렇게 한 번
+// 500 이 됐다.
+//
+// 서버가 흔들려도 어제 보던 목록은 보여준다. 장소·축제·코스는 몇 시간 낡아도
+// 쓸모가 없어지지 않는다 — 아무것도 없는 화면보다 낫다.
+const LAST_GOOD_PREFIX = "lastgood:";
+// 이보다 오래된 것은 쓰지 않는다. 문 닫은 곳을 일주일 넘게 보여줄 수는 없다.
+const LAST_GOOD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+// 날씨는 남기지 않는다 — 지난 예보를 오늘 날씨라고 보여주면 안 된다.
+const LAST_GOOD_PATHS = ["/api/places", "/api/festivals", "/api/courses", "/api/banners", "/api/reviews"];
+
+function lastGoodKey(url, options) {
+  if ((options.method || "GET").toUpperCase() !== "GET") return "";
+  const path = String(url).split("?")[0];
+  return LAST_GOOD_PATHS.indexOf(path) === -1 ? "" : LAST_GOOD_PREFIX + path;
+}
+
+function readLastGood(key, now = Date.now()) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const saved = JSON.parse(raw);
+    if (!saved || !Number.isFinite(saved.at)) return null;
+    if (now - saved.at > LAST_GOOD_MAX_AGE_MS) return null;
+    return saved.data;
+  } catch {
+    // 저장소를 못 읽는 브라우저(사생활 보호 모드 등)에서도 화면은 떠야 한다.
+    return null;
+  }
+}
+
+function saveLastGood(key, data, now = Date.now()) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ at: now, data }));
+  } catch {
+    // 용량이 찼거나 저장이 막혔다. 저장은 곁다리라 실패해도 화면에는 영향이 없다.
+  }
+}
+
 function fetchJson(url, options = {}) {
+  const key = lastGoodKey(url, options);
   return fetch(apiUrl(url), { ...options, signal: AbortSignal.timeout(options.timeoutMs || FETCH_TIMEOUT_MS) }).then(
     (res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
+    }
+  ).then(
+    (data) => {
+      // 장소 목록이 455KB라 그 자리에서 문자열로 만들면 첫 화면이 그만큼 늦는다.
+      // 그릴 것을 다 그린 뒤에 저장한다.
+      if (key) setTimeout(() => saveLastGood(key, data), 0);
+      return data;
+    },
+    (err) => {
+      const saved = key ? readLastGood(key) : null;
+      if (saved) return saved;
+      throw err;
     }
   );
 }
@@ -361,6 +418,9 @@ window.primaryNearby = primaryNearby;
 window.sortByWeather = sortByWeather;
 window.activeEvent = activeEvent;
 window.fetchJson = fetchJson;
+window.readLastGood = readLastGood;
+window.saveLastGood = saveLastGood;
+window.lastGoodKey = lastGoodKey;
 window.apiUrl = apiUrl;
 window.sortByDistance = sortByDistance;
 window.distanceKm = distanceKm;

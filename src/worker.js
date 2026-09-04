@@ -21,7 +21,7 @@ import {
 // 제보 스크린샷 주소를 노션에 적을 때 쓴다. 운영자가 노션에서 바로 눌러 볼 수
 // 있어야 하므로 상대경로로는 안 된다.
 const PUBLIC_BASE_URL = "https://yukjindae-map.wmf34a.workers.dev";
-import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId } from "./http.js";
+import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId, READ_TIMEOUT_MS, READ_RETRIES } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
   applyApprovedReports, isListField, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
@@ -273,7 +273,8 @@ async function fetchAllPlaces(env) {
 
     const res = await fetchWithRetry(
       `https://api.notion.com/v1/databases/${env.NOTION_DATABASE_ID}/query`,
-      { method: "POST", headers: notionHeaders, body: JSON.stringify(body) }
+      { method: "POST", headers: notionHeaders, body: JSON.stringify(body) },
+      { timeoutMs: READ_TIMEOUT_MS, retries: READ_RETRIES }
     );
 
     if (!res.ok) {
@@ -379,7 +380,7 @@ async function handlePlaceById(env, url, id, request) {
   try {
     const res = await fetchWithRetry(`https://api.notion.com/v1/pages/${id}`, {
       headers: notionHeadersFor(env),
-    });
+    }, { timeoutMs: READ_TIMEOUT_MS, retries: READ_RETRIES });
     if (!res.ok) {
       return Response.json({ error: "장소를 찾을 수 없습니다." }, { status: 404, headers });
     }
@@ -507,7 +508,7 @@ async function handleBanners(env) {
         filter: { property: "노출여부", checkbox: { equals: true } },
         sorts: [{ property: "순서", direction: "ascending" }],
       }),
-    });
+    }, { timeoutMs: READ_TIMEOUT_MS, retries: READ_RETRIES });
 
     if (!res.ok) {
       return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
@@ -568,7 +569,7 @@ async function handleCourses(env) {
       body: JSON.stringify({
         filter: { property: "공개여부", checkbox: { equals: true } },
       }),
-    });
+    }, { timeoutMs: READ_TIMEOUT_MS, retries: READ_RETRIES });
 
     if (!res.ok) {
       return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
@@ -621,7 +622,7 @@ async function handleFestivals(env) {
         filter: { property: "공개여부", checkbox: { equals: true } },
         sorts: [{ property: "기간", direction: "ascending" }],
       }),
-    });
+    }, { timeoutMs: READ_TIMEOUT_MS, retries: READ_RETRIES });
 
     if (!res.ok) {
       return upstreamErrorResponse("정보를 불러오지 못했습니다.", await res.text());
@@ -1635,14 +1636,24 @@ async function handleToday(url, env) {
   }
 
   try {
-    const res = await fetchWithTimeout(buildForecastUrl({ lat, lng }));
+    // 예보와 지역 이름을 함께 부른다. 둘 다 좌표만 있으면 되는데 순서대로
+    // 기다렸다 — 예보 8초를 다 쓴 뒤 이름 조회를 시작하니 최악이 16초였다.
+    // 감시에 잡힌 콜드 미스가 6.2초, 7.1초였고 둘 다 이 합이다. 이제 둘 중
+    // 느린 쪽만 기다린다.
+    //
+    // 예보가 실패하면 이름은 버려진다 — 네이버 호출 하나가 헛돈다. 예보 실패는
+    // 드물고, 이 응답은 좌표를 1.1km 로 뭉갠 뒤 한 시간 캐시하므로 호출 자체가
+    // 이미 크게 줄어 있다. 기다리는 시간을 반으로 줄이는 값이 더 크다.
+    const [res, area] = await Promise.all([
+      fetchWithTimeout(buildForecastUrl({ lat, lng })),
+      // 이름 조회는 스스로 실패를 삼키고 빈 문자열을 돌려준다 — 이름이 없어도
+      // 날씨는 나와야 한다.
+      reverseGeocodeArea(env, { lat, lng }),
+    ]);
     if (!res.ok) return Response.json({ weather: null }, { status: 200, headers });
 
     const forecast = parseForecast(await res.json());
     if (!forecast) return Response.json({ weather: null }, { status: 200, headers });
-
-    // 이름 조회가 늦어도 날씨는 나와야 한다. 실패하면 빈 값으로 넘어간다.
-    const area = await reverseGeocodeArea(env, { lat, lng });
 
     return new Response(
       JSON.stringify({ weather: forecast, area, recommendation: recommendationFor(forecast) }),

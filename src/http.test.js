@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { isNotionId, upstreamErrorResponse, serverErrorResponse, fetchWithTimeout, fetchWithRetry } from "./http.js";
+import { isNotionId, upstreamErrorResponse, serverErrorResponse, fetchWithTimeout, fetchWithRetry, DEFAULT_TIMEOUT_MS, READ_TIMEOUT_MS, READ_RETRIES} from "./http.js";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -134,5 +134,24 @@ describe("fetchWithRetry", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("down", { status: 502 })));
     const res = await fetchWithRetry("https://example.com", {}, { retries: 1, backoffMs: 1 });
     expect(res.status).toBe(502);
+  });
+});
+
+// 사람이 화면 앞에서 기다리는 조회는 빨리 포기해야 한다. 기본값 8초에 재시도
+// 두 번이면 최악 24초인데, 실제로 축제 목록이 8초를 두 번 다 쓰고 500 이 되는
+// 동안 사용자는 빈 화면을 보고 있었다.
+describe("READ_TIMEOUT_MS / READ_RETRIES", () => {
+  it("기본값보다 짧다", () => {
+    expect(READ_TIMEOUT_MS).toBeLessThan(DEFAULT_TIMEOUT_MS);
+  });
+
+  it("최악의 대기가 10초를 넘지 않는다", () => {
+    // 첫 시도 + 재시도 + 그 사이 백오프(400ms)
+    const worst = READ_TIMEOUT_MS * (READ_RETRIES + 1) + 400 * READ_RETRIES;
+    expect(worst).toBeLessThanOrEqual(10_000);
+  });
+
+  it("기본값으로는 최악이 20초를 넘는다 — 그래서 따로 둔다", () => {
+    expect(DEFAULT_TIMEOUT_MS * 3).toBeGreaterThan(20_000);
   });
 });

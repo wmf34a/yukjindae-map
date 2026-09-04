@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
@@ -10,6 +10,7 @@ let escapeHtml, safeHref, safeImageSrc, festivalDday, monthlyRank, sortByMonthly
 let splitNearbyList, primaryNearby, activeEvent, sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore;
 let naverDirectionsUrl;
 let readLastLocation, saveLastLocation, initialMapView;
+let readLastGood, saveLastGood, lastGoodKey;
 let fakeStore;
 
 beforeAll(() => {
@@ -30,6 +31,7 @@ beforeAll(() => {
   ({ sortByDistance, distanceKm, HOME_PLACE_LIMIT, pickRegionTops, weatherScore } = sandbox.window);
   ({ naverDirectionsUrl } = sandbox.window);
   ({ readLastLocation, saveLastLocation, initialMapView } = sandbox.window);
+  ({ readLastGood, saveLastGood, lastGoodKey } = sandbox.window);
 });
 
 // 지금이 KST로 몇 월인지에 따라 테스트가 갈리므로, 검증용으로도 같은 방식으로 계산한다.
@@ -556,5 +558,67 @@ describe("주변 탭 첫 화면", () => {
     fakeStore.clear();
     saveLastLocation(35.1796, 129.0756, NOW);
     expect(readLastLocation(NOW)).toEqual({ lat: 35.1796, lng: 129.0756, at: NOW });
+  });
+});
+
+// 엣지 캐시는 Cloudflare 콜로마다 따로다. 연결마다 다른 콜로로 붙는 날에는 처음
+// 받는 콜로가 캐시 없이 노션까지 갔다 오다 타임아웃이 나고, 사용자는 빈 화면을
+// 본다. 마지막으로 잘 받아온 목록을 남겨 두었다가 그때 대신 보여준다.
+describe("마지막 성공 응답 폴백", () => {
+  beforeEach(() => {
+    fakeStore.clear();
+    fakeStore.blocked = false;
+  });
+
+  describe("lastGoodKey", () => {
+    it("목록 조회에는 키를 준다", () => {
+      expect(lastGoodKey("/api/places", {})).toBe("lastgood:/api/places");
+      expect(lastGoodKey("/api/festivals", {})).toBe("lastgood:/api/festivals");
+    });
+
+    it("쿼리스트링이 붙어도 같은 키다", () => {
+      expect(lastGoodKey("/api/places?x=1", {})).toBe("lastgood:/api/places");
+    });
+
+    it("날씨는 남기지 않는다 — 지난 예보를 오늘로 보여주면 안 된다", () => {
+      expect(lastGoodKey("/api/today?lat=37&lng=127", {})).toBe("");
+    });
+
+    it("보내는 요청은 남기지 않는다", () => {
+      expect(lastGoodKey("/api/places", { method: "POST" })).toBe("");
+      expect(lastGoodKey("/api/reviews", { method: "post" })).toBe("");
+    });
+
+    it("목록에 없는 경로는 남기지 않는다", () => {
+      expect(lastGoodKey("/api/health", {})).toBe("");
+    });
+  });
+
+  describe("readLastGood / saveLastGood", () => {
+    it("저장한 것을 그대로 돌려준다", () => {
+      saveLastGood("lastgood:/api/places", { places: [{ name: "화담숲" }] }, 1000);
+      expect(readLastGood("lastgood:/api/places", 1000)).toEqual({ places: [{ name: "화담숲" }] });
+    });
+
+    it("이레가 지나면 쓰지 않는다 — 문 닫은 곳을 계속 보여줄 수 없다", () => {
+      const week = 7 * 24 * 60 * 60 * 1000;
+      saveLastGood("lastgood:/api/places", { places: [] }, 0);
+      expect(readLastGood("lastgood:/api/places", week - 1)).toEqual({ places: [] });
+      expect(readLastGood("lastgood:/api/places", week + 1)).toBe(null);
+    });
+
+    it("저장된 것이 없으면 null 이다", () => {
+      expect(readLastGood("lastgood:/api/places")).toBe(null);
+    });
+
+    it("깨진 값이 들어 있어도 터지지 않는다", () => {
+      fakeStore.set("lastgood:/api/places", "{{{");
+      expect(readLastGood("lastgood:/api/places")).toBe(null);
+    });
+
+    it("저장이 막힌 브라우저에서도 화면은 떠야 한다", () => {
+      fakeStore.blocked = true;
+      expect(() => saveLastGood("lastgood:/api/places", { places: [] })).not.toThrow();
+    });
   });
 });

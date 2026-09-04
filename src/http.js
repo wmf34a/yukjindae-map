@@ -7,6 +7,18 @@
 // 한곳으로 모았다.
 export const DEFAULT_TIMEOUT_MS = 8000;
 
+// 사람이 화면 앞에서 기다리는 조회에는 더 짧게 준다.
+//
+// 기본값 8초에 재시도 두 번이면 최악 24초다. 실제로 축제 목록이 8초 + 8초를
+// 다 쓰고 500 이 됐고, 그 사이 사용자는 빈 화면을 보고 있었다. 노션이 평소
+// 0.3~1초에 답하므로 4초면 넉넉하고, 4초 안에 못 주는 날은 한 번 더 불러도
+// 마찬가지다. 최악을 8.4초로 줄인다.
+//
+// 크론은 이 값을 쓰지 않는다 — 뒤에 기다리는 사람이 없고, 축제 수집처럼 한
+// 번에 여러 장을 넘기는 작업은 느려도 끝나는 편이 낫다.
+export const READ_TIMEOUT_MS = 4000;
+export const READ_RETRIES = 1;
+
 export function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   return fetch(url, { ...options, signal: AbortSignal.timeout(timeoutMs) });
 }

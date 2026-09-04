@@ -384,6 +384,12 @@ function trackScreen(name) {
     const id = deviceId();
     const qs = new URLSearchParams({ s: name });
     if (id) qs.set("d", id);
+    // 장소·축제·코스 상세는 주소창에 ?id= 로 어느 페이지인지 들고 있다. 그대로
+    // 얹어 어느 곳이 많이 열리는지 센다. 서버가 모양을 확인하고 거른다.
+    const target = typeof location !== "undefined"
+      ? new URLSearchParams(location.search).get("id")
+      : null;
+    if (target) qs.set("p", target);
     fetch(apiUrl(`/api/visit?${qs}`), { method: "POST", keepalive: true }).catch(() => {});
   } catch {
     // 집계는 있으면 좋은 것이지 화면이 뜨는 조건이 아니다.

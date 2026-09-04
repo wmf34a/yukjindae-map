@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeScreen, SCREENS } from "./screens.js";
+import { normalizeScreen, SCREENS, normalizeTargetId} from "./screens.js";
 
 describe("normalizeScreen", () => {
   it("아는 화면은 그대로 둔다", () => {
@@ -31,5 +31,36 @@ describe("파일 이름 별칭", () => {
   it("경로 조각을 화면 이름으로 옮긴다", () => {
     expect(normalizeScreen("index")).toBe("home");
     expect(normalizeScreen("festival-detail")).toBe("festival");
+  });
+});
+
+// 화면 종류만 세면 "상세를 31명이 열었다"까지만 안다. 어느 곳을 열었는지 알아야
+// 사진 없는 곳을 감이 아니라 조회수 순으로 채울 수 있다.
+describe("normalizeTargetId", () => {
+  it("노션 id 를 받는다", () => {
+    expect(normalizeTargetId("3a5a4eba-1ccb-81cd-adac-d5e0ba5c8d9c")).toBe("3a5a4eba1ccb81cdadacd5e0ba5c8d9c");
+  });
+
+  it("하이픈이 없어도 같은 값이 된다 — 같은 페이지가 두 줄로 갈리면 안 된다", () => {
+    const withDash = normalizeTargetId("3a5a4eba-1ccb-81cd-adac-d5e0ba5c8d9c");
+    const without = normalizeTargetId("3a5a4eba1ccb81cdadacd5e0ba5c8d9c");
+    expect(withDash).toBe(without);
+  });
+
+  it("대문자도 같은 값이 된다", () => {
+    expect(normalizeTargetId("3A5A4EBA-1CCB-81CD-ADAC-D5E0BA5C8D9C")).toBe("3a5a4eba1ccb81cdadacd5e0ba5c8d9c");
+  });
+
+  it("id 모양이 아니면 버린다 — 주소창에 아무거나 넣어 통계를 더럽힐 수 없다", () => {
+    expect(normalizeTargetId("../../etc/passwd")).toBe("");
+    expect(normalizeTargetId("<script>")).toBe("");
+    expect(normalizeTargetId("a".repeat(500))).toBe("");
+    expect(normalizeTargetId("3a5a4eba")).toBe("");
+  });
+
+  it("없으면 빈 값이다 — 목록 화면에는 붙지 않는다", () => {
+    expect(normalizeTargetId("")).toBe("");
+    expect(normalizeTargetId(null)).toBe("");
+    expect(normalizeTargetId(undefined)).toBe("");
   });
 });

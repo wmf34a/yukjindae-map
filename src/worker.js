@@ -12,7 +12,7 @@ import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilR
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
 import { readChangingToilets } from "./toilets.js";
-import { normalizeScreen } from "./screens.js";
+import { normalizeScreen, normalizeTargetId } from "./screens.js";
 import { decodeImageDataUrl, reportImageKey } from "./report-image.js";
 import {
   REVIEWS_KV_KEY, validateReview, summarize, readPublicReviews, MAX_PHOTOS,
@@ -1488,6 +1488,8 @@ async function handleVisit(request, env, url) {
   // 방문자 통계를 그대로 읽을 수 있어야 하기 때문이다. 오히려 정확해진다:
   // 예전에는 홈을 거친 사람만 셌는데, 이제 링크로 상세에 바로 들어온 사람도 잡힌다.
   const screen = normalizeScreen(url.searchParams.get("s"));
+  // 상세 화면이면 어느 페이지였는지도 남긴다. 목록 화면에서는 빈 값이다.
+  const target = normalizeTargetId(url.searchParams.get("p"));
 
   // 들어온 사람을 하나도 빠짐없이 적어 둔다.
   //
@@ -1496,7 +1498,7 @@ async function handleVisit(request, env, url) {
   if (env.VISITS) {
     try {
       env.VISITS.writeDataPoint({
-        blobs: [today, id, request.headers.get("cf-ipcountry") || "??", screen],
+        blobs: [today, id, request.headers.get("cf-ipcountry") || "??", screen, target],
         doubles: [1],
         indexes: [today],
       });

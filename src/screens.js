@@ -34,3 +34,19 @@ export function normalizeScreen(value) {
   const name = ALIASES[raw] || raw;
   return SCREENS.has(name) ? name : "other";
 }
+
+// 어느 장소를 봤는지까지 남긴다.
+//
+// 화면 종류만 세니 "상세를 31명이 열었다"까지는 알아도 어느 곳을 열었는지는
+// 몰랐다. 사진이 없거나 설명이 부실한 곳을 감으로 골라 채우고 있었는데,
+// 실제로 많이 열리는 곳부터 채우는 편이 낫다. 축제·코스 상세도 같은 칸을 쓴다.
+//
+// 노션 페이지 id 모양만 받는다. 임의 문자열을 그대로 적으면 집계가 지저분해지고,
+// 주소창에 아무거나 넣어 통계를 오염시킬 수도 있다. 하이픈은 떼어 한 모양으로
+// 맞춘다 — 같은 페이지가 두 줄로 갈리면 세는 의미가 없다.
+const NOTION_ID_RE = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/;
+
+export function normalizeTargetId(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  return NOTION_ID_RE.test(raw) ? raw.replace(/-/g, "") : "";
+}

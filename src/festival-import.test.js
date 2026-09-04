@@ -42,13 +42,15 @@ describe("scoreCandidate", () => {
 });
 
 describe("rankCandidates", () => {
-  it("점수 높은 순, 동점이면 시작일이 이른 순으로 정렬한다", () => {
+  it("점수 높은 순, 동점이면 임박한 순으로 정렬한다", () => {
     const items = [
       baseItem({ contentId: "a", title: "지역 축제", eventStartDate: "20260901" }),
       baseItem({ contentId: "b", title: "가족 체험 축제", eventStartDate: "20260905" }),
       baseItem({ contentId: "c", title: "가족 체험 축제", eventStartDate: "20260902" }),
     ];
-    const ranked = rankCandidates(items, { limit: 10 });
+    // "임박한 순"은 오늘을 기준으로 재므로 today 를 고정하지 않으면 날짜가 바뀔 때
+    // 순서가 뒤집힌다. 실제로 2026-09-04 에 이 테스트가 깨졌다.
+    const ranked = rankCandidates(items, { limit: 10, today: new Date("2026-08-31T00:00:00Z") });
     expect(ranked.map((i) => i.contentId)).toEqual(["c", "b", "a"]);
   });
 

@@ -37,6 +37,8 @@ export const NURSING_SOURCE_URLS = {
 // 준다. 아빠가 들어갈 수 있는지도 알려 준다 — 이 앱에서는 그게 핵심이다.
 const SOOYUSIL_BASE = "https://sooyusil.com/api/nursingRoomJSON.do";
 const SOOYUSIL_KV_KEY = "nursing-rooms:sooyusil";
+// 어떤 값이든 비어 있지만 않으면 통과한다. 어디서 온 요청인지 밝혀 둔다.
+export const SOOYUSIL_USER_AGENT = "yukjindae-map (+https://yukjindae.com)";
 const SOOYUSIL_KV_TTL_SECONDS = 60 * 60 * 24 * 14;
 // 한 번에 전국을 주지 않아 시·도로 나눠 부른다. 열일곱 번이면 끝나서 크론 한 틱에
 // 들어간다.
@@ -311,7 +313,14 @@ export async function refreshSooyusilRooms(env) {
   for (const zone of SOOYUSIL_ZONES) {
     const qs = new URLSearchParams({ confirmApiKey: env.SOOYUSIL_API_KEY, zoneName: zone });
     try {
-      const res = await fetchWithTimeout(`${SOOYUSIL_BASE}?${qs}`, {}, 20_000);
+      // User-Agent 가 없으면 sooyusil.com 이 403 을 준다 — 인증 문제가 아니다.
+      // (같은 키로 UA 만 붙이면 200, 심지어 틀린 키에도 200 을 준다.) 워커 fetch 는
+      // UA 를 안 붙여 나가서 2026-09-05 새벽 크론에서 열일곱 시·도가 전부 막혔다.
+      const res = await fetchWithTimeout(
+        `${SOOYUSIL_BASE}?${qs}`,
+        { headers: { "user-agent": SOOYUSIL_USER_AGENT } },
+        20_000
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       for (const room of data.roomList || []) {

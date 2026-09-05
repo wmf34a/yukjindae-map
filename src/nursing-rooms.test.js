@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   parseBusanItems,
   normalizeBusanItem,
@@ -7,6 +7,9 @@ import {
   parseSeoulMetroNursingItems,
   normalizeSooyusilRoom,
   dedupeByDistance,
+  refreshSooyusilRooms,
+  SOOYUSIL_USER_AGENT,
+  SOOYUSIL_ZONES,
 } from "./nursing-rooms.js";
 
 describe("parseBusanItems", () => {
@@ -179,5 +182,25 @@ describe("dedupeByDistance", () => {
 
   it("좌표가 없는 것은 버린다", () => {
     expect(dedupeByDistance([{ name: "좌표없음" }, at(35.1, 129.0, "정상")])).toHaveLength(1);
+  });
+});
+
+// sooyusil.com 은 User-Agent 가 비면 403 을 준다. 인증이 아니라 UA 검사라서,
+// 헤더가 빠지면 열일곱 시·도가 한꺼번에 막힌다 (2026-09-05 새벽에 실제로 그랬다).
+describe("refreshSooyusilRooms", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("User-Agent 를 붙여서 부른다", async () => {
+    const seen = [];
+    vi.stubGlobal("fetch", async (url, options) => {
+      seen.push({ url: String(url), ua: options?.headers?.["user-agent"] });
+      return new Response(JSON.stringify({ roomList: [] }), { status: 200 });
+    });
+    const kv = { put: async () => {} };
+    await refreshSooyusilRooms({ SOOYUSIL_API_KEY: "k", RATE_LIMIT: kv });
+
+    expect(seen).toHaveLength(SOOYUSIL_ZONES.length);
+    for (const call of seen) expect(call.ua).toBe(SOOYUSIL_USER_AGENT);
+    expect(SOOYUSIL_USER_AGENT).not.toBe("");
   });
 });

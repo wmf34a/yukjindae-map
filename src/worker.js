@@ -46,6 +46,11 @@ const CACHED_AT = "x-cached-at";
 // 만료된 뒤에도 이만큼은 들고 있는다. 그 사이 들어온 요청은 옛 응답이라도 바로 받고,
 // 새 값은 뒤에서 받아 갈아 끼운다.
 const CACHE_HOLD_SECONDS = 3600;
+// 원본을 실제로 받아 온 시각. CACHED_AT 은 갱신 표시로 앞당겨 쓰기 때문에,
+// "언제 진짜로 받은 값인가"는 따로 들고 있어야 한다.
+const FETCHED_AT = "x-fetched-at";
+// 갱신을 띄운 뒤 이만큼은 다른 요청이 또 띄우지 않는다.
+const REVALIDATE_LOCK_SECONDS = 30;
 
 // 네이버·카카오 프록시 응답을 엣지에 두는 기간. 가게 위치와 주행 경로는 하루
 // 사이에 바뀌지 않는다. 이 값이 곧 바깥 API 호출 횟수를 나눈다 —
@@ -84,6 +89,7 @@ export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
     const holdSeconds = Math.max(CACHE_HOLD_SECONDS, ttlSeconds);
     toCache.headers.set("cache-control", `public, max-age=60, s-maxage=${holdSeconds}`);
     toCache.headers.set(CACHED_AT, String(Date.now()));
+    toCache.headers.set(FETCHED_AT, String(Date.now()));
     const forCache = toCache.clone();
     if (ctx) ctx.waitUntil(cache.put(cacheKey, forCache));
     else await cache.put(cacheKey, forCache);
@@ -96,8 +102,33 @@ export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
   const cachedAt = Number(cached.headers.get(CACHED_AT)) || 0;
   const stale = Date.now() - cachedAt > ttlSeconds * 1000;
   // ctx 가 없으면(테스트 등) 뒤에서 돌릴 곳이 없으니 그 자리에서 새로 받는다.
-  if (stale && ctx) ctx.waitUntil(store().catch(() => {}));
-  else if (stale) return store();
+  if (stale && ctx) {
+    // 만료된 뒤 들어오는 요청마다 각자 갱신을 띄우면 노션을 동시에 두드린다 —
+    // 실제로 서로 다른 DB 두 곳이 1초 안에 같이 타임아웃 났고, 그 갱신들은
+    // waitUntil 유예를 넘겨 통째로 취소됐다. 갱신을 시작하기 전에 지금 들고
+    // 있는 응답의 CACHED_AT 만 앞으로 당겨 다시 넣어, 그 사이 들어온 요청은
+    // 갱신을 또 띄우지 않게 한다. 갱신이 잘려도 보관 기간(s-maxage)은 그대로다.
+    //
+    // 다만 갱신이 계속 실패하는 동안 이 표시가 무한정 연장되면 옛 값을 언제까지나
+    // 보여주게 된다. 그래서 원본을 받은 지 보관 기간을 넘겼으면 표시하지 않고,
+    // 예전처럼 요청마다 갱신을 띄운다 — 그쯤 되면 값이 사라지는 게 낫다.
+    const fetchedAt = Number(cached.headers.get(FETCHED_AT)) || cachedAt;
+    const holdSeconds = Math.max(CACHE_HOLD_SECONDS, ttlSeconds);
+    const claimable = Date.now() - fetchedAt < holdSeconds * 1000;
+    const claim = async () => {
+      if (!claimable) return;
+      const held = new Response(cached.clone().body, cached);
+      const ageSeconds = Math.max(0, ttlSeconds - REVALIDATE_LOCK_SECONDS);
+      held.headers.set(CACHED_AT, String(Date.now() - ageSeconds * 1000));
+      await cache.put(cacheKey, held);
+    };
+    ctx.waitUntil(
+      claim()
+        .catch(() => {})
+        .then(() => store())
+        .catch(() => {})
+    );
+  } else if (stale) return store();
   return cached;
 }
 

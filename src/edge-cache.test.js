@@ -160,3 +160,73 @@ describe("GET 이 아닌 요청", () => {
     expect(put).not.toHaveBeenCalled();
   });
 });
+
+// 만료 직후 요청이 몰리면 각자 갱신을 띄워 노션을 동시에 두드렸다. 갱신을 시작할 때
+// 캐시에 표시를 남겨 뒤따르는 요청이 다시 띄우지 않게 한 부분을 확인한다.
+describe("withEdgeCache 갱신 표시", () => {
+  // claim() 안의 await 몇 단계를 흘려보낸다. 타이머가 아니라 마이크로태스크라
+  // 시간을 진행시킬 필요가 없다.
+  const flush = async () => {
+    for (let i = 0; i < 10; i += 1) await Promise.resolve();
+  };
+
+  // 첫 호출만 바로 답하고, 그 뒤 갱신은 풀어 줄 때까지 매달려 있는 핸들러.
+  function gatedHandler() {
+    let release;
+    const gate = new Promise((r) => (release = r));
+    let calls = 0;
+    const handler = async () => {
+      calls += 1;
+      if (calls > 1) await gate;
+      return json({ n: calls });
+    };
+    return { handler, release: () => release(), get calls() { return calls; } };
+  }
+
+  const T0 = Date.parse("2026-09-05T00:00:00Z");
+
+  it("갱신이 도는 동안 들어온 요청은 갱신을 또 띄우지 않는다", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    const g = gatedHandler();
+
+    await withEdgeCache(req(), fakeCtx(), 300, g.handler);
+    expect(g.calls).toBe(1);
+
+    vi.setSystemTime(T0 + 301_000); // 만료됨
+    const first = fakeCtx();
+    await withEdgeCache(req(), first, 300, g.handler);
+    await flush();
+    expect(g.calls).toBe(2); // 갱신 하나 시작
+
+    const second = fakeCtx();
+    await withEdgeCache(req(), second, 300, g.handler);
+    await second.settle();
+    expect(g.calls).toBe(2); // 표시를 보고 다시 띄우지 않음
+
+    g.release();
+    await first.settle();
+  });
+
+  it("원본을 받은 지 보관 기간을 넘겼으면 표시하지 않는다", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(T0);
+    const g = gatedHandler();
+
+    await withEdgeCache(req(), fakeCtx(), 300, g.handler);
+
+    vi.setSystemTime(T0 + 3_601_000); // 보관 기간(1시간) 지남
+    const first = fakeCtx();
+    await withEdgeCache(req(), first, 300, g.handler);
+    await flush();
+    expect(g.calls).toBe(2);
+
+    const second = fakeCtx();
+    await withEdgeCache(req(), second, 300, g.handler);
+    await flush();
+    expect(g.calls).toBe(3); // 표시가 없으니 요청마다 갱신을 띄운다
+
+    g.release();
+    await Promise.all([first.settle(), second.settle()]);
+  });
+});

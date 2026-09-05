@@ -230,3 +230,38 @@ describe("withEdgeCache 갱신 표시", () => {
     await Promise.all([first.settle(), second.settle()]);
   });
 });
+
+// 조건부 요청이 오면 cache.match 가 304 를 준다. 그 응답을 갱신 표시로 다시
+// 넣으려 하면 Workers 가 "Ignoring attempt to Cache.put() a 304" 를 찍는다.
+it("304 는 갱신 표시로 다시 넣지 않는다", async () => {
+  vi.useFakeTimers();
+  const T = Date.parse("2026-09-05T00:00:00Z");
+  vi.setSystemTime(T);
+
+  let calls = 0;
+  const handler = async () => {
+    calls += 1;
+    return json({ n: calls });
+  };
+  await withEdgeCache(req(), fakeCtx(), 300, handler);
+
+  // 만료된 뒤, 캐시가 304 를 돌려주는 상황을 만든다.
+  vi.setSystemTime(T + 301_000);
+  const hit = await cache.match(req());
+  const notModified = new Response(null, { status: 304, headers: hit.headers });
+  cache.match = async () => notModified.clone();
+  const puts = [];
+  const realPut = cache.put.bind(cache);
+  cache.put = async (k, v) => {
+    puts.push(v.status);
+    return realPut(k, v);
+  };
+
+  const ctx = fakeCtx();
+  const res = await withEdgeCache(req(), ctx, 300, handler);
+  await ctx.settle();
+
+  expect(res.status).toBe(304);
+  expect(puts).not.toContain(304); // 304 를 캐시에 넣지 않는다
+  expect(calls).toBe(2); // 갱신 자체는 그대로 돈다
+});

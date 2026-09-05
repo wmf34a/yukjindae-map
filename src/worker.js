@@ -112,9 +112,12 @@ export async function withEdgeCache(request, ctx, ttlSeconds, handler) {
     // 다만 갱신이 계속 실패하는 동안 이 표시가 무한정 연장되면 옛 값을 언제까지나
     // 보여주게 된다. 그래서 원본을 받은 지 보관 기간을 넘겼으면 표시하지 않고,
     // 예전처럼 요청마다 갱신을 띄운다 — 그쯤 되면 값이 사라지는 게 낫다.
+    //
+    // 조건부 요청(If-None-Match 등)이 오면 cache.match 가 304 를 돌려준다. 그건
+    // 다시 넣을 수 없는 응답이라, 표시만 건너뛰고 갱신은 그대로 돈다.
     const fetchedAt = Number(cached.headers.get(FETCHED_AT)) || cachedAt;
     const holdSeconds = Math.max(CACHE_HOLD_SECONDS, ttlSeconds);
-    const claimable = Date.now() - fetchedAt < holdSeconds * 1000;
+    const claimable = cached.status === 200 && Date.now() - fetchedAt < holdSeconds * 1000;
     const claim = async () => {
       if (!claimable) return;
       const held = new Response(cached.clone().body, cached);

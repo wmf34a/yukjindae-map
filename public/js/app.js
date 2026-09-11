@@ -258,7 +258,7 @@ async function renderFestivals() {
   wrap.hidden = false;
   wrap.innerHTML = `
     <div class="festival-strip__head">
-      <h2 class="section__title">🎪 지금 열리는 축제<button type="button" class="info-dot" aria-expanded="false" aria-label="축제 목록이 언제 바뀌는지 보기" data-info="매주 일요일 새벽에 새 축제를 모아 와요. 끝난 축제는 종료일이 지나면 자동으로 내려가요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
+      <h2 class="section__title">🎪 지금 열리는 축제<button type="button" class="info-dot" aria-expanded="false" aria-label="축제 목록이 언제 바뀌는지 보기" data-info="매주 토요일 새벽에 새 축제를 모아 와요. 끝난 축제는 종료일이 지나면 자동으로 내려가요."><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="4.6" r="0.95" fill="currentColor"/><path d="M8 7.2v4.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></h2>
       <a class="festival-strip__more" href="festival.html">전체 ${festivals.length}개 ›</a>
     </div>
     <div class="festival-strip__scroll">${cards}</div>

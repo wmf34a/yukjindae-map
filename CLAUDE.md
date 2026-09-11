@@ -13,7 +13,7 @@
 | `make install` | `npm install` (husky 훅 포함) |
 | `make dev` | `wrangler dev` — http://localhost:8788 |
 | `make lint` / `make lint-fix` | **oxlint** (ESLint 아님) |
-| `make test` / `make test-watch` | vitest. 현재 **33개 파일 693개 통과** |
+| `make test` / `make test-watch` | vitest. 현재 **37개 파일 729개 통과** |
 | `make ci` | lint + test. CI와 같은 체크 |
 | `make deploy` | `wrangler deploy` (수동/즉시 배포용) — **웹만** |
 | `npm run build` | 앱인토스 미니앱 번들 `yukjindae-map.ait` 생성 — **웹과 무관** |
@@ -79,7 +79,7 @@ node scripts/register-places.mjs tmp/<지역>-후보.json  # 공개여부=false 
 
 ## 축제 자동수집
 
-주 1회 크론(토 19:00 UTC = 일 04:00 KST)이 TourAPI에서 앞으로 60일 안에 열리는
+주 1회 크론(금 19:00 UTC = 토 04:00 KST)이 TourAPI에서 앞으로 60일 안에 열리는
 축제를 긁어 노션에 **`공개여부=false`(검토 대기)** 로 만든다. 앱에 뜨는 것은 사람이
 체크박스를 켠 것뿐이다 — 키워드 필터는 완벽하지 않아 자동 공개는 하지 않는다.
 

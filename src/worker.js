@@ -1545,9 +1545,14 @@ async function handleVisit(request, env, url) {
 }
 
 function handleNaverConfig(env) {
+  // 여기 담기는 값은 전부 공개해도 되는 것들이다. 지도 클라이언트 ID 는 URL
+  // 화이트리스트로, Supabase anon 키는 행 단위 보안(RLS)으로 보호된다 —
+  // 시크릿 계열(NAVER_SEARCH_CLIENT_SECRET, SUPABASE_SERVICE_ROLE 등)은 절대 넣지 않는다.
   const body = `window.__ENV__ = ${JSON.stringify({
     NAVER_MAP_CLIENT_ID: env.NAVER_MAP_CLIENT_ID || "",
     TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY || "",
+    SUPABASE_URL: env.SUPABASE_URL || "",
+    SUPABASE_ANON_KEY: env.SUPABASE_ANON_KEY || "",
   })};`;
   return new Response(body, {
     status: 200,
@@ -2051,11 +2056,11 @@ async function withProxyRateLimit(request, env, handler) {
 // Turnstile, Pretendard 폰트 CDN을 실제로 쓰고 있어서 그 출처만 허용한다.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' https://oapi.map.naver.com https://*.pstatic.net https://challenges.cloudflare.com",
+  "script-src 'self' 'unsafe-inline' https://oapi.map.naver.com https://*.pstatic.net https://challenges.cloudflare.com https://cdn.jsdelivr.net",
   "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
   "font-src 'self' https://cdn.jsdelivr.net data:",
   "img-src 'self' data: blob: https:",
-  "connect-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.map.naver.net",
+  "connect-src 'self' https://oapi.map.naver.com https://*.pstatic.net https://*.map.naver.net https://*.supabase.co",
   "frame-src https://challenges.cloudflare.com",
   "frame-ancestors 'none'",
   "base-uri 'self'",

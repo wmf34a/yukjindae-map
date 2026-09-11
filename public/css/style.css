@@ -2389,3 +2389,51 @@ body {
 .festival-fee--paid {
   background: var(--color-accent);
 }
+
+/* ── 로그인 칸 (찜 화면) ───────────────────────────────────────── */
+.auth-box {
+  margin: 0 16px 14px;
+  padding: 14px 16px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 14px;
+}
+.auth-box__hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-sub, #6b7280);
+}
+.auth-box__hint--lead { margin-bottom: 10px; }
+.auth-box__hint b { color: var(--text, #111827); font-weight: 600; }
+.auth-box__btns { display: flex; gap: 8px; }
+.auth-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line, #e5e7eb);
+}
+.auth-btn--google { background: #fff; color: #1f2937; }
+.auth-btn--kakao { background: #fee500; color: #191600; border-color: #fee500; }
+.auth-btn:active { transform: translateY(1px); }
+.auth-box__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.auth-box__who {
+  font-size: 14px; font-weight: 600; color: var(--text, #111827);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.auth-box__out {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-sub, #6b7280);
+  background: transparent;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.auth-box__row + .auth-box__hint { margin-top: 8px; }

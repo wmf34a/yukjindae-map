@@ -13,6 +13,17 @@ function isFavorite(id) {
   return getFavorites().includes(id);
 }
 
+// 브라우저 저장소가 정본이다. 로그인했으면 서버에도 같은 목록을 밀어 넣지만,
+// 그 호출이 실패해도 화면은 이미 바뀐 뒤다 — 찜은 실패했다고 되돌릴 만한 일이 아니고,
+// 다음 로그인 때 합치기가 다시 맞춰 준다.
+function setFavorites(list, { push = true } = {}) {
+  const favorites = Array.isArray(list) ? list : [];
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  window.dispatchEvent(new CustomEvent("favoritesChanged", { detail: { favorites } }));
+  if (push) window.yukAuth?.pushFavorites?.(favorites);
+  return favorites;
+}
+
 // 새로 찜한 항목을 배열 맨 앞에 둬서 저장 순서 자체가 "최근 찜한 순"이 되게 한다.
 function toggleFavorite(id) {
   const favorites = getFavorites();
@@ -22,9 +33,7 @@ function toggleFavorite(id) {
   } else {
     favorites.splice(index, 1);
   }
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
-  window.dispatchEvent(new CustomEvent("favoritesChanged", { detail: { favorites } }));
-  return favorites;
+  return setFavorites(favorites);
 }
 
 function onFavoritesChange(callback) {
@@ -56,6 +65,7 @@ function bindFavoriteButtons(root) {
 // 이 파일은 app.js/map.js/place.js/favorite-page.js가 <script> 태그로 공유해서 쓰는
 // 전역 유틸이라, 이 파일 안에서는 안 불리는 함수도 window에 명시적으로 붙여둔다.
 window.getFavorites = getFavorites;
+window.setFavorites = setFavorites;
 window.isFavorite = isFavorite;
 window.toggleFavorite = toggleFavorite;
 window.onFavoritesChange = onFavoritesChange;

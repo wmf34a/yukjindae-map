@@ -84,7 +84,43 @@ function renderFavorites() {
   bindFavoriteButtons(listEl);
 }
 
+// 로그인 칸. 로그인은 선택이라, 팔아야 할 것은 "기기를 바꿔도 찜이 따라온다" 하나뿐이다.
+// 그래서 찜 목록 바로 위에 둔다 — 지금 보고 있는 것이 사라질까 걱정되는 자리다.
+function renderAuthBox(user) {
+  const box = document.getElementById("auth-box");
+  if (!box) return;
+  if (!window.yukAuth?.authAvailable()) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+
+  if (user) {
+    box.innerHTML = `
+      <div class="auth-box__row">
+        <span class="auth-box__who">${escapeHtml(window.yukAuth.displayName(user))}</span>
+        <button type="button" class="auth-box__out" id="auth-signout">로그아웃</button>
+      </div>
+      <p class="auth-box__hint">찜한 장소가 계정에 저장돼요. 다른 기기에서 로그인해도 그대로 보여요.</p>
+    `;
+    box.querySelector("#auth-signout").addEventListener("click", () => window.yukAuth.signOut());
+    return;
+  }
+
+  box.innerHTML = `
+    <p class="auth-box__hint auth-box__hint--lead">로그인하면 <b>기기를 바꿔도 찜이 따라와요.</b></p>
+    <div class="auth-box__btns">
+      <button type="button" class="auth-btn auth-btn--google" data-provider="google">구글로 계속하기</button>
+      <button type="button" class="auth-btn auth-btn--kakao" data-provider="kakao">카카오로 계속하기</button>
+    </div>
+  `;
+  box.querySelectorAll("[data-provider]").forEach((btn) => {
+    btn.addEventListener("click", () => window.yukAuth.signIn(btn.dataset.provider));
+  });
+}
+
 async function init() {
+  window.yukAuth?.onAuthChange(renderAuthBox);
   try {
     const data = await fetchJson("/api/places");
     favoriteState.places = data.places || [];

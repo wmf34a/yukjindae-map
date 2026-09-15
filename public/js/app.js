@@ -755,16 +755,39 @@ function buildNotices() {
     createdAt: banner.createdAt,
   }));
 
-  const newPlaceNotices = state.places
+  // 새 장소는 하루에 한두 곳씩 늘 때를 전제로 세 줄만 보여줬다. 그런데 한 번에
+  // 서른 곳이 들어오는 날이 있고, 그러면 나머지가 통째로 묻힌다 — 같은 날 것은
+  // 한 줄로 묶어 "몇 곳이 늘었는지"를 먼저 말하고, 이름은 앞의 몇 개만 붙인다.
+  const recent = state.places
     .toSorted((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-    .slice(0, 3)
-    .map((place) => ({
+    .slice(0, 40);
+  const byDay = new Map();
+  for (const place of recent) {
+    const day = String(place.createdAt).slice(0, 10);
+    if (!byDay.has(day)) byDay.set(day, []);
+    byDay.get(day).push(place);
+  }
+  const newPlaceNotices = [...byDay.entries()].slice(0, 3).map(([, places]) => {
+    const newest = places[0];
+    if (places.length === 1) {
+      return {
+        type: "new-place",
+        title: `새 장소 추가: ${newest.name}`,
+        subtitle: newest.region,
+        link: `place.html?id=${encodeURIComponent(newest.id)}`,
+        createdAt: newest.createdAt,
+      };
+    }
+    const names = places.slice(0, 3).map((p) => p.name).join(" · ");
+    const more = places.length > 3 ? ` 외 ${places.length - 3}곳` : "";
+    return {
       type: "new-place",
-      title: `새 장소 추가: ${place.name}`,
-      subtitle: place.region,
-      link: `place.html?id=${encodeURIComponent(place.id)}`,
-      createdAt: place.createdAt,
-    }));
+      title: `새 장소 ${places.length}곳이 추가됐어요`,
+      subtitle: `${names}${more}`,
+      link: "index.html",
+      createdAt: newest.createdAt,
+    };
+  });
 
   const featureNotices = FEATURE_NOTICES.map((notice) => ({ ...notice, type: "feature" }));
 

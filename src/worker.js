@@ -7,7 +7,10 @@ import { runEnrichment } from "./enrich.js";
 import { runMonthlyTop10 } from "./monthly-top10.js";
 import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weather.js";
 import { fetchFestivalDescription, fetchFestivalUseFee, searchFestivalsInRange } from "./tourapi.js";
-import { rankCandidates, selectNewCandidates, toNotionProperties } from "./festival-import.js";
+import {
+  rankCandidates, selectNewCandidates, toNotionProperties,
+  pendingExpiringSoon, buildFestivalSlackText,
+} from "./festival-import.js";
 import { fetchAllNursingRooms, runStationNursingGeocodeRefresh, refreshSooyusilRooms } from "./nursing-rooms.js";
 import { announceNursingReport, applyApprovedNursingReports } from "./nursing-reports.js";
 import { findNearestRoom, needsPublicDataMatch, buildPublicDataPatchProperties } from "./nursing-match.js";
@@ -767,7 +770,10 @@ async function runScheduledFestivalImport(env) {
   }
   /* oxlint-enable no-await-in-loop */
 
-  await notifyFestivalCandidates(env, fresh);
+  // 지난 회차에 켜지 않아 곧 끝나는 것들. 이걸 안 알려서 9/11 회차 13건 중
+  // 8건이 주말에 그대로 끝났다 — 새 후보만 알리면 대기 건은 영영 묻힌다.
+  const expiring = pendingExpiringSoon(existing, { today: todayInKst() });
+  await notifyFestivalCandidates(env, fresh, expiring);
 }
 
 // 운영진에게 제보를 알린다. 노션 페이지에 댓글로 멘션하면 노션이 알아서 메일을
@@ -806,15 +812,16 @@ async function notifyNotionMention(env, pageId, { placeName, field, value }) {
 
 // 새로 등록된 축제 후보는 항상 공개여부=false(검토 대기)로 들어가므로, 사람이
 // 노션을 열어 확인하지 않으면 계속 묻힌다 — 매주 슬랙으로 리마인드한다.
-async function notifyFestivalCandidates(env, items) {
-  if (items.length === 0) return;
-
+async function notifyFestivalCandidates(env, items, pending = []) {
   const dbUrl = `https://www.notion.so/${env.NOTION_FESTIVAL_DATABASE_ID.replace(/-/g, "")}`;
-  const lines = items.map((item) => {
-    const start = item.eventStartDate ? `${item.eventStartDate.slice(4, 6)}.${item.eventStartDate.slice(6, 8)}~` : "";
-    return `• ${item.title}${start ? ` (${start})` : ""}`;
+  const text = buildFestivalSlackText({
+    fresh: items,
+    pending,
+    today: todayInKst(),
+    dbUrl,
   });
-  const text = `🎪 새 축제 후보 ${items.length}개가 노션에 추가됐어요 (검토 대기)\n${lines.join("\n")}\n${dbUrl}`;
+  // 새 후보도 없고 곧 끝날 대기 건도 없으면 아무 말도 하지 않는다.
+  if (!text) return;
   await notifySlack(env, text);
 }
 

@@ -194,3 +194,97 @@ export function selectNewCandidates(rankedItems, existingTourApiIds, { limit = I
   const existing = new Set(existingTourApiIds.filter(Boolean));
   return rankedItems.filter((item) => !existing.has(item.contentId)).slice(0, limit);
 }
+
+// ── 승인 리마인드 ──────────────────────────────────────────────
+//
+// 수집은 토요일 새벽에 도는데, 그 주 주말에 열리는 축제는 며칠 안에 켜지 않으면
+// 그대로 끝나 버린다. 2026-09-11 회차에서 13건 중 8건을 그렇게 놓쳤다 —
+// 미추홀미디어문화축제·노원수제맥주축제처럼 9/12~13 이틀만 하는 것들이었다.
+//
+// 그래서 알림이 두 가지를 말해야 한다: (1) 이번에 새로 온 후보 중 급한 것,
+// (2) 지난 회차에 켜지 않아 곧 만료될 대기 건. (2)는 지금까지 아무도 안 알렸다.
+
+function dayDiff(fromYmd, toYmd) {
+  const a = Date.parse(`${fromYmd}T00:00:00Z`);
+  const b = Date.parse(`${toYmd}T00:00:00Z`);
+  if (Number.isNaN(a) || Number.isNaN(b)) return null;
+  return Math.round((b - a) / DAY_MS);
+}
+
+/** "20260912" 또는 "2026-09-12" 를 "2026-09-12" 로 맞춘다. */
+export function normalizeYmd(value) {
+  const s = String(value || "").trim();
+  if (/^\d{8}$/.test(s)) return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  return "";
+}
+
+// 새 후보를 급한 것과 여유 있는 것으로 가른다.
+// 기준은 시작일 — soonDays 안에 시작하면 이번 알림에서 먼저 보여준다.
+export function splitByUrgency(items, { today, soonDays = 3 } = {}) {
+  const urgent = [];
+  const later = [];
+  for (const item of items) {
+    const start = normalizeYmd(item.eventStartDate || item.periodStart);
+    const d = start ? dayDiff(today, start) : null;
+    if (d !== null && d <= soonDays) urgent.push({ item, dday: d });
+    else later.push({ item, dday: d });
+  }
+  urgent.sort((a, b) => a.dday - b.dday);
+  return { urgent, later };
+}
+
+// 아직 공개하지 않았는데 곧 끝나는 축제. 이미 끝난 것은 뺀다 —
+// 켜도 목록에 안 뜨므로 알려봐야 할 일이 없다.
+export function pendingExpiringSoon(pages, { today, withinDays = 10 } = {}) {
+  const out = [];
+  for (const p of pages) {
+    if (p.published) continue;
+    const start = normalizeYmd(p.periodStart);
+    const end = normalizeYmd(p.periodEnd) || start;
+    if (!end) continue;
+    const left = dayDiff(today, end);
+    if (left === null || left < 0) continue;      // 이미 끝났다
+    if (left > withinDays) continue;              // 아직 여유가 있다
+    out.push({ page: p, daysLeft: left, start, end });
+  }
+  out.sort((a, b) => a.daysLeft - b.daysLeft);
+  return out;
+}
+
+// 슬랙 문구. 무엇부터 켜야 하는지가 첫 줄에서 보여야 한다.
+export function buildFestivalSlackText({ fresh = [], pending = [], today, dbUrl } = {}) {
+  const { urgent, later } = splitByUrgency(fresh, { today });
+  const lines = [];
+
+  if (urgent.length) {
+    lines.push(`🚨 *오늘내일 시작하는 축제 ${urgent.length}건 — 지금 켜지 않으면 놓칩니다*`);
+    for (const { item, dday } of urgent) {
+      const when = dday <= 0 ? "오늘 시작" : dday === 1 ? "내일 시작" : `D-${dday}`;
+      lines.push(`• [${when}] ${item.title}`);
+    }
+    lines.push("");
+  }
+
+  if (pending.length) {
+    lines.push(`⏳ *지난 회차 대기 중 — ${pending.length}건이 곧 끝납니다*`);
+    for (const { page, daysLeft, end } of pending) {
+      const when = daysLeft === 0 ? "오늘 종료" : `${daysLeft}일 뒤 종료`;
+      lines.push(`• [${when}] ${page.title} (~${end.slice(5)})`);
+    }
+    lines.push("");
+  }
+
+  if (later.length) {
+    lines.push(`🎪 새 후보 ${later.length}건 (여유 있음)`);
+    for (const { item } of later) {
+      const start = normalizeYmd(item.eventStartDate || item.periodStart);
+      lines.push(`• ${item.title}${start ? ` (${start.slice(5)}~)` : ""}`);
+    }
+    lines.push("");
+  }
+
+  if (!lines.length) return "";
+  lines.push(dbUrl);
+  return lines.join("\n");
+}

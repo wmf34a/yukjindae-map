@@ -5,6 +5,10 @@ import {
   mapAddressToRegion,
   toNotionProperties,
   selectNewCandidates,
+  splitByUrgency,
+  pendingExpiringSoon,
+  buildFestivalSlackText,
+  normalizeYmd,
 } from "./festival-import.js";
 
 const baseItem = (overrides = {}) => ({
@@ -214,5 +218,135 @@ describe("selectNewCandidates", () => {
   it("limit이 없으면 전부 남긴다", () => {
     const items = Array.from({ length: 30 }, (_, i) => baseItem({ contentId: `${i}` }));
     expect(selectNewCandidates(items, [])).toHaveLength(30);
+  });
+});
+
+describe("승인 리마인드", () => {
+  const TODAY = "2026-09-12"; // 토요일 새벽 수집 직후
+
+  describe("normalizeYmd", () => {
+    it("TourAPI 형식과 노션 형식을 같은 모양으로 맞춘다", () => {
+      expect(normalizeYmd("20260912")).toBe("2026-09-12");
+      expect(normalizeYmd("2026-09-12")).toBe("2026-09-12");
+      expect(normalizeYmd("2026-09-12T00:00:00+09:00")).toBe("2026-09-12");
+    });
+    it("빈 값과 이상한 값은 빈 문자열", () => {
+      for (const bad of ["", null, undefined, "언젠가", 123]) expect(normalizeYmd(bad)).toBe("");
+    });
+  });
+
+  describe("splitByUrgency", () => {
+    it("오늘·내일 시작하는 것을 따로 뽑는다", () => {
+      const items = [
+        { title: "오늘시작", eventStartDate: "20260912" },
+        { title: "내일시작", eventStartDate: "20260913" },
+        { title: "다음달", eventStartDate: "20261020" },
+      ];
+      const { urgent, later } = splitByUrgency(items, { today: TODAY });
+      expect(urgent.map((u) => u.item.title)).toEqual(["오늘시작", "내일시작"]);
+      expect(later.map((u) => u.item.title)).toEqual(["다음달"]);
+    });
+
+    it("급한 것은 가까운 순으로 정렬한다", () => {
+      const items = [
+        { title: "내일", eventStartDate: "20260913" },
+        { title: "오늘", eventStartDate: "20260912" },
+      ];
+      const { urgent } = splitByUrgency(items, { today: TODAY });
+      expect(urgent[0].item.title).toBe("오늘");
+    });
+
+    it("이미 시작한 축제도 급한 쪽이다 — 아직 안 끝났을 수 있다", () => {
+      const { urgent } = splitByUrgency([{ title: "어제부터", eventStartDate: "20260911" }], { today: TODAY });
+      expect(urgent).toHaveLength(1);
+      expect(urgent[0].dday).toBe(-1);
+    });
+
+    it("날짜가 없으면 여유 쪽으로 둔다 — 급하다고 잘못 알리지 않는다", () => {
+      const { urgent, later } = splitByUrgency([{ title: "날짜없음" }], { today: TODAY });
+      expect(urgent).toHaveLength(0);
+      expect(later).toHaveLength(1);
+    });
+  });
+
+  describe("pendingExpiringSoon", () => {
+    const page = (title, start, end, published = false) =>
+      ({ title, periodStart: start, periodEnd: end, published });
+
+    it("공개 안 했는데 곧 끝나는 것만 고른다", () => {
+      const pages = [
+        page("곧끝남", "2026-09-10", "2026-09-14"),
+        page("여유있음", "2026-10-01", "2026-10-30"),
+        page("이미공개", "2026-09-10", "2026-09-14", true),
+      ];
+      const out = pendingExpiringSoon(pages, { today: TODAY });
+      expect(out.map((o) => o.page.title)).toEqual(["곧끝남"]);
+    });
+
+    it("이미 끝난 것은 뺀다 — 켜도 목록에 안 뜬다", () => {
+      const out = pendingExpiringSoon([page("지남", "2026-09-01", "2026-09-05")], { today: TODAY });
+      expect(out).toHaveLength(0);
+    });
+
+    it("종료일이 없으면 시작일을 종료일로 본다", () => {
+      const out = pendingExpiringSoon([page("하루짜리", "2026-09-13", "")], { today: TODAY });
+      expect(out).toHaveLength(1);
+      expect(out[0].daysLeft).toBe(1);
+    });
+
+    it("남은 날이 적은 순으로 준다", () => {
+      const pages = [page("3일", "2026-09-10", "2026-09-15"), page("오늘", "2026-09-10", "2026-09-12")];
+      const out = pendingExpiringSoon(pages, { today: TODAY });
+      expect(out.map((o) => o.daysLeft)).toEqual([0, 3]);
+    });
+  });
+
+  describe("buildFestivalSlackText", () => {
+    const dbUrl = "https://notion.so/db";
+
+    it("급한 것을 맨 위에 두고 무엇부터 켤지 말한다", () => {
+      const text = buildFestivalSlackText({
+        fresh: [{ title: "주말축제", eventStartDate: "20260913" }],
+        pending: [],
+        today: TODAY,
+        dbUrl,
+      });
+      expect(text.split("\n")[0]).toContain("놓칩니다");
+      expect(text).toContain("[내일 시작] 주말축제");
+    });
+
+    it("지난 회차 대기 건도 함께 알린다 — 이게 없어서 8건을 놓쳤다", () => {
+      const text = buildFestivalSlackText({
+        fresh: [],
+        pending: [{ page: { title: "지난주것" }, daysLeft: 1, end: "2026-09-13" }],
+        today: TODAY,
+        dbUrl,
+      });
+      expect(text).toContain("곧 끝납니다");
+      expect(text).toContain("지난주것");
+    });
+
+    it("급한 것도 대기 건도 없으면 새 후보만 담백하게 적는다", () => {
+      const text = buildFestivalSlackText({
+        fresh: [{ title: "다음달축제", eventStartDate: "20261020" }],
+        pending: [],
+        today: TODAY,
+        dbUrl,
+      });
+      expect(text).not.toContain("놓칩니다");
+      expect(text).toContain("여유 있음");
+    });
+
+    it("알릴 게 하나도 없으면 빈 문자열 — 빈 알림을 보내지 않는다", () => {
+      expect(buildFestivalSlackText({ fresh: [], pending: [], today: TODAY, dbUrl })).toBe("");
+    });
+
+    it("마지막 줄은 항상 노션 링크다", () => {
+      const text = buildFestivalSlackText({
+        fresh: [{ title: "축제", eventStartDate: "20261020" }],
+        pending: [], today: TODAY, dbUrl,
+      });
+      expect(text.trim().split("\n").pop()).toBe(dbUrl);
+    });
   });
 });

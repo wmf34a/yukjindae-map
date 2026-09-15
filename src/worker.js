@@ -528,6 +528,42 @@ async function ensureMirroredImage(env, prefix, pageId, source) {
   }
 }
 
+// 합칠 응답에서 목록 하나를 꺼낸다. 키가 없거나 본문이 JSON 이 아니면 빈 목록을
+// 준다 — 한 곳이 모양을 바꿔도 홈 전체가 빈 화면이 되지는 않게.
+export async function pickList(response, key) {
+  try {
+    const data = await response.json();
+    return Array.isArray(data?.[key]) ? data[key] : [];
+  } catch {
+    return [];
+  }
+}
+
+// 홈이 따로 부르던 배너·축제·후기를 한 응답으로 합친다.
+//
+// 셋 다 응답이 작고 홈에서만 함께 쓰이는데, 나눠 두면 홈을 한 번 열 때마다 워커
+// 요청이 세 건씩 잡힌다. 2026-09-15 홈 조회 7,732회가 그런 식으로 무료 플랜의
+// 하루 한도(100,000)를 밀어 올렸고, 그날 API 가 통째로 1027 로 막혔다.
+//
+// 장소 목록은 합치지 않는다 — 455KB 라 홈이 그것부터 그려야 하고, 장소·지도·코스
+// 페이지가 같은 /api/places 엣지 캐시를 나눠 쓰고 있어 합치면 캐시가 둘로 갈린다.
+//
+// 하나가 실패해도 나머지는 내려보낸다. 셋이 한 배를 타면 후기 조회가 흔들릴 때
+// 배너와 축제까지 같이 사라진다.
+async function handleHome(env, url) {
+  const headers = { "content-type": "application/json; charset=utf-8" };
+  // 후기는 placeId 없이 전부 받는다. 홈은 카드에 별점만 얹으므로 장소별로 나눌 필요가 없다.
+  const allReviews = new URL(url);
+  allReviews.search = "";
+
+  const [banners, festivals, reviews] = await Promise.all([
+    handleBanners(env).then((r) => pickList(r, "banners"), () => []),
+    handleFestivals(env).then((r) => pickList(r, "festivals"), () => []),
+    handleReviewsGet(env, allReviews).then((r) => pickList(r, "reviews"), () => []),
+  ]);
+  return Response.json({ banners, festivals, reviews }, { status: 200, headers });
+}
+
 async function handleBanners(env) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 
@@ -2154,6 +2190,9 @@ async function handleRequest(request, env, ctx) {
       return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handlePlaces(env, url));
     }
     return handlePlaces(env, url);
+  }
+  if (url.pathname === "/api/home") {
+    return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handleHome(env, url));
   }
   if (url.pathname === "/api/banners") {
     return withEdgeCache(request, ctx, LIST_CACHE_SECONDS, () => handleBanners(env));

@@ -223,17 +223,9 @@ function initShareButton() {
 // 지금까지는 "축제·행사 TOP10 / 지금 열리는 행사 10개"라는 링크 한 줄이었다.
 // 무엇이 열리는지 안 보여주니 눌러볼 이유가 없었다. 실제 축제를 카드로 깔고
 // 전체 보기를 옆에 둔다.
-async function renderFestivals() {
+function renderFestivals(festivals = []) {
   const wrap = document.getElementById("curated-links");
   if (!wrap) return;
-
-  let festivals = [];
-  try {
-    const data = await fetchJson("/api/festivals");
-    festivals = data.festivals || [];
-  } catch {
-    // 축제를 못 가져와도 홈은 떠야 한다.
-  }
 
   if (!festivals.length) {
     wrap.hidden = true;
@@ -319,11 +311,10 @@ function freeBadgeText(place) {
 // 카드에서 별점이 보이는 것과 상세까지 들어가야 보이는 것은 다르다.
 const reviewStats = new Map();
 
-async function loadReviewStats() {
+function applyReviewStats(reviews = []) {
   try {
-    const data = await fetchJson("/api/reviews");
     const byPlace = new Map();
-    for (const r of data.reviews || []) {
+    for (const r of reviews) {
       if (!r.placeId || !r.rating) continue;
       const cur = byPlace.get(r.placeId) || { sum: 0, count: 0 };
       cur.sum += Number(r.rating);
@@ -690,23 +681,23 @@ function bannerSlide(banner) {
     : `<div class="banner__slide banner__slide--photo">${inner}</div>`;
 }
 
-async function loadBanners() {
-  try {
-    const data = await fetchJson("/api/banners");
-    const banners = data.banners || [];
-    // 내용이 그대로면 다시 그리지 않는다. 화면이 다시 보일 때마다 새로 그리면
-    // 슬라이드가 첫 장으로 튀고 화면이 한 번 깜빡인다.
-    if (JSON.stringify(banners) === JSON.stringify(state.banners)) return;
-    state.banners = banners;
-    if (banners.length) {
-      document.getElementById("hero-track").innerHTML = banners.map(bannerSlide).join("");
-    }
-  } catch (err) {
-    console.error(err);
+function renderBanners(banners = []) {
+  const hero = document.getElementById("hero-banner");
+  const same = JSON.stringify(banners) === JSON.stringify(state.banners);
+  // 내용이 그대로면 다시 그리지 않는다. 화면이 다시 보일 때마다 새로 그리면
+  // 슬라이드가 첫 장으로 튀고 화면이 한 번 깜빡인다.
+  //
+  // 다만 아직 로딩 상태면 같은 내용이라도 아래로 내려간다. state.banners 초기값이
+  // 빈 배열이라, 노션에 배너가 하나도 없거나 응답을 못 받은 경우 "그대로"로 판정돼
+  // 배너 자리가 영영 로딩 상태로 남았다.
+  if (same && !hero.classList.contains("is-loading")) return;
+  state.banners = banners;
+  if (banners.length) {
+    document.getElementById("hero-track").innerHTML = banners.map(bannerSlide).join("");
   }
   // 노션 배너 유무가 판가름 난 뒤에야 배너 영역을 드러내서, 기본 배너가 잠깐
   // 보였다가 노션 배너로 바뀌는 깜빡임 없이 처음부터 최종 내용만 보이게 한다.
-  document.getElementById("hero-banner").classList.remove("is-loading");
+  hero.classList.remove("is-loading");
   initHeroSlider();
 }
 
@@ -1058,16 +1049,33 @@ function updateSearchModeUI() {
 //
 // 화면이 다시 보이는 순간 다시 부른다. 엣지 캐시가 60초라 서버 부담은 거의 없지만,
 // 탭을 자주 오가는 사람이 매번 네 개를 부르지 않도록 최소 간격을 둔다.
-const REFRESH_MIN_GAP_MS = 30000;
+// 30초였다. 탭을 자주 오가는 사람이 그때마다 홈 데이터를 다시 받아 요청이 불어난다 —
+// 배너나 새 장소가 5분 늦게 보이는 것은 아무도 눈치채지 못한다.
+const REFRESH_MIN_GAP_MS = 300000;
 let lastLoadedAt = 0;
+
+// 배너·축제·후기는 /api/home 하나로 받는다. 따로 부르면 홈을 열 때마다 워커 요청이
+// 세 건씩 잡혀 무료 한도를 밀어 올린다(2026-09-15 에 실제로 넘겨 API 가 막혔다).
+// 장소 목록은 크고 먼저 그려야 해서 따로 둔다.
+async function loadHomeExtras() {
+  try {
+    const data = await fetchJson("/api/home");
+    renderBanners(data.banners || []);
+    renderFestivals(data.festivals || []);
+    applyReviewStats(data.reviews || []);
+  } catch (err) {
+    console.error(err);
+    // 못 받아도 홈은 떠야 한다. 배너 자리를 로딩 상태로 붙잡아 두지 않는다.
+    renderBanners([]);
+    renderFestivals([]);
+  }
+}
 
 function loadHomeData() {
   lastLoadedAt = Date.now();
-  Promise.all([loadBanners(), loadPlaces()]).then(renderBellBadge);
+  Promise.all([loadHomeExtras(), loadPlaces()]).then(renderBellBadge);
   // 장소 로딩과 독립적으로 돈다 — 날씨가 늦거나 실패해도 목록은 그대로 뜬다.
   loadTodayWeather();
-  // 후기도 마찬가지다. 없으면 별점만 안 보일 뿐이다.
-  loadReviewStats();
 }
 
 document.addEventListener("visibilitychange", () => {
@@ -1079,7 +1087,6 @@ document.addEventListener("visibilitychange", () => {
 document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
-  renderFestivals();
   renderCategoryFilter();
   initNoticesBell();
   initShareButton();

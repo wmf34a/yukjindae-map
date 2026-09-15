@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesQuery, validateReportPayload, validateNewPlacePayload, validateBugPayload,
-  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst,
+  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst, pickList,
 } from "./worker.js";
 
 const place = {
@@ -266,5 +266,25 @@ describe("validateBugPayload", () => {
 
   it("너무 긴 내용은 막는다", () => {
     expect(validateBugPayload({ value: "가".repeat(1001) })).toBe("내용이 너무 깁니다.");
+  });
+});
+
+describe("pickList — /api/home 합치기", () => {
+  it("해당 키의 배열을 꺼낸다", async () => {
+    const res = Response.json({ banners: [{ id: "a" }], extra: 1 });
+    expect(await pickList(res, "banners")).toEqual([{ id: "a" }]);
+  });
+
+  it("키가 없으면 빈 목록이다 — 한 곳이 비어도 홈의 나머지는 떠야 한다", async () => {
+    expect(await pickList(Response.json({ festivals: [] }), "banners")).toEqual([]);
+    expect(await pickList(Response.json({}), "reviews")).toEqual([]);
+  });
+
+  it("배열이 아닌 값이 와도 빈 목록이다", async () => {
+    expect(await pickList(Response.json({ banners: "nope" }), "banners")).toEqual([]);
+  });
+
+  it("JSON 이 아니면 던지지 않고 빈 목록을 준다", async () => {
+    expect(await pickList(new Response("<html>502</html>"), "banners")).toEqual([]);
   });
 });

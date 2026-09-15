@@ -202,7 +202,7 @@ const LAST_GOOD_PREFIX = "lastgood:";
 // 이보다 오래된 것은 쓰지 않는다. 문 닫은 곳을 일주일 넘게 보여줄 수는 없다.
 const LAST_GOOD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 // 날씨는 남기지 않는다 — 지난 예보를 오늘 날씨라고 보여주면 안 된다.
-const LAST_GOOD_PATHS = ["/api/places", "/api/festivals", "/api/courses", "/api/banners", "/api/reviews"];
+const LAST_GOOD_PATHS = ["/api/places", "/api/home", "/api/festivals", "/api/courses", "/api/banners", "/api/reviews"];
 
 function lastGoodKey(url, options) {
   if ((options.method || "GET").toUpperCase() !== "GET") return "";

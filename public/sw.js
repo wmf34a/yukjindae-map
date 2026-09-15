@@ -80,7 +80,35 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 그 외 정적 리소스(css/js/이미지)는 stale-while-revalidate: 캐시가 있으면 즉시
+  // 장소 사진은 캐시에 있으면 그대로 쓰고 네트워크를 부르지 않는다.
+  //
+  // 아래 stale-while-revalidate 는 캐시가 맞아도 fetch 를 매번 띄운다. 사진은
+  // 워커가 R2 에서 읽어 내려주는 경로(/images/*)라 그 재검증 하나하나가 워커 요청
+  // 으로 잡힌다 — 2026-09-15 하루 워커 요청 145,375 건 중 87,585 건(60%)이 사진
+  // 이었고, 그날 무료 플랜 일일 한도(100,000)를 넘겨 API 가 통째로 1027 로 막혔다.
+  // 화면 한 번에 사진 8장인데 방문자 4,411 명이 87,585 번을 받아 간 것은 같은
+  // 사진을 페이지를 옮길 때마다 다시 받았다는 뜻이다.
+  //
+  // 사진을 갈아끼웠을 때는 노션의 사진 URL 뒤 ?v=날짜 를 바꾼다. URL 이 달라지므로
+  // 캐시가 비껴가고 새 사진이 내려간다 — 얼굴이 찍힌 사진을 내려야 할 때 쓰는 길이
+  // 이것뿐이니, 사진을 교체하면 ?v= 도 반드시 함께 올릴 것.
+  if (url.pathname.startsWith("/images/")) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((res) => {
+          if (res.ok) {
+            const resClone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone)).catch(() => {});
+          }
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  // 그 외 정적 리소스(css/js)는 stale-while-revalidate: 캐시가 있으면 즉시
   // 보여주고, 백그라운드로 최신화. 캐시 저장 실패는 무시하고 응답은 항상 반환.
   event.respondWith(
     caches.match(event.request).then((cached) => {

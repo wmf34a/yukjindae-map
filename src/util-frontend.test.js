@@ -576,8 +576,12 @@ describe("마지막 성공 응답 폴백", () => {
       expect(lastGoodKey("/api/festivals", {})).toBe("lastgood:/api/festivals");
     });
 
-    it("쿼리스트링이 붙어도 같은 키다", () => {
-      expect(lastGoodKey("/api/places?x=1", {})).toBe("lastgood:/api/places");
+    it("쿼리스트링이 다르면 키도 다르다 — 장소마다 자기 후기를 들고 있어야 한다", () => {
+      expect(lastGoodKey("/api/reviews?placeId=A", {})).toBe("lastgood:/api/reviews?placeId=A");
+      expect(lastGoodKey("/api/reviews?placeId=B", {})).toBe("lastgood:/api/reviews?placeId=B");
+      expect(lastGoodKey("/api/reviews?placeId=A", {})).not.toBe(lastGoodKey("/api/reviews?placeId=B", {}));
+      // placeId 없이 부르는 홈의 전체 후기와도 섞이지 않는다.
+      expect(lastGoodKey("/api/reviews", {})).toBe("lastgood:/api/reviews");
     });
 
     it("날씨는 남기지 않는다 — 지난 예보를 오늘로 보여주면 안 된다", () => {

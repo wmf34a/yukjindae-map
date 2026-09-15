@@ -207,7 +207,11 @@ const LAST_GOOD_PATHS = ["/api/places", "/api/festivals", "/api/courses", "/api/
 function lastGoodKey(url, options) {
   if ((options.method || "GET").toUpperCase() !== "GET") return "";
   const path = String(url).split("?")[0];
-  return LAST_GOOD_PATHS.indexOf(path) === -1 ? "" : LAST_GOOD_PREFIX + path;
+  if (LAST_GOOD_PATHS.indexOf(path) === -1) return "";
+  // 쿼리스트링까지 키에 넣는다. 경로만 쓰면 /api/reviews?placeId=A 와 =B 가 한 칸을
+  // 나눠 써서, 네트워크가 막힌 순간 모든 장소에 마지막으로 받은 후기가 그대로 뜬다
+  // (홈이 placeId 없이 전체 후기를 받아 두면 장소마다 남의 후기가 보였다).
+  return LAST_GOOD_PREFIX + String(url);
 }
 
 function readLastGood(key, now = Date.now()) {

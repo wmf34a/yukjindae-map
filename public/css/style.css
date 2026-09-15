@@ -79,6 +79,10 @@ body {
   align-items: center;
   gap: 10px;
   text-decoration: none;
+  /* min-width:0 이 없으면 flex 항목이 내용 크기 아래로 못 줄어든다 —
+     그래서 제목이 줄바꿈으로 삐져나갔다. */
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .header__logo {
@@ -103,6 +107,14 @@ body {
   color: var(--color-white);
   user-select: none;
   -webkit-user-select: none;
+  /* 390px 폭에서 "by 육진대"가 "육진 / 대"로 쪼개져 두 줄이 됐다.
+     제목은 한 줄로 두고, 자리가 모자라면 브랜드 블록이 줄어들게 한다. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* flex 항목의 기본 min-width 는 auto 라 내용보다 작아지지 않는다.
+     이게 없으면 nowrap 을 줘도 부모를 밀어내며 줄바꿈이 남는다. */
+  min-width: 0;
 }
 
 .header__subtitle {
@@ -111,11 +123,20 @@ body {
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* 좁은 폰에서는 헤더 아이콘 넷과 설치 버튼이 자리를 다 쓴다.
+   "by 육진대"까지 넣으면 제목이 잘리므로, 그 폭에서는 부제를 감춘다 —
+   로고가 이미 누구 앱인지 말해 준다. */
+@media (max-width: 430px) {
+  .header__subtitle { display: none; }
+}
+
 .header__actions {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 10px;
+  /* 아이콘·설치 버튼은 줄이지 않는다. 제목 쪽이 먼저 줄어들어야 한다. */
+  flex-shrink: 0;
 }
 
 /* 공유·알림은 헤더에서 같은 무게로 보여야 한다 — 하나만 튀면 다른 하나를 못 본다. */

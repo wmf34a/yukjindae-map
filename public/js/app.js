@@ -947,6 +947,10 @@ async function loadTodayWeather({ ask = false } = {}) {
   try {
     const coords = await currentCoords({ ask });
     const usingDefault = coords === DEFAULT_WEATHER_COORDS;
+    // 홈이 어느 기준으로 그려졌는지 방문 집계에 남긴다. 버튼을 눌러 허용한
+    // 경우(ask)와 원래 허용돼 있던 경우를 갈라 둔다 — 버튼이 실제로 눌리는지
+    // 알아야 자리를 옮길지 판단할 수 있다.
+    window.setGeoOutcome?.(usingDefault ? "default" : (ask ? "granted-click" : "granted"));
     // 실제 내 위치를 받았을 때만 기억한다. 기본 좌표(서울)로 거리순 정렬을 하면
     // 지방 사용자에게 서울 근처를 추천하게 된다.
     state.coords = usingDefault ? null : coords;

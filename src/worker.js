@@ -1546,6 +1546,13 @@ async function visitStats(env) {
   return { today: stats.today, total: stats.total };
 }
 
+// 홈이 어느 좌표로 그려졌는지. 아는 값만 받는다 — 쿼리로 들어오는 값이라
+// 그대로 적으면 누구나 집계에 아무 문자열이나 심을 수 있다.
+export function normalizeGeoOutcome(value) {
+  const v = String(value || "").trim();
+  return ["granted", "granted-click", "default", "unknown"].includes(v) ? v : "";
+}
+
 async function handleVisit(request, env, url) {
   const headers = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
   const today = todayInKst();
@@ -1567,6 +1574,9 @@ async function handleVisit(request, env, url) {
   const screen = normalizeScreen(url.searchParams.get("s"));
   // 상세 화면이면 어느 페이지였는지도 남긴다. 목록 화면에서는 빈 값이다.
   const target = normalizeTargetId(url.searchParams.get("p"));
+  // 홈이 내 위치 기준으로 그려졌는지(granted / granted-click) 서울 기준인지(default).
+  // 홈이 아닌 화면과 판정 전에 떠난 경우는 빈 값이다.
+  const geo = normalizeGeoOutcome(url.searchParams.get("g"));
 
   // 들어온 사람을 하나도 빠짐없이 적어 둔다.
   //
@@ -1575,7 +1585,7 @@ async function handleVisit(request, env, url) {
   if (env.VISITS) {
     try {
       env.VISITS.writeDataPoint({
-        blobs: [today, id, request.headers.get("cf-ipcountry") || "??", screen, target],
+        blobs: [today, id, request.headers.get("cf-ipcountry") || "??", screen, target, geo],
         doubles: [1],
         indexes: [today],
       });

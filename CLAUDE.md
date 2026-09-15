@@ -277,8 +277,24 @@ HTML·`sw.js`·`manifest.json` 은 캐시하지 않는다. HTML 을 캐시하면
 ```
 blob1  KST 날짜 "YYYY-MM-DD"      blob4  화면 (home/place/map/festival/...)
 blob2  기기 식별자                 blob5  대상 ID (장소·축제, 대시 없는 32자)
-blob3  국가                        double1  1
+blob3  국가                        blob6  홈 위치 기준 (아래)
+                                  double1  1
 ```
+
+`blob6` 은 홈이 어느 좌표로 그려졌는지다. 홈은 위치 권한을 자동으로 묻지 않아
+(`currentCoords`), 허용하지 않은 사람은 계속 서울 기준 추천을 본다 — 그 비율을
+재려고 넣었다. 홈이 아닌 화면에서는 빈 값이다.
+
+| 값 | 뜻 |
+|---|---|
+| `granted` | 이미 허용돼 있어 조용히 내 위치로 그렸다 |
+| `granted-click` | 📍 버튼을 눌러 그 자리에서 허용했다 |
+| `default` | 허용 안 됨 — 서울 기준으로 그렸다 |
+| `unknown` | 판정 전에 떠났다(2초 상한) |
+
+**권한 상태(`navigator.permissions`)로 세지 않는다.** iOS 사파리가 geolocation 을
+지원하지 않아 통째로 `unsupported` 로 오는데 한국 모바일에서 그 비중이 크다.
+그래서 권한이 아니라 실제 결과를 남긴다.
 
 SQL API 로 조회한다. 토큰은 `.dev.vars` 의 `CF_ANALYTICS_TOKEN`,
 계정은 `4f082846f63415e0d1300ec9c6e5c6cb`.

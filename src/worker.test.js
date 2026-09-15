@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesQuery, validateReportPayload, validateNewPlacePayload, validateBugPayload,
-  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst, pickList,
+  validateNewPlaceAmenities, buildNewPlaceValue, isFirstDayInKst, pickList, normalizeGeoOutcome,
 } from "./worker.js";
 
 const place = {
@@ -286,5 +286,21 @@ describe("pickList — /api/home 합치기", () => {
 
   it("JSON 이 아니면 던지지 않고 빈 목록을 준다", async () => {
     expect(await pickList(new Response("<html>502</html>"), "banners")).toEqual([]);
+  });
+});
+
+describe("normalizeGeoOutcome — 홈 위치 기준 집계", () => {
+  it("아는 값만 통과시킨다", () => {
+    expect(normalizeGeoOutcome("granted")).toBe("granted");
+    expect(normalizeGeoOutcome("granted-click")).toBe("granted-click");
+    expect(normalizeGeoOutcome("default")).toBe("default");
+    expect(normalizeGeoOutcome("unknown")).toBe("unknown");
+  });
+
+  it("모르는 값은 빈 값이다 — 집계에 아무 문자열이나 심지 못하게", () => {
+    expect(normalizeGeoOutcome("서울")).toBe("");
+    expect(normalizeGeoOutcome("x".repeat(500))).toBe("");
+    expect(normalizeGeoOutcome(null)).toBe("");
+    expect(normalizeGeoOutcome(undefined)).toBe("");
   });
 });

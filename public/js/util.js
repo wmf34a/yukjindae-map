@@ -236,6 +236,24 @@ function saveLastGood(key, data, now = Date.now()) {
   }
 }
 
+// 서버가 통째로 막혔을 때 쓰는 마지막 그물. 배포할 때 함께 올려 두는 목록 스냅샷이다.
+//
+// 정적 파일은 워커를 거치지 않아서, 무료 플랜 하루 한도를 넘겨 API 가 1027 로
+// 막혀도 그대로 내려간다(2026-09-15 에 실제로 겪었다 — 그날 첫 방문자는 "장소 0곳"
+// 만 봤다). 재방문자는 lastGood 이 받쳐 주지만 처음 오는 사람에게는 이것뿐이다.
+//
+// 날짜가 지난 목록이라도 빈 화면보다 낫다. 스냅샷을 새로 뜨려면
+// `node scripts/dump-snapshots.mjs` 를 돌리고 함께 배포한다.
+const SNAPSHOTS = {
+  "/api/places": "data/places.json",
+  "/api/home": "data/home.json",
+  "/api/courses": "data/courses.json",
+};
+
+function snapshotPath(url) {
+  return SNAPSHOTS[String(url).split("?")[0]] || "";
+}
+
 function fetchJson(url, options = {}) {
   const key = lastGoodKey(url, options);
   return fetch(apiUrl(url), { ...options, signal: AbortSignal.timeout(options.timeoutMs || FETCH_TIMEOUT_MS) }).then(
@@ -253,6 +271,15 @@ function fetchJson(url, options = {}) {
     (err) => {
       const saved = key ? readLastGood(key) : null;
       if (saved) return saved;
+      // 저장해 둔 것도 없으면(처음 온 사람) 배포에 딸려 온 스냅샷을 쓴다.
+      const snap = (options.method || "GET").toUpperCase() === "GET" ? snapshotPath(url) : "";
+      if (snap) {
+        return fetch(snap, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
+          .then((res) => (res.ok ? res.json() : Promise.reject(err)))
+          .catch(() => {
+            throw err;
+          });
+      }
       throw err;
     }
   );
@@ -383,11 +410,48 @@ function deviceId() {
 // 2.9% 인데 어디서 놓치는지 알 방법이 없었다.
 //
 // 결과를 기다리지 않는다. 집계가 느리거나 실패한다고 화면이 늦어지면 안 된다.
-function trackScreen(name) {
+// 홈이 "내 위치 기준"으로 그려졌는지 "서울 기준"으로 그려졌는지를 함께 남기기
+// 위한 장치. 홈은 위치 권한을 자동으로 묻지 않아서, 허용하지 않은 사람은 계속
+// 서울 기준 추천을 본다 — 그게 몇 %인지 지금까지 잴 방법이 없었다.
+//
+// 권한 상태(navigator.permissions)로는 못 센다. iOS 사파리가 geolocation 을
+// 지원하지 않아 통째로 "unsupported" 로 오는데, 한국 모바일에서 그 비중이 크다.
+// 그래서 권한이 아니라 실제 결과 — 홈이 어느 좌표로 그려졌는지 — 를 남긴다.
+let geoOutcomeResolve;
+const geoOutcome = new Promise((resolve) => {
+  geoOutcomeResolve = resolve;
+});
+
+// app.js 가 위치 판정을 마치면 부른다. 한 번만 먹는다.
+function setGeoOutcome(value) {
+  if (geoOutcomeResolve) {
+    geoOutcomeResolve(value);
+    geoOutcomeResolve = null;
+  }
+}
+
+// 홈 말고는 기다릴 이유가 없고, 홈도 하염없이 기다리지는 않는다 — 판정이 안 오면
+// 모르는 채로 남긴다. 집계 때문에 기록 자체를 놓치면 본말이 전도된다.
+//
+// 2초로 끊는다. 권한을 안 준 사람은 권한 조회만 하고 끝나 거의 즉시 오고, 준
+// 사람도 보통 1초 안에 온다. 그 사이에 나가 버린 사람은 기록이 통째로 빠지므로
+// 길게 잡을수록 손해다. GPS 가 유난히 느린 사람 몇이 unknown 으로 새는데,
+// 그쪽은 어차피 위치를 허용한 사람이라 "서울 기준 비율"을 부풀리지는 않는다.
+function geoOutcomeWithin(ms) {
+  return Promise.race([
+    geoOutcome,
+    new Promise((resolve) => setTimeout(() => resolve("unknown"), ms)),
+  ]).catch(() => "unknown");
+}
+
+async function trackScreen(name) {
   try {
     const id = deviceId();
     const qs = new URLSearchParams({ s: name });
     if (id) qs.set("d", id);
+    if (name === "home" || name === "index" || name === "") {
+      qs.set("g", await geoOutcomeWithin(2000));
+    }
     // 장소·축제·코스 상세는 주소창에 ?id= 로 어느 페이지인지 들고 있다. 그대로
     // 얹어 어느 곳이 많이 열리는지 센다. 서버가 모양을 확인하고 거른다.
     const target = typeof location !== "undefined"
@@ -431,6 +495,8 @@ window.fetchJson = fetchJson;
 window.readLastGood = readLastGood;
 window.saveLastGood = saveLastGood;
 window.lastGoodKey = lastGoodKey;
+window.snapshotPath = snapshotPath;
+window.setGeoOutcome = setGeoOutcome;
 window.apiUrl = apiUrl;
 window.sortByDistance = sortByDistance;
 window.distanceKm = distanceKm;

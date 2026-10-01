@@ -2579,3 +2579,17 @@ body {
   .launch-sheet__dim,
   .launch-sheet__panel { transition: none; }
 }
+
+.launch-sheet__skip {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: var(--color-sub);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}

@@ -1144,21 +1144,55 @@ const LAUNCH_NOTICE = {
   id: "2026-10-autumn",
   tag: "10월 추천",
   title: "이번 달은 단풍 명소로 골랐어요",
-  text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요. 홈에서 우리 지역을 눌러 확인해 보세요.",
+  text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요.",
+  cta: "우리 지역 보러 가기",
+  // 누르면 이 자리로 데려간다. 닫기만 하는 버튼은 누를 이유가 없다.
+  target: "region-section",
 };
 const LAUNCH_NOTICE_KEY = "yukjindae:launchNotice";
 
-function closeLaunchSheet() {
+// 부드럽게 옮기되, 못 가면 그냥 간다.
+//
+// 앱을 연 직후에는 장소 목록이 늦게 그려지면서 문서 높이가 바뀐다. 그 리플로우가
+// 진행 중인 부드러운 스크롤을 취소해 버려서, 버튼을 눌러도 화면이 그대로 있었다
+// (제보: "둘러보기 했을 때 뭐 동작이 없음"). 끝났어야 할 시점에 안 왔으면 한 번에 옮긴다.
+function scrollToSection(target) {
+  const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const want = () => Math.round(window.scrollY + target.getBoundingClientRect().top);
+  const goal = want();
+  target.scrollIntoView({ behavior: motionOk ? "smooth" : "auto", block: "start" });
+  if (!motionOk) return;
+  setTimeout(() => {
+    // 목표가 그 사이 또 움직였을 수 있으니 지금 기준으로 다시 잰다.
+    if (Math.abs(target.getBoundingClientRect().top) > 40) {
+      target.scrollIntoView({ behavior: "auto", block: "start" });
+    }
+  }, Math.max(700, Math.min(1200, Math.abs(goal - window.scrollY))));
+}
+
+function closeLaunchSheet({ goTo = false } = {}) {
   const sheet = document.getElementById("launch-sheet");
   if (!sheet || sheet.hidden || !sheet.classList.contains("is-open")) return false;
   sheet.classList.remove("is-open");
-  // 올라온 길로 되내려간 뒤에 감춘다. 바로 hidden 을 주면 툭 사라진다.
-  setTimeout(() => { sheet.hidden = true; }, 320);
   try {
     localStorage.setItem(LAUNCH_NOTICE_KEY, LAUNCH_NOTICE.id);
   } catch {
     // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
   }
+
+  const target = goTo && LAUNCH_NOTICE.target
+    ? document.getElementById(LAUNCH_NOTICE.target)
+    : null;
+
+  // 감추기와 스크롤을 한 번에 한다.
+  //
+  // 처음에는 320ms 에 감추고 340ms 에 스크롤했는데, 그 20ms 사이의 리플로우가
+  // 부드러운 스크롤을 취소해서 화면이 그대로 있었다 — 버튼을 눌러도 아무 일이
+  // 없다는 제보가 그래서 나왔다. 같은 틱에서 감춘 뒤 바로 움직이면 흔들리지 않는다.
+  setTimeout(() => {
+    sheet.hidden = true;
+    if (target) scrollToSection(target);
+  }, 320);
   return true;
 }
 
@@ -1174,8 +1208,11 @@ function initLaunchSheet() {
   document.getElementById("launch-sheet-tag").textContent = LAUNCH_NOTICE.tag;
   document.getElementById("launch-sheet-title").textContent = LAUNCH_NOTICE.title;
   document.getElementById("launch-sheet-text").textContent = LAUNCH_NOTICE.text;
-  document.getElementById("launch-sheet-close").addEventListener("click", closeLaunchSheet);
-  document.getElementById("launch-sheet-dim").addEventListener("click", closeLaunchSheet);
+  const cta = document.getElementById("launch-sheet-close");
+  cta.textContent = LAUNCH_NOTICE.cta || "확인";
+  cta.addEventListener("click", () => closeLaunchSheet({ goTo: true }));
+  document.getElementById("launch-sheet-dismiss").addEventListener("click", () => closeLaunchSheet());
+  document.getElementById("launch-sheet-dim").addEventListener("click", () => closeLaunchSheet());
 
   sheet.hidden = false;
   // 첫 화면이 그려진 뒤에 올라와야 "앱을 열었더니 올라온다"로 읽힌다.

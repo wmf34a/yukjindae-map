@@ -1112,9 +1112,25 @@ function isStandalone() {
   }
 }
 
+// 종료 확인창도 같은 이유로 없으면 만든다(설치형에서만 쓰인다).
+function buildExitAsk() {
+  const el = document.createElement("dialog");
+  el.className = "ask";
+  el.id = "exit-ask";
+  el.innerHTML = `
+    <p class="ask__t">육진대 맵을 종료할까요?</p>
+    <div class="ask__row">
+      <button type="button" class="ask__btn ask__btn--ghost" id="exit-no">취소</button>
+      <button type="button" class="ask__btn" id="exit-yes">종료</button>
+    </div>`;
+  document.body.appendChild(el);
+  return el;
+}
+
 function initExitGuard() {
-  const ask = document.getElementById("exit-ask");
-  if (!ask || !isStandalone() || typeof ask.showModal !== "function") return;
+  if (!isStandalone()) return;
+  const ask = document.getElementById("exit-ask") || buildExitAsk();
+  if (!ask || typeof ask.showModal !== "function") return;
 
   const guard = () => {
     if (!history.state?.layer) history.pushState({ layer: "guard" }, "");
@@ -1255,9 +1271,39 @@ function closeLaunchSheet({ goTo = false, forever = false } = {}) {
   return true;
 }
 
+// 시트를 HTML 에 의존하지 않고 직접 만든다.
+//
+// 설치해서 쓰는 앱은 서비스워커가 옛 HTML 을 들고 있을 수 있다. 그러면 시트 요소가
+// 아예 없어서 아무 일도 일어나지 않는다 — 배포했는데 안 뜬다는 제보가 세 번 나왔고,
+// 매번 원인이 달랐지만 결과는 같았다. app.js 는 네트워크 우선이라 늘 최신이므로,
+// 화면 조각을 여기서 만들면 HTML 이 낡았든 말든 뜬다.
+function buildLaunchSheet() {
+  const el = document.createElement("div");
+  el.className = "launch-sheet";
+  el.id = "launch-sheet";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-modal", "true");
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="launch-sheet__dim" id="launch-sheet-dim"></div>
+    <div class="launch-sheet__panel">
+      <div class="launch-sheet__handle"></div>
+      <div class="launch-sheet__body">
+        <span class="launch-sheet__tag" id="launch-sheet-tag"></span>
+        <p class="launch-sheet__title" id="launch-sheet-title"></p>
+        <p class="launch-sheet__text" id="launch-sheet-text"></p>
+        <button type="button" class="launch-sheet__cta" id="launch-sheet-close"></button>
+        <button type="button" class="launch-sheet__skip" id="launch-sheet-dismiss">다시 안 보기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  return el;
+}
+
 function initLaunchSheet() {
-  const sheet = document.getElementById("launch-sheet");
-  if (!sheet || !LAUNCH_NOTICE.title) return;
+  if (!LAUNCH_NOTICE.title) return;
+  const sheet = document.getElementById("launch-sheet") || buildLaunchSheet();
+  if (!sheet) return;
   try {
     if (localStorage.getItem(LAUNCH_NOTICE_KEY) === launchNoticeKey()) return;
   } catch {

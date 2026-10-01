@@ -531,11 +531,17 @@ async function ensureMirroredImage(env, prefix, pageId, source) {
 // 합칠 응답에서 목록 하나를 꺼낸다. 키가 없거나 본문이 JSON 이 아니면 빈 목록을
 // 준다 — 한 곳이 모양을 바꿔도 홈 전체가 빈 화면이 되지는 않게.
 export async function pickList(response, key) {
+  // 못 받은 것과 비어 있는 것을 가른다.
+  //
+  // 예전에는 둘 다 빈 배열이었다. 그래서 노션이 흔들려 축제를 못 받아도 /api/home 이
+  // 200 으로 나갔고, withEdgeCache 가 그 빈 응답을 5분 동안 들고 있었다 — 한 번의
+  // 일시적 실패가 홈의 배너와 축제를 5분간 지웠다(2026-10-01 노션 500 장애 때 실제로).
+  if (!response || response.status !== 200) return null;
   try {
     const data = await response.json();
     return Array.isArray(data?.[key]) ? data[key] : [];
   } catch {
-    return [];
+    return null;
   }
 }
 
@@ -557,11 +563,21 @@ async function handleHome(env, url) {
   allReviews.search = "";
 
   const [banners, festivals, reviews] = await Promise.all([
-    handleBanners(env).then((r) => pickList(r, "banners"), () => []),
-    handleFestivals(env).then((r) => pickList(r, "festivals"), () => []),
-    handleReviewsGet(env, allReviews).then((r) => pickList(r, "reviews"), () => []),
+    handleBanners(env).then((r) => pickList(r, "banners"), () => null),
+    handleFestivals(env).then((r) => pickList(r, "festivals"), () => null),
+    handleReviewsGet(env, allReviews).then((r) => pickList(r, "reviews"), () => null),
   ]);
-  return Response.json({ banners, festivals, reviews }, { status: 200, headers });
+
+  // 배너나 축제를 못 받았으면 통째로 실패로 돌린다.
+  //
+  // 200 으로 내보내면 엣지가 그 빈 응답을 5분 동안 재사용하고, 프론트도 성공으로
+  // 알아 last-good 을 쓰지 않는다. 차라리 실패를 알려야 앱이 지난번에 받아 둔
+  // 목록을 그대로 보여준다 — 빈 홈보다 조금 지난 홈이 낫다.
+  if (banners === null || festivals === null) {
+    return upstreamErrorResponse("정보를 불러오지 못했습니다.", "home: banners/festivals 조회 실패");
+  }
+  // 후기는 없어도 별점만 안 보인다. 이것 때문에 홈 전체를 막지는 않는다.
+  return Response.json({ banners, festivals, reviews: reviews || [] }, { status: 200, headers });
 }
 
 async function handleBanners(env) {

@@ -284,8 +284,10 @@ describe("pickList — /api/home 합치기", () => {
     expect(await pickList(Response.json({ banners: "nope" }), "banners")).toEqual([]);
   });
 
-  it("JSON 이 아니면 던지지 않고 빈 목록을 준다", async () => {
-    expect(await pickList(new Response("<html>502</html>"), "banners")).toEqual([]);
+  it("못 받은 것은 빈 목록이 아니라 null 이다 — 빈 홈이 5분 동안 캐시되면 안 된다", async () => {
+    expect(await pickList(new Response("bad", { status: 502 }), "banners")).toBe(null);
+    expect(await pickList(new Response("<html>", { status: 200 }), "banners")).toBe(null);
+    expect(await pickList(null, "banners")).toBe(null);
   });
 });
 

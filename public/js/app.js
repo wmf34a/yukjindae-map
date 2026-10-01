@@ -1088,10 +1088,85 @@ document.addEventListener("visibilitychange", () => {
   loadHomeData();
 });
 
+
+// 홈에서 뒤로가기를 눌렀을 때 앱이 예고 없이 닫히는 것을 한 번 막아 준다.
+//
+// 설치형(PWA/TWA)으로 열면 방문 기록이 홈 한 칸뿐이라, 뒤로가기 한 번에 바로
+// 닫힌다. 보고 있던 화면이 그대로 사라지는 것으로 느껴진다는 제보가 있었다.
+//
+// "종료하시겠습니까?" 확인창은 만들 수 없다. 가짜 기록을 밀어 넣어 첫 뒤로가기를
+// 받아내는 방식이라, 그 시점에는 기록이 다시 비어 있다. 거기서 "예"를 눌러도
+// 웹에서 앱을 닫을 방법이 없다 — window.close() 는 스크립트가 연 창이 아니면
+// 막힌다. 그래서 안드로이드 앱들이 쓰는 "한 번 더 누르면 종료" 로 간다.
+// 가짜 기록을 다시 밀어 넣지 않으면 다음 뒤로가기는 시스템이 받아 앱을 닫는다.
+//
+// 브라우저 탭에서는 걸지 않는다. 거기서는 뒤로가기가 이전 사이트로 가는 것이
+// 맞고, 그걸 가로채면 사용자를 가두는 꼴이 된다.
+const EXIT_CONFIRM_MS = 2000;
+
+function isStandalone() {
+  try {
+    return window.matchMedia("(display-mode: standalone)").matches
+      || window.matchMedia("(display-mode: fullscreen)").matches
+      || window.navigator.standalone === true;
+  } catch {
+    return false;
+  }
+}
+
+function showExitToast() {
+  let el = document.getElementById("exit-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "exit-toast";
+    el.className = "exit-toast";
+    // 화면 낭독기가 읽어 주도록. 눈으로 못 보는 사람에게도 안내가 필요하다.
+    el.setAttribute("role", "status");
+    el.textContent = "한 번 더 누르면 종료됩니다";
+    document.body.appendChild(el);
+  }
+  el.classList.add("is-visible");
+  return el;
+}
+
+function initExitGuard() {
+  if (!isStandalone()) return;
+
+  // 모달이 열려 있으면 그 모달이 자기 popstate 를 쓴다(course.js, map.js).
+  // 그쪽이 먼저 소비하므로 여기서는 홈 화면 상태일 때만 반응한다.
+  let armed = false;
+  let toastTimer = null;
+
+  const arm = () => {
+    if (armed) return;
+    history.pushState({ yukExitGuard: true }, "");
+    armed = true;
+  };
+
+  window.addEventListener("popstate", (e) => {
+    if (!armed) return;
+    // 우리 가짜 기록이 아니라 다른 화면에서 돌아온 것이면 건드리지 않는다.
+    if (e.state && e.state.yukExitGuard) return;
+    armed = false;
+
+    const el = showExitToast();
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove("is-visible");
+      // 시간이 지나면 다시 막아 준다. 한참 뒤의 뒤로가기까지 종료로 치면
+      // 안내를 본 적 없는 것과 같다.
+      arm();
+    }, EXIT_CONFIRM_MS);
+  });
+
+  arm();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderRegionMap();
   renderRegionLegend();
   renderCategoryFilter();
+  initExitGuard();
   initNoticesBell();
   initShareButton();
 

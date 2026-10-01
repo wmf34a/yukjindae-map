@@ -1146,12 +1146,52 @@ const LAUNCH_NOTICE = {
   id: "2026-10-autumn-b",
   tag: "10월 추천",
   title: "이번 달은 단풍 명소로 골랐어요",
-  text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요.",
-  cta: "우리 지역 보러 가기",
-  // 누르면 이 자리로 데려간다. 닫기만 하는 버튼은 누를 이유가 없다.
-  target: "region-section",
+  text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요. 위치를 알려주시면 우리 지역 추천을 바로 보여드려요.",
+  cta: "우리 지역 추천 보기",
 };
 const LAUNCH_NOTICE_KEY = "yukjindae:launchNotice";
+
+// 시트의 버튼이 하는 일. 지도까지 데려다 놓고 "알아서 누르세요" 하면
+// 아무것도 안 한 것처럼 느껴진다 — 지역까지 눌러 준다.
+//
+// 내 지역은 가장 가까운 장소의 지역으로 잡는다. 좌표→지역 표를 따로 들고 있으면
+// 장소가 늘 때마다 같이 손봐야 하는데, 이미 290곳의 좌표가 있어서 그걸로 충분하다.
+//
+// 위치를 모르는 사람이 대부분이다(실측 8할). 그때는 지역별 1위를 한 번에 펼쳐
+// 보여준다 — 지역을 못 고른다고 빈손으로 돌려보내지 않는다.
+function myRegionGroup() {
+  if (!state.coords || !state.places.length) return "";
+  const near = sortByDistance(state.places, state.coords)[0];
+  if (!near) return "";
+  return REGIONS.find((g) => REGION_GROUPS[g].includes(near.region)) || "";
+}
+
+async function showMonthlyPicks() {
+  let group = myRegionGroup();
+
+  // 위치를 모르면 여기서 물어본다.
+  //
+  // 홈은 들어오자마자 권한을 묻지 않는다(거부하면 되돌릴 길이 없다). 대신 날씨 줄에
+  // 작은 📍 버튼을 뒀는데 2주 동안 클릭이 0건이었다 — 있으나 마나였다.
+  // "우리 지역 추천 보기" 를 누른 순간은 위치를 물어보기에 가장 떳떳한 자리다.
+  // 사용자가 직접 누른 것이라 권한창이 갑자기 뜬 것으로 느껴지지도 않는다.
+  if (!group) {
+    await loadTodayWeather({ ask: true }).catch(() => {});
+    group = myRegionGroup();
+  }
+
+  if (group) {
+    // 지도에서 그 지역을 직접 누른 것과 똑같이 둔다 — 제목이 "○○ 이달의 Top 10"
+    // 으로 바뀌고 지도에도 선택 표시가 남는다.
+    if (state.region !== group) selectRegion(group);
+    return;
+  }
+
+  // 거부했거나 못 잡았으면 추천 목록까지만 데려간다. 전체 290곳을 펼치지는 않는다 —
+  // 그건 "10월 추천" 이 아니라 그냥 목록이다.
+  const heading = document.getElementById("place-heading");
+  if (heading) scrollToSection(heading);
+}
 
 // 부드럽게 옮기되, 못 가면 그냥 간다.
 //
@@ -1182,18 +1222,14 @@ function closeLaunchSheet({ goTo = false } = {}) {
     // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
   }
 
-  const target = goTo && LAUNCH_NOTICE.target
-    ? document.getElementById(LAUNCH_NOTICE.target)
-    : null;
-
-  // 감추기와 스크롤을 한 번에 한다.
+  // 감추기와 다음 동작을 한 번에 한다.
   //
   // 처음에는 320ms 에 감추고 340ms 에 스크롤했는데, 그 20ms 사이의 리플로우가
   // 부드러운 스크롤을 취소해서 화면이 그대로 있었다 — 버튼을 눌러도 아무 일이
   // 없다는 제보가 그래서 나왔다. 같은 틱에서 감춘 뒤 바로 움직이면 흔들리지 않는다.
   setTimeout(() => {
     sheet.hidden = true;
-    if (target) scrollToSection(target);
+    if (goTo) showMonthlyPicks();
   }, 320);
   return true;
 }

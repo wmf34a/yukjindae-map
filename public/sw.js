@@ -80,6 +80,30 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // 코드(css/js)는 네트워크를 먼저 본다.
+  //
+  // 아래 stale-while-revalidate 는 캐시에 있는 것을 먼저 내주고 갱신은 뒤로 미룬다.
+  // 그래서 배포한 코드가 **다음 실행에야** 적용된다. 게다가 서비스워커 안의 fetch 도
+  // 브라우저 HTTP 캐시를 거치는데 /js/* 가 max-age=300 이라, 그 5분 동안은 갱신해도
+  // 옛 파일을 다시 캐시에 넣는다 — 앱을 두 번 껐다 켜도 안 바뀌는 일이 실제로 났다.
+  //
+  // 코드는 정적 자산이라 워커 요청으로 잡히지 않는다(청구·한도와 무관). 매번 네트워크를
+  // 보고, 안 되면 그때 캐시를 쓴다. 느린 망에서도 캐시가 받쳐 주므로 화면이 비지 않는다.
+  if (url.pathname.startsWith("/js/") || url.pathname.startsWith("/css/")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (res.ok) {
+            const resClone = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, resClone)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   // 장소 사진은 캐시에 있으면 그대로 쓰고 네트워크를 부르지 않는다.
   //
   // 아래 stale-while-revalidate 는 캐시가 맞아도 fetch 를 매번 띄운다. 그래서

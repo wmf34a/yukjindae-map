@@ -4,7 +4,7 @@ import { readVisitStats, refreshVisitStats } from "./visit-stats.js";
 import { todayInKst, kstNow } from "./kst.js";
 import { decodeNaverHtml } from "./text-utils.js";
 import { runEnrichment } from "./enrich.js";
-import { runMonthlyTop10 } from "./monthly-top10.js";
+import { runMonthlyTop10, regionsMissingMonth } from "./monthly-top10.js";
 import { buildForecastUrl, parseForecast, recommendationFor } from "./today-weather.js";
 import { fetchFestivalDescription, fetchFestivalUseFee, searchFestivalsInRange } from "./tourapi.js";
 import {
@@ -2047,6 +2047,47 @@ async function runScheduledReportApply(env) {
   await notifySlack(env, lines.join("\n"));
 }
 
+// 월간 Top10 에서 빠진 지역을 10분 크론이 하나씩 채운다.
+//
+// 2026-10-01 월간 크론이 다섯 지역을 끝낸 뒤 scriptThrewException 으로 죽었고,
+// 수도권·충청 다섯 지역이 9월 순위 그대로 남았다("바뀐 게 없다"는 제보가 그래서
+// 나왔다). 지역당 Claude 한 번 + 노션 열 번이라 열 지역을 한 번에 돌면 서브리퀘스트가
+// 백 번을 넘는다 — 또 같은 자리에서 끊긴다.
+//
+// 그래서 한 번에 한 지역만 채운다. 열한 번이면 한도에 한참 못 미치고, 열 지역이
+// 전부 밀려도 백 분이면 끝난다.
+//
+// 매달 1~3일에만 본다. 그 뒤에도 비어 있으면 후보가 없는 지역이라 돌려도 결과가
+// 같고, 한 달 내내 노션을 읽을 이유가 없다.
+const MONTHLY_BACKFILL_DAYS = 3;
+
+async function runMonthlyTop10Backfill(env) {
+  if (!env.NOTION_API_KEY || !env.NOTION_DATABASE_ID || !env.ANTHROPIC_API_KEY) return;
+  const now = kstNow();
+  if (now.getUTCDate() > MONTHLY_BACKFILL_DAYS) return;
+
+  const monthKey = now.toISOString().slice(0, 7);
+  const places = await fetchAllPlaces(env);
+  const missing = regionsMissingMonth(places, monthKey);
+  if (!missing.length) return;
+
+  const region = missing[0];
+  const result = await runMonthlyTop10({
+    places,
+    monthKey,
+    onlyRegions: [region],
+    askClaude: (prompt) => askClaude(env, prompt),
+    patchPlace: (placeId, properties) => patchPlaceProperties(env, placeId, properties),
+  });
+
+  const done = result.regions.find((r) => r.region === region);
+  const rest = missing.length - 1;
+  const tail = rest ? ` · 남은 ${rest}곳은 다음 회차에` : " · 이번 달 전 지역 완료";
+  await notifySlack(env, done?.ok
+    ? `🗓️ ${monthKey} ${region} Top 10 을 채웠습니다 (${done.ranked}곳)${tail}`
+    : `⚠️ ${monthKey} ${region} Top 10 갱신 실패 — ${done?.error || "알 수 없는 이유"}. 지난달 순위를 유지합니다`);
+}
+
 async function runScheduledMonthlyTop10(env) {
   // 어느 값이 비었는지 말해주지 않으면 셋 중 무엇을 고쳐야 할지 알 수 없다.
   // 실제로 wrangler secret put 은 대화형 프롬프트에 값을 붙여넣어도 빈 값으로
@@ -2369,6 +2410,10 @@ export default {
     }
     if (event.cron === REPORT_APPLY_CRON) {
       ctx.waitUntil(runScheduledReportApply(env));
+      // 월간 Top10 이 중간에 끊겼으면 남은 지역을 하나씩 이어서 채운다.
+      ctx.waitUntil(
+        runMonthlyTop10Backfill(env).catch((err) => console.warn(`월간 Top10 이어채우기 실패: ${err.message}`))
+      );
       // 목록 캐시를 데워 둔다.
       //
       // 사람이 없는 시간에는 캐시가 통째로 비어서, 새벽에 처음 들어온 한 사람이

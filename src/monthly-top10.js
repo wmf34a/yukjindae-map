@@ -249,7 +249,14 @@ export function pickPlacesToClear(places, ranked, monthKey) {
  * @param {(placeId: string, properties: object) => Promise<void>} deps.patchPlace Notion 페이지 갱신
  * @param {string} deps.monthKey "2026-09"
  */
-export async function runMonthlyTop10({ places, askClaude, patchPlace, monthKey }) {
+// onlyRegions 를 주면 그 지역만 돈다.
+//
+// 2026-10-01 월간 크론이 다섯 지역을 끝낸 뒤 scriptThrewException 으로 죽었다.
+// 지역 하나당 Claude 한 번 + 노션 열 번이라 열 지역이면 서브리퀘스트가 백 번을
+// 넘는다. 한 번에 다 하려 들면 또 같은 자리에서 끊기므로, 워커에서는 남은 지역을
+// 하나씩 나눠 돈다(worker.js 의 runMonthlyTop10Backfill). 로컬 스크립트는 한도가
+// 없으니 예전처럼 전부 한 번에 돌린다.
+export async function runMonthlyTop10({ places, askClaude, patchPlace, monthKey, onlyRegions }) {
   if (!parseMonthKey(monthKey)) {
     return { ok: false, error: `잘못된 monthKey: ${monthKey}`, regions: [] };
   }
@@ -258,6 +265,7 @@ export async function runMonthlyTop10({ places, askClaude, patchPlace, monthKey 
   const regions = [];
 
   for (const [region, regionPlaces] of groups) {
+    if (onlyRegions && !onlyRegions.includes(region)) continue;
     const candidates = buildCandidates(regionPlaces);
     if (candidates.length === 0) continue;
 
@@ -306,4 +314,22 @@ export async function runMonthlyTop10({ places, askClaude, patchPlace, monthKey 
   }
 
   return { ok: regions.every((r) => r.ok), monthKey, regions };
+}
+
+// 이번 달 순위가 아직 없는 지역을 추려 준다.
+//
+// 어떤 지역에 monthKey 가 붙은 장소가 하나도 없으면 그 지역은 아직 안 돈 것이다.
+// 순위가 하나도 없는 지역(후보가 없어 건너뛴 곳)은 돌려봐야 소용없으므로 뺀다.
+export function regionsMissingMonth(places, monthKey) {
+  const ranked = new Map();
+  for (const p of places || []) {
+    if (!p?.region) continue;
+    const cur = ranked.get(p.region) || { any: false, thisMonth: false };
+    if (p.rank) {
+      cur.any = true;
+      if (p.rankMonth === monthKey) cur.thisMonth = true;
+    }
+    ranked.set(p.region, cur);
+  }
+  return [...ranked.entries()].filter(([, v]) => v.any && !v.thisMonth).map(([k]) => k);
 }

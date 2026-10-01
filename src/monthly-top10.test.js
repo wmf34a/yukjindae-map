@@ -13,8 +13,7 @@ import {
   buildClearProperties,
   pickPlacesToClear,
   runMonthlyTop10,
-  autumnRule,
-} from "./monthly-top10.js";
+  autumnRule, regionsMissingMonth } from "./monthly-top10.js";
 
 const place = (over = {}) => ({
   id: `id-${over.name || "x"}`,
@@ -411,5 +410,29 @@ describe("autumnRule — 단풍 시기", () => {
     expect(oct).toContain("지금이 단풍 절정");
     const sep = buildPrompt({ monthKey: "2026-09", region: "강원도", candidates: [{ no: 1, name: "화담숲", categories: [] }] });
     expect(sep).not.toContain("단풍 절정");
+  });
+});
+
+describe("regionsMissingMonth — 이번 달 순위가 없는 지역 고르기", () => {
+  const P = (region, rank, rankMonth) => ({ region, rank, rankMonth });
+
+  it("이번 달이 붙은 지역은 뺀다", () => {
+    const places = [P("서울", 1, "2026-10"), P("인천", 1, "2026-09")];
+    expect(regionsMissingMonth(places, "2026-10")).toEqual(["인천"]);
+  });
+
+  it("순위가 하나도 없는 지역은 애초에 세지 않는다 — 돌려도 결과가 같다", () => {
+    const places = [P("서울", 1, "2026-10"), { region: "울릉도" }];
+    expect(regionsMissingMonth(places, "2026-10")).toEqual([]);
+  });
+
+  it("한 지역에 이번 달이 하나라도 있으면 끝난 것으로 본다", () => {
+    const places = [P("인천", 1, "2026-10"), P("인천", 2, "2026-09")];
+    expect(regionsMissingMonth(places, "2026-10")).toEqual([]);
+  });
+
+  it("전부 지난달이면 전부 고른다", () => {
+    const places = [P("서울", 1, "2026-09"), P("인천", 1, "2026-09")];
+    expect(regionsMissingMonth(places, "2026-10").toSorted()).toEqual(["서울", "인천"]);
   });
 });

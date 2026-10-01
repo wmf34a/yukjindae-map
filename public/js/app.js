@@ -1141,15 +1141,24 @@ function initExitGuard() {
 // 달이 바뀌면 여기만 고친다. id 가 바뀌어야 다시 뜨므로, 같은 내용을 다시 띄우고
 // 싶으면 id 에 날짜를 붙여 새로 만든다. 한 번 닫은 사람에게는 다시 뜨지 않는다.
 const LAUNCH_NOTICE = {
-  // id 를 바꾸면 한 번 닫은 사람에게도 다시 뜬다. 처음 올린 2026-10-autumn 은
-  // 버튼이 닫히기만 하고 아무 데도 안 데려가서, 고친 뒤 번호를 올렸다.
-  id: "2026-10-autumn-b",
   tag: "10월 추천",
   title: "이번 달은 단풍 명소로 골랐어요",
   text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요. 위치를 알려주시면 우리 지역 추천을 바로 보여드려요.",
-  cta: "우리 지역 추천 보기",
+  cta: "우리 지역 추천 보기 →",
 };
 const LAUNCH_NOTICE_KEY = "yukjindae:launchNotice";
+
+// "이미 봤다" 표시를 내용에서 뽑는다.
+//
+// 처음에는 id 를 손으로 적었는데, 내용을 고치고 id 올리는 걸 두 번 연달아 잊었다.
+// 그때마다 고친 안내가 아무에게도 안 보였고 "왜 안 뜨냐"는 말을 들었다.
+// 문구가 한 글자라도 달라지면 열쇠가 달라지므로, 고치면 자동으로 다시 뜬다.
+function launchNoticeKey() {
+  const text = [LAUNCH_NOTICE.tag, LAUNCH_NOTICE.title, LAUNCH_NOTICE.text, LAUNCH_NOTICE.cta].join("|");
+  let h = 0;
+  for (let i = 0; i < text.length; i++) h = (Math.imul(31, h) + text.charCodeAt(i)) | 0;
+  return String(h);
+}
 
 // 시트의 버튼이 하는 일. 지도까지 데려다 놓고 "알아서 누르세요" 하면
 // 아무것도 안 한 것처럼 느껴진다 — 지역까지 눌러 준다.
@@ -1217,7 +1226,7 @@ function closeLaunchSheet({ goTo = false } = {}) {
   if (!sheet || sheet.hidden || !sheet.classList.contains("is-open")) return false;
   sheet.classList.remove("is-open");
   try {
-    localStorage.setItem(LAUNCH_NOTICE_KEY, LAUNCH_NOTICE.id);
+    localStorage.setItem(LAUNCH_NOTICE_KEY, launchNoticeKey());
   } catch {
     // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
   }
@@ -1236,9 +1245,9 @@ function closeLaunchSheet({ goTo = false } = {}) {
 
 function initLaunchSheet() {
   const sheet = document.getElementById("launch-sheet");
-  if (!sheet || !LAUNCH_NOTICE.id) return;
+  if (!sheet || !LAUNCH_NOTICE.title) return;
   try {
-    if (localStorage.getItem(LAUNCH_NOTICE_KEY) === LAUNCH_NOTICE.id) return;
+    if (localStorage.getItem(LAUNCH_NOTICE_KEY) === launchNoticeKey()) return;
   } catch {
     return;
   }

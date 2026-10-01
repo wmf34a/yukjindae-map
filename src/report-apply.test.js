@@ -6,6 +6,8 @@ import {
   buildPlaceProperties,
   buildReportProperties,
   applyApprovedReports,
+  isPermanentFailure,
+  REJECTED,
   APPLIED,
   mergeList,
   splitList,
@@ -274,5 +276,51 @@ describe("splitList — 상호 안의 쉼표", () => {
   it("구분자 없이 이어 적은 제보는 그대로 갈린다", () => {
     expect(splitList("사니다 (약 6.8km) 목수의 진달래 (약 5.8km)"))
       .toEqual(["사니다 (약 6.8km)", "목수의 진달래 (약 5.8km)"]);
+  });
+});
+
+describe("되돌아오지 않는 실패는 \"반려\"로 내린다 — 10분 크론이 영원히 재시도하는 고리를 끊는다", () => {
+  it("영구/일시 실패를 가른다", () => {
+    expect(isPermanentFailure("연결된 장소가 없습니다")).toBe(true);
+    expect(isPermanentFailure("반영할 수 없는 필드/값입니다 (수유실정보수정)")).toBe(true);
+    expect(isPermanentFailure("지금 값을 읽지 못했습니다: timeout")).toBe(false);
+    expect(isPermanentFailure("Notion 500")).toBe(false);
+    expect(isPermanentFailure(undefined)).toBe(false);
+  });
+
+  it("장소가 안 붙은 제보는 상태를 반려로 바꾼다", async () => {
+    const patched = [];
+    const result = await applyApprovedReports({
+      reports: [{ id: "r1", placeId: "", field: "주차", value: "무료", placeName: "어딘가" }],
+      patchPlace: async () => {},
+      patchReport: async (id, props) => patched.push([id, props["상태"].select.name]),
+      today: "2026-10-01",
+    });
+    expect(result.applied).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+    expect(patched).toEqual([["r1", REJECTED]]);
+  });
+
+  it("일시적 실패는 건드리지 않는다 — 다음 회차에 다시 시도돼야 한다", async () => {
+    const patched = [];
+    const result = await applyApprovedReports({
+      reports: [{ id: "r2", placeId: "p2", field: "근처맛집", value: "김밥집", placeName: "어딘가" }],
+      patchPlace: async () => {},
+      patchReport: async (id, props) => patched.push([id, props["상태"].select.name]),
+      readPlaceField: async () => { throw new Error("timeout"); },
+      today: "2026-10-01",
+    });
+    expect(result.skipped).toHaveLength(1);
+    expect(patched).toEqual([]);
+  });
+
+  it("상태를 못 바꿔도 결과 보고는 그대로 한다 — 알림을 멈추려다 실패를 숨기지 않는다", async () => {
+    const result = await applyApprovedReports({
+      reports: [{ id: "r3", placeId: "", field: "주차", value: "무료", placeName: "어딘가" }],
+      patchPlace: async () => {},
+      patchReport: async () => { throw new Error("notion down"); },
+      today: "2026-10-01",
+    });
+    expect(result.skipped[0].reason).toBe("연결된 장소가 없습니다");
   });
 });

@@ -27,7 +27,7 @@ const PUBLIC_BASE_URL = "https://yukjindae-map.wmf34a.workers.dev";
 import { fetchWithTimeout, fetchWithRetry, upstreamErrorResponse, serverErrorResponse, isNotionId, READ_TIMEOUT_MS, READ_RETRIES } from "./http.js";
 import { parseNotifyEmails, resolveMentionTargets, buildReportComment } from "./notion-notify.js";
 import {
-  applyApprovedReports, isListField, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
+  applyApprovedReports, isListField, isPermanentFailure, APPROVED, APPLIED, MODE_ADD, MODE_REPLACE,
 } from "./report-apply.js";
 import { isValidCoords } from "./nearby-lookup.js";
 import { notifySlack } from "./notify.js";
@@ -1833,6 +1833,27 @@ async function findPlaceByName(env, notionHeaders, name) {
   return null;
 }
 
+// 등록하지 못한 신규장소 제보를 "대기중" 으로 되돌린다.
+//
+// 10분 크론은 "승인됨" 만 집어간다. 실패한 제보의 상태를 그대로 두면 같은 제보를
+// 영원히 다시 시도하고 그때마다 슬랙 알림이 나간다 — 2026-10-01 에 막힌 제보
+// 네 건이 하루 144번씩 같은 알림을 보내고 있었다.
+//
+// 버리지 않고 "대기중" 으로 되돌리는 것은 중복 처리와 같은 결이다. 사람이 노션에서
+// 내용을 고쳐 다시 승인하면 그때 재시도된다.
+async function parkReport(reportId, notionHeaders) {
+  try {
+    await fetchWithTimeout(`https://api.notion.com/v1/pages/${reportId}`, {
+      method: "PATCH",
+      headers: notionHeaders,
+      body: JSON.stringify({ properties: { "상태": { select: { name: "대기중" } } } }),
+    });
+  } catch (err) {
+    // 못 되돌렸으면 다음 회차에 다시 시도된다. 조용히 잃는 것보다 낫다.
+    console.warn(`제보 상태 되돌리기 실패: ${err.message}`);
+  }
+}
+
 async function createPlacesFromReports(env, notionHeaders, reports) {
   if (reports.length === 0) return;
 
@@ -1897,6 +1918,7 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
 
     if (!prepared.ok) {
       failed.push({ ...report, reason: prepared.error });
+      await parkReport(report.id, notionHeaders);
       continue;
     }
 
@@ -1911,6 +1933,7 @@ async function createPlacesFromReports(env, notionHeaders, reports) {
 
     if (!created.ok) {
       failed.push({ ...report, reason: (await created.text()).slice(0, 120) });
+      await parkReport(report.id, notionHeaders);
       continue;
     }
 
@@ -2006,11 +2029,20 @@ async function runScheduledReportApply(env) {
     today,
   });
 
-  const lines = [`✅ 승인된 제보 ${result.applied.length}건을 장소에 반영했습니다.`];
-  for (const r of result.applied) lines.push(`• ${r.placeName} — ${r.field}: ${r.value}`);
-  if (result.skipped.length) {
-    lines.push(`\n⚠️ 반영하지 못한 ${result.skipped.length}건 — 노션에서 확인이 필요합니다.`);
-    for (const r of result.skipped) lines.push(`• ${r.placeName} — ${r.field}: ${r.reason}`);
+  // 일시적 실패(읽기 타임아웃 등)만 있는 회차는 알리지 않는다. 그 제보는 "승인됨"
+  // 으로 남아 다음 회차에 다시 시도되므로, 알리면 성공할 때까지 10분마다 같은 말을
+  // 반복하게 된다. 영구 실패는 "반려" 로 내려가 한 번만 알려진다.
+  const parked = result.skipped.filter((r) => isPermanentFailure(r.reason));
+  if (!result.applied.length && !parked.length) return;
+
+  const lines = [];
+  if (result.applied.length) {
+    lines.push(`✅ 승인된 제보 ${result.applied.length}건을 장소에 반영했습니다.`);
+    for (const r of result.applied) lines.push(`• ${r.placeName} — ${r.field}: ${r.value}`);
+  }
+  if (parked.length) {
+    lines.push(`\n⚠️ 반영할 수 없어 "반려"로 내린 ${parked.length}건 — 노션에서 확인이 필요합니다.`);
+    for (const r of parked) lines.push(`• ${r.placeName} — ${r.field}: ${r.reason}`);
   }
   await notifySlack(env, lines.join("\n"));
 }

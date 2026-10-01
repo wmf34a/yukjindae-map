@@ -87,6 +87,10 @@ export function mergeList(current, incoming) {
 
 export const APPROVED = "승인됨";
 export const APPLIED = "반영됨";
+// 다시 돌려도 영원히 실패하는 제보를 여기로 내린다. 10분 크론이 "승인됨" 만
+// 집어가므로, 상태를 안 바꾸면 같은 제보를 영원히 다시 시도하고 그때마다 슬랙
+// 알림이 나간다 — 2026-10-01 에 막힌 제보 4건이 하루 144번씩 알림을 보내고 있었다.
+export const REJECTED = "반려";
 
 export function isApplicableField(field) {
   return BOOLEAN_FIELDS.has(field) || TEXT_FIELDS.has(field);
@@ -138,8 +142,16 @@ export function buildPlaceProperties(field, value, today, options) {
   };
 }
 
-export function buildReportProperties() {
-  return { "상태": { select: { name: APPLIED } } };
+export function buildReportProperties(status = APPLIED) {
+  return { "상태": { select: { name: status } } };
+}
+
+// 되돌아오지 않는 실패인가. 연결된 장소가 없거나 반영할 수 없는 필드/값이면
+// 몇 번을 다시 돌려도 결과가 같다 — 사람이 노션에서 고쳐야 풀린다.
+// 반대로 읽기·쓰기 실패는 다음 회차에 성공할 수 있으므로 "승인됨" 으로 남겨 둔다.
+export function isPermanentFailure(reason) {
+  const r = String(reason || "");
+  return r.startsWith("연결된 장소가 없습니다") || r.startsWith("반영할 수 없는 필드/값입니다");
 }
 
 /**
@@ -156,12 +168,23 @@ export function buildReportProperties() {
 export async function applyApprovedReports({ reports, patchPlace, patchReport, readPlaceField, today }) {
   const applied = [];
   const skipped = [];
+  // 영구 실패는 "반려" 로 내려 다음 회차 조회에서 빠지게 한다. 상태를 못 바꿔도
+  // 결과 보고는 그대로 한다 — 알림을 멈추려다 실패를 숨기면 더 나쁘다.
+  const park = async (report, reason) => {
+    skipped.push({ ...report, reason });
+    if (!isPermanentFailure(reason)) return;
+    try {
+      await patchReport(report.id, buildReportProperties(REJECTED));
+    } catch {
+      // 상태를 못 바꿨으면 다음 회차에 다시 시도된다. 그 편이 조용히 잃는 것보다 낫다.
+    }
+  };
 
   for (const report of reports || []) {
     // 어떤 장소를 고치라는 것인지 모르면 손대지 않는다. 신규 장소 제보가 여기
     // 섞여 들어오는 경우가 그렇다.
     if (!report.placeId) {
-      skipped.push({ ...report, reason: "연결된 장소가 없습니다" });
+      await park(report, "연결된 장소가 없습니다");
       continue;
     }
     /* oxlint-disable no-await-in-loop */
@@ -173,13 +196,13 @@ export async function applyApprovedReports({ reports, patchPlace, patchReport, r
     let current = "";
     if (needsCurrent) {
       if (!readPlaceField) {
-        skipped.push({ ...report, reason: "지금 값을 읽을 수 없어 건너뜁니다" });
+        await park(report, "지금 값을 읽을 수 없어 건너뜁니다");
         continue;
       }
       try {
         current = await readPlaceField(report.placeId, report.field);
       } catch (err) {
-        skipped.push({ ...report, reason: `지금 값을 읽지 못했습니다: ${err.message}` });
+        await park(report, `지금 값을 읽지 못했습니다: ${err.message}`);
         continue;
       }
     }
@@ -189,7 +212,7 @@ export async function applyApprovedReports({ reports, patchPlace, patchReport, r
       mode: report.mode, current,
     });
     if (!properties) {
-      skipped.push({ ...report, reason: `반영할 수 없는 필드/값입니다 (${report.field})` });
+      await park(report, `반영할 수 없는 필드/값입니다 (${report.field})`);
       continue;
     }
 
@@ -202,7 +225,7 @@ export async function applyApprovedReports({ reports, patchPlace, patchReport, r
     } catch (err) {
       // 장소는 고쳤는데 제보 상태를 못 바꾼 경우, 다음 실행에서 같은 값을 한 번
       // 더 쓰게 된다. 같은 값을 덮어쓰는 것이라 해가 없다.
-      skipped.push({ ...report, reason: err.message });
+      await park(report, err.message);
     }
   }
 

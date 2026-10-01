@@ -1089,21 +1089,19 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
-// 홈에서 뒤로가기를 눌렀을 때 앱이 예고 없이 닫히는 것을 한 번 막아 준다.
+// 설치해서 쓰는 사람이 홈에서 뒤로가기를 누르면 앱이 예고 없이 닫힌다.
+// 한 번 물어보고 닫는다. 동작 방식은 ~/revision/ref 의 같은 장치를 따랐다.
 //
-// 설치형(PWA/TWA)으로 열면 방문 기록이 홈 한 칸뿐이라, 뒤로가기 한 번에 바로
-// 닫힌다. 보고 있던 화면이 그대로 사라지는 것으로 느껴진다는 제보가 있었다.
+// 첫 페이지 위에 가짜 기록("가드")을 한 칸 얹어 둔다. 뒤로가기는 그 칸을 소비하고,
+// 그때 묻는다. "취소" 면 가드를 다시 얹고, "종료" 면 history.back() 으로 첫 페이지
+// 이전까지 물러나 앱이 닫힌다.
 //
-// "종료하시겠습니까?" 확인창은 만들 수 없다. 가짜 기록을 밀어 넣어 첫 뒤로가기를
-// 받아내는 방식이라, 그 시점에는 기록이 다시 비어 있다. 거기서 "예"를 눌러도
-// 웹에서 앱을 닫을 방법이 없다 — window.close() 는 스크립트가 연 창이 아니면
-// 막힌다. 그래서 안드로이드 앱들이 쓰는 "한 번 더 누르면 종료" 로 간다.
-// 가짜 기록을 다시 밀어 넣지 않으면 다음 뒤로가기는 시스템이 받아 앱을 닫는다.
+// 가드를 탭할 때마다 얹는 이유가 중요하다. **크롬은 사용자 조작 없이 추가한 기록을
+// 건너뛴다.** 페이지가 뜨자마자 한 번 밀어 넣는 방식으로는 그 칸이 없는 것과 같다.
+// 손가락이 떨어져야 조작으로 치므로 pointerdown 이 아니라 click 을 듣는다.
 //
-// 브라우저 탭에서는 걸지 않는다. 거기서는 뒤로가기가 이전 사이트로 가는 것이
-// 맞고, 그걸 가로채면 사용자를 가두는 꼴이 된다.
-const EXIT_CONFIRM_MS = 2000;
-
+// 브라우저 탭에서는 걸지 않는다 — 거기서는 뒤로가기가 이전 사이트로 가는 게 맞고,
+// 가로채면 사용자를 가두는 꼴이 된다.
 function isStandalone() {
   try {
     return window.matchMedia("(display-mode: standalone)").matches
@@ -1114,52 +1112,75 @@ function isStandalone() {
   }
 }
 
-function showExitToast() {
-  let el = document.getElementById("exit-toast");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "exit-toast";
-    el.className = "exit-toast";
-    // 화면 낭독기가 읽어 주도록. 눈으로 못 보는 사람에게도 안내가 필요하다.
-    el.setAttribute("role", "status");
-    el.textContent = "한 번 더 누르면 종료됩니다";
-    document.body.appendChild(el);
-  }
-  el.classList.add("is-visible");
-  return el;
-}
-
 function initExitGuard() {
-  if (!isStandalone()) return;
+  const ask = document.getElementById("exit-ask");
+  if (!ask || !isStandalone() || typeof ask.showModal !== "function") return;
 
-  // 모달이 열려 있으면 그 모달이 자기 popstate 를 쓴다(course.js, map.js).
-  // 그쪽이 먼저 소비하므로 여기서는 홈 화면 상태일 때만 반응한다.
-  let armed = false;
-  let toastTimer = null;
-
-  const arm = () => {
-    if (armed) return;
-    history.pushState({ yukExitGuard: true }, "");
-    armed = true;
+  const guard = () => {
+    if (!history.state?.layer) history.pushState({ layer: "guard" }, "");
   };
+  document.addEventListener("click", guard, true);
 
-  window.addEventListener("popstate", (e) => {
-    if (!armed) return;
-    // 우리 가짜 기록이 아니라 다른 화면에서 돌아온 것이면 건드리지 않는다.
-    if (e.state && e.state.yukExitGuard) return;
-    armed = false;
-
-    const el = showExitToast();
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      el.classList.remove("is-visible");
-      // 시간이 지나면 다시 막아 준다. 한참 뒤의 뒤로가기까지 종료로 치면
-      // 안내를 본 적 없는 것과 같다.
-      arm();
-    }, EXIT_CONFIRM_MS);
+  window.addEventListener("popstate", () => {
+    // 이번 달 소식이 열려 있으면 그것부터 닫는다. 뒤로가기 한 번에 둘이 겹치면
+    // 종료를 묻는 창 뒤로 시트가 비쳐 보인다.
+    if (closeLaunchSheet()) return;
+    if (!history.state?.layer && !ask.open) ask.showModal();
   });
 
-  arm();
+  document.getElementById("exit-no").addEventListener("click", () => { ask.close(); guard(); });
+  document.getElementById("exit-yes").addEventListener("click", () => { ask.close(); history.back(); });
+  // Esc 를 누르거나 묻는 창에서 다시 뒤로가기를 하면 남는 것으로 본다.
+  ask.addEventListener("cancel", guard);
+
+  guard();
+}
+
+// 이번 달 소식.
+//
+// 달이 바뀌면 여기만 고친다. id 가 바뀌어야 다시 뜨므로, 같은 내용을 다시 띄우고
+// 싶으면 id 에 날짜를 붙여 새로 만든다. 한 번 닫은 사람에게는 다시 뜨지 않는다.
+const LAUNCH_NOTICE = {
+  id: "2026-10-autumn",
+  tag: "10월 추천",
+  title: "이번 달은 단풍 명소로 골랐어요",
+  text: "지역별 추천 장소가 단풍·억새·은행나무길 기준으로 새로 바뀌었어요. 홈에서 우리 지역을 눌러 확인해 보세요.",
+};
+const LAUNCH_NOTICE_KEY = "yukjindae:launchNotice";
+
+function closeLaunchSheet() {
+  const sheet = document.getElementById("launch-sheet");
+  if (!sheet || sheet.hidden || !sheet.classList.contains("is-open")) return false;
+  sheet.classList.remove("is-open");
+  // 올라온 길로 되내려간 뒤에 감춘다. 바로 hidden 을 주면 툭 사라진다.
+  setTimeout(() => { sheet.hidden = true; }, 320);
+  try {
+    localStorage.setItem(LAUNCH_NOTICE_KEY, LAUNCH_NOTICE.id);
+  } catch {
+    // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
+  }
+  return true;
+}
+
+function initLaunchSheet() {
+  const sheet = document.getElementById("launch-sheet");
+  if (!sheet || !LAUNCH_NOTICE.id) return;
+  try {
+    if (localStorage.getItem(LAUNCH_NOTICE_KEY) === LAUNCH_NOTICE.id) return;
+  } catch {
+    return;
+  }
+
+  document.getElementById("launch-sheet-tag").textContent = LAUNCH_NOTICE.tag;
+  document.getElementById("launch-sheet-title").textContent = LAUNCH_NOTICE.title;
+  document.getElementById("launch-sheet-text").textContent = LAUNCH_NOTICE.text;
+  document.getElementById("launch-sheet-close").addEventListener("click", closeLaunchSheet);
+  document.getElementById("launch-sheet-dim").addEventListener("click", closeLaunchSheet);
+
+  sheet.hidden = false;
+  // 첫 화면이 그려진 뒤에 올라와야 "앱을 열었더니 올라온다"로 읽힌다.
+  // hidden 을 떼자마자 클래스를 붙이면 전환 없이 이미 올라와 있는 상태로 그려진다.
+  setTimeout(() => sheet.classList.add("is-open"), 450);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1167,6 +1188,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderRegionLegend();
   renderCategoryFilter();
   initExitGuard();
+  initLaunchSheet();
   initNoticesBell();
   initShareButton();
 

@@ -1221,14 +1221,21 @@ function scrollToSection(target) {
   }, Math.max(700, Math.min(1200, Math.abs(goal - window.scrollY))));
 }
 
-function closeLaunchSheet({ goTo = false } = {}) {
+// forever 일 때만 "안 보겠다"를 적어 둔다.
+//
+// 닫는다고 영영 감추지 않는다. 홈·지도·축제가 각각 다른 페이지라, 탭을 옮겼다
+// 홈으로 돌아오면 새로 뜬다 — 한 번 흘려보낸 사람도 다시 볼 기회를 갖는다.
+// 그만 보고 싶으면 "다시 안 보기" 를 누른다. 그게 유일하게 영구적인 선택이다.
+function closeLaunchSheet({ goTo = false, forever = false } = {}) {
   const sheet = document.getElementById("launch-sheet");
   if (!sheet || sheet.hidden || !sheet.classList.contains("is-open")) return false;
   sheet.classList.remove("is-open");
-  try {
-    localStorage.setItem(LAUNCH_NOTICE_KEY, launchNoticeKey());
-  } catch {
-    // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
+  if (forever) {
+    try {
+      localStorage.setItem(LAUNCH_NOTICE_KEY, launchNoticeKey());
+    } catch {
+      // 저장소를 못 쓰는 브라우저에서는 다음에 또 뜬다. 화면이 안 뜨는 것보다 낫다.
+    }
   }
 
   // 감추기와 다음 동작을 한 번에 한다.
@@ -1258,7 +1265,7 @@ function initLaunchSheet() {
   const cta = document.getElementById("launch-sheet-close");
   cta.textContent = LAUNCH_NOTICE.cta || "확인";
   cta.addEventListener("click", () => closeLaunchSheet({ goTo: true }));
-  document.getElementById("launch-sheet-dismiss").addEventListener("click", () => closeLaunchSheet());
+  document.getElementById("launch-sheet-dismiss").addEventListener("click", () => closeLaunchSheet({ forever: true }));
   document.getElementById("launch-sheet-dim").addEventListener("click", () => closeLaunchSheet());
 
   sheet.hidden = false;

@@ -710,6 +710,12 @@ function renderBanners(banners = []) {
 // 날짜를 손으로 적는다. 지나간 소식은 아래에서 지우면 된다.
 const FEATURE_NOTICES = [
   {
+    title: "'내 주변부터'가 안 될 때 이유를 알려줘요",
+    subtitle: "위치를 못 잡으면 서울로 돌아가며 말이 없던 문제를 고쳤어요 · 앱 안 브라우저에서 안 되면 크롬·사파리로 열어보세요",
+    link: "index.html",
+    createdAt: "2026-10-13T09:30:00+09:00",
+  },
+  {
     title: "이제 별점과 후기를 남길 수 있어요",
     subtitle: "다녀온 곳에 별점 · 아이 나이 · 사진까지 · 모든 후기는 확인 후 올라와요",
     link: "index.html",

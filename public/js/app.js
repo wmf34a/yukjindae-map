@@ -923,7 +923,18 @@ function readPosition() {
   });
 }
 
+// 버튼을 눌렀는데 위치를 못 잡은 이유. 서울로 되돌아가면서 아무 말이 없으면
+// "눌러도 안 바뀐다"로 보인다.
+let lastGeoError = null;
+
+function geoFailMessage(err) {
+  if (err?.code === 1) return "위치 권한이 꺼져 있어요 · 설정에서 허용해 주세요";
+  if (err?.code === 3) return "위치 확인이 오래 걸려요 · 다시 눌러 주세요";
+  return "현재 위치를 확인할 수 없어요 · 다시 눌러 주세요";
+}
+
 async function currentCoords({ ask = false } = {}) {
+  lastGeoError = null;
   if (!navigator.geolocation) return DEFAULT_WEATHER_COORDS;
 
   const permission = await geolocationState();
@@ -935,7 +946,8 @@ async function currentCoords({ ask = false } = {}) {
 
   try {
     return await readPosition();
-  } catch {
+  } catch (err) {
+    lastGeoError = err;
     return DEFAULT_WEATHER_COORDS;
   }
 }
@@ -997,6 +1009,7 @@ async function loadTodayWeather({ ask = false } = {}) {
     box.hidden = false;
 
     const locate = document.getElementById("weather-locate");
+    if (locate && ask && lastGeoError) locate.textContent = geoFailMessage(lastGeoError);
     if (locate) {
       locate.addEventListener("click", async () => {
         if ((await geolocationState()) === "denied") {

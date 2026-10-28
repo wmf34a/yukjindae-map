@@ -160,6 +160,23 @@ function render(place) {
     parking = [place.parkingAvailable, place.parkingDetail].filter(Boolean).join(" · ");
   }
 
+  // 짧은 값은 반 칸, 긴 값(입장료 안내 등)은 한 줄 전체를 쓴다. 자르지 않는다.
+  const cells = [
+    ["운영시간", place.hours],
+    ["입장료", place.fee],
+    ["무료입장 연령", place.freeAgePolicy],
+    ["주차", parking],
+  ]
+    .filter(([, v]) => v)
+    .map(
+      ([k, v]) => `<div class="place-detail__cell${v.length > 20 ? " place-detail__cell--wide" : ""}">
+        <span class="place-detail__cell-k">${escapeHtml(k)}</span>
+        <span class="place-detail__cell-v">${escapeHtml(v)}</span>
+      </div>`,
+    )
+    .join("");
+  const cellsHtml = cells ? `<div class="place-detail__cells">${cells}</div>` : "";
+
   el.innerHTML = `
     ${hero}
     <div class="place-detail__body">
@@ -170,12 +187,9 @@ function render(place) {
       <div class="place-detail__tags">${tags}</div>
       ${officialLinkHtml(place)}
 
+      ${place.reason ? `<p class="place-detail__reason">${escapeHtml(place.reason)}</p>` : ""}
       ${row("📍 주소", place.address)}
-      ${row("⏰ 운영시간", place.hours)}
-      ${row("💰 입장료", place.fee)}
-      ${row("👶 무료입장 연령", place.freeAgePolicy)}
-      ${row("✏️ 추천 이유", place.reason)}
-      ${row("🅿️ 주차", parking)}
+      ${cellsHtml}
       ${amenitiesHtml}
       <!-- 가까운 수유실이 뒤늦게 도착해 들어갈 자리. 자리를 미리 비워 두지 않으면
            편의시설 칸이 없는 장소(청주랜드 등)에서 갈 곳을 잃고 길찾기 버튼

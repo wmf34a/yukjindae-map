@@ -2,19 +2,22 @@
   --color-primary: #5B6B95;
   --color-primary-dark: #3C4972;
   --color-accent: #8D9BC4;
-  --color-bg: #F5F6FA;
-  --color-surface: #F5F6FA;
+  --color-bg: #F7F4EA;
+  --color-surface: #F7F4EA;
   --color-text: #3A4363;
   --color-white: #FFFFFF;
-  --color-border: #E7E9F2;
+  --color-border: #E6E0D0;
   --color-text-secondary: #7B84A3;
   --color-warm: #8D9BC4;
-  --radius: 16px;
-  --radius-lg: 20px;
+  --radius: 20px;
+  --radius-lg: 24px;
   --shadow: 0 4px 16px rgba(58, 67, 99, 0.08);
   --shadow-float: 0 -4px 16px rgba(58, 67, 99, 0.06);
   --max-width: 480px;
   --tabbar-height: 60px;
+  --color-acc: #F2C94C;
+  --color-acc-deep: #D9A918;
+  --font-display: "Jua", "Pretendard", -apple-system, "Apple SD Gothic Neo", sans-serif;
 }
 
 * {
@@ -231,13 +234,13 @@ body {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--color-primary);
-  border-bottom: 1px solid #E7E9F2;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .notices-panel__item {
   display: block;
   padding: 12px 14px;
-  border-bottom: 1px solid #E7E9F2;
+  border-bottom: 1px solid var(--color-border);
   text-decoration: none;
 }
 
@@ -530,8 +533,9 @@ body {
 }
 
 .section__title {
-  font-size: 17px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 400;
   color: var(--color-primary);
   margin: 0 0 14px;
 }
@@ -1262,6 +1266,7 @@ body {
 }
 
 .tabbar__item {
+  position: relative;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1292,8 +1297,24 @@ body {
 }
 
 .tabbar__item.is-active {
-  color: var(--color-primary);
+  color: var(--color-primary-dark);
   font-weight: 700;
+}
+
+.tabbar__item.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 4px;
+  border-radius: 0 0 4px 4px;
+  background: var(--color-acc-deep);
+}
+
+.tabbar__item.is-active svg {
+  fill: currentColor;
+  fill-opacity: 0.16;
 }
 
 .install-popup-overlay {
@@ -2531,7 +2552,7 @@ body {
   height: 4px;
   margin: 10px auto 2px;
   border-radius: 999px;
-  background: #E7E9F2;
+  background: var(--color-border);
 }
 
 .launch-sheet__body { padding: 14px 22px 22px; }
@@ -2566,9 +2587,9 @@ body {
   width: 100%;
   padding: 15px;
   border: 0;
-  border-radius: 14px;
-  background: var(--color-primary);
-  color: var(--color-white);
+  border-radius: 12px;
+  background: var(--color-acc);
+  color: var(--color-text);
   font-size: 15.5px;
   font-weight: 700;
   font-family: inherit;
@@ -2592,4 +2613,14 @@ body {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
+}
+
+/* 제목은 주아체. 장소 이름과 목록 글씨는 본문 글꼴을 그대로 쓴다. */
+.header__title,
+.intro__title,
+.festival-section__title,
+.launch-sheet__title,
+.place-detail__name {
+  font-family: var(--font-display);
+  font-weight: 400;
 }

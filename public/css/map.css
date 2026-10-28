@@ -58,7 +58,7 @@
   flex: none;
   padding: 7px 15px;
   border-radius: 999px;
-  border: 1px solid #E7E9F2;
+  border: 1px solid var(--color-border);
   color: #7B84A3;
   font-size: 13px;
   font-weight: 600;
@@ -265,7 +265,7 @@
 .map-sheet__handle {
   width: 36px;
   height: 4px;
-  background: #E7E9F2;
+  background: var(--color-border);
   border-radius: 999px;
   margin: 10px auto;
 }

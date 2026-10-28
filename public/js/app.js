@@ -348,6 +348,9 @@ function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
   const rankReason = rank && place.rankReason
     ? `<div class="place-grid__rank-reason">${escapeHtml(place.rankReason)}</div>`
     : "";
+  const reason = !rankReason && place.reason
+    ? `<div class="place-grid__reason">${escapeHtml(place.reason)}</div>`
+    : "";
   const event = activeEvent(place);
   const eventBadge = event ? `<span class="place-grid__event-badge">🎟 할인</span>` : "";
   const rating = ratingBadgeHtml(place);
@@ -364,7 +367,7 @@ function placeCard(place, showRank = false, { hideRankBadge = false } = {}) {
       <div class="place-grid__body">
         <div class="place-grid__name">${escapeHtml(place.name)}</div>
         <div class="place-grid__region">${escapeHtml(place.region)}</div>
-        ${rankReason}
+        ${rankReason}${reason}
       </div>
     </a>
   `;

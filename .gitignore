@@ -8,8 +8,6 @@ dist/
 .DS_Store
 *.log
 
-*.ait
-
 dist/
 
 # 장소 발굴 스크립트 중간 산출물

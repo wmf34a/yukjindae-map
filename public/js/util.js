@@ -28,12 +28,9 @@ function safeHref(url) {
   }
 }
 
-// 앱인토스 미니앱 번들은 *.tossmini.com 오리진에서 실행되지만 API와 이미지는 그대로
-// Cloudflare Worker가 서빙한다 — 그래서 미니앱에서만 절대경로가 필요하다. 웹
-// (workers.dev)에서는 같은 오리진이라 빈 문자열로 두고 기존 상대경로를 유지한다.
-const API_ORIGIN = globalThis.location?.hostname.endsWith(".tossmini.com")
-  ? "https://yukjindae-map.wmf34a.workers.dev"
-  : "";
+// 웹은 API와 같은 오리진이라 빈 문자열이다. 오리진이 다른 껍데기(Capacitor 등)를
+// 붙일 때 여기에 Worker 주소를 넣는다.
+const API_ORIGIN = "";
 
 function apiUrl(path) {
   const value = String(path ?? "");
@@ -468,7 +465,7 @@ async function trackScreen(name) {
 // 경로를 보고 한 번만 남기면 새 화면이 생겨도 빠뜨릴 일이 없다.
 //
 // 이름을 아는 것은 서버(src/screens.js)다. 여기서 표를 한 벌 더 들면 새 화면이
-// 생길 때마다 두 곳을 고쳐야 하고, 미니앱 번들은 스냅샷이라 한쪽만 갱신된다.
+// 생길 때마다 두 곳을 고쳐야 한다.
 function currentScreen() {
   return (location.pathname.split("/").pop() || "").replace(/\.html$/, "");
 }

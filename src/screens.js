@@ -21,7 +21,7 @@ export const SCREENS = new Set([
 
 // 파일 이름과 화면 이름이 다른 것들. 화면 이름을 정하는 곳은 여기 하나여야 해서
 // 브라우저가 보내는 경로 조각을 여기서 받는다 — 예전에는 util.js 가 같은 표를 한 벌
-// 더 들고 있었고, 미니앱 번들은 스냅샷이라 옛 표를 든 번들이 한동안 돌아다닌다.
+// 더 들고 있었다.
 const ALIASES = {
   index: "home",
   "festival-detail": "festival",

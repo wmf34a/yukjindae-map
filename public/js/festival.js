@@ -31,8 +31,8 @@ function festivalCardHtml(festival) {
   const period = formatPeriod(festival);
   const dday = festivalDday(festival);
   const fee = feeLabel(festival.useFee);
-  // 축제 이미지는 /images/... 루트 상대경로로 온다. safeImageSrc를 거치지 않으면
-  // 미니앱에서 번들 자신을 가리켜 전부 깨진다 — 웹에서는 멀쩡해서 안 잡힌다.
+  // 축제 이미지는 /images/... 루트 상대경로로 온다. 오리진이 다른 앱 껍데기에서도 뜨도록
+  // safeImageSrc를 거친다.
   const thumb = festival.image
     ? `<img class="place-grid__thumb" src="${escapeHtml(safeImageSrc(festival.image))}" alt="${escapeHtml(festival.title)}" loading="lazy" />`
     : `<div class="place-grid__thumb"></div>`;

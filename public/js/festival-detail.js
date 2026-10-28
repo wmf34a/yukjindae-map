@@ -20,7 +20,7 @@ function render(festival) {
   const el = document.getElementById("festival-detail");
   document.title = `${festival.title} | 육진대`;
 
-  // 축제 이미지는 /images/... 루트 상대경로다. safeImageSrc를 거쳐야 미니앱에서도 뜬다.
+  // 축제 이미지는 /images/... 루트 상대경로다. 오리진이 다른 앱 껍데기에서도 뜨도록 safeImageSrc를 거친다.
   const hero = festival.image
     ? `<img class="place-detail__hero" src="${escapeHtml(safeImageSrc(festival.image))}" alt="${escapeHtml(festival.title)}" />`
     : "";

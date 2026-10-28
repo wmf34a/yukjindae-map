@@ -2223,48 +2223,6 @@ function withSecurityHeaders(response) {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-// 앱인토스 미니앱 번들은 *.tossmini.com 오리진에서 실행되는데 API와 이미지는 계속
-// 이 Worker가 서빙한다 — 웹(workers.dev)과 달리 교차 출처 요청이라 CORS 허용이
-// 필요하다. 오리진은 콘솔 appName(yukjindae-map)으로 고정 발급되고, SDK 버전과
-// 업로드 시점에 따라 apps/web 두 계열이 모두 쓰일 수 있어 넷 다 열어둔다.
-const MINIAPP_ORIGINS = new Set([
-  "https://yukjindae-map.apps.tossmini.com",
-  "https://yukjindae-map.private-apps.tossmini.com",
-  "https://yukjindae-map.web.tossmini.com",
-  "https://yukjindae-map.private-web.tossmini.com",
-]);
-
-function miniAppOrigin(request) {
-  const origin = request.headers.get("Origin");
-  return origin && MINIAPP_ORIGINS.has(origin) ? origin : null;
-}
-
-function withCors(request, response) {
-  const origin = miniAppOrigin(request);
-  if (!origin) return response;
-  const headers = new Headers(response.headers);
-  headers.set("access-control-allow-origin", origin);
-  // 허용 오리진이 여러 개라 응답이 오리진별로 달라진다 — 엣지 캐시가 한 오리진의
-  // 응답을 다른 오리진에 재사용하지 않도록 Vary를 붙인다.
-  headers.set("vary", "Origin");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-// /api/reports는 JSON 본문 POST라 브라우저가 먼저 preflight를 보낸다. 라우터는
-// OPTIONS를 모르고 405로 떨구므로 여기서 먼저 받아낸다.
-function handlePreflight(request, origin) {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "access-control-allow-origin": origin,
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": request.headers.get("Access-Control-Request-Headers") || "content-type",
-      "access-control-max-age": "86400",
-      vary: "Origin",
-    },
-  });
-}
-
 // 목록 엣지 캐시 수명. 60초로 뒀더니 오픈 첫날 재보니 열 번 중 네 번이 캐시를
 // 놓쳤다 — 엣지가 지역별로 나뉘어 있어 한 곳에 채워도 다른 곳은 비어 있고, 그
 // 요청은 노션을 세 번 순차로 부르느라 1.6~3.1초가 걸렸다. 캐시에 맞으면 0.6초다.
@@ -2389,11 +2347,7 @@ async function handleRequest(request, env, ctx) {
 
 export default {
   async fetch(request, env, ctx) {
-    const origin = miniAppOrigin(request);
-    if (request.method === "OPTIONS" && origin) {
-      return handlePreflight(request, origin);
-    }
-    return withCors(request, await handleRequest(request, env, ctx));
+    return handleRequest(request, env, ctx);
   },
 
   async scheduled(event, env, ctx) {

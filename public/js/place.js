@@ -111,8 +111,7 @@ function render(place) {
   const el = document.getElementById("place-detail");
   document.title = `${place.name} | 육진대`;
 
-  // safeImageSrc를 거쳐야 미니앱(다른 오리진)에서도 이미지가 뜬다 — 여기만
-  // 빠져 있었다.
+  // 오리진이 다른 앱 껍데기에서도 뜨도록 safeImageSrc를 거친다.
   const hero = place.image
     ? `<figure class="place-detail__hero-wrap">
         <img class="place-detail__hero" src="${escapeHtml(safeImageSrc(place.image))}" alt="${escapeHtml(place.name)}" />
@@ -209,9 +208,7 @@ function render(place) {
 
 // 한 곳을 보려고 목록 전체(195곳·69KB)를 받던 자리다. 이제 그 장소만 읽는다.
 //
-// 목록으로 되돌아가는 길은 남겨 둔다 — 앱인토스 미니앱은 public/ 의 스냅샷을
-// 올리는 구조라, 새 엔드포인트를 모르는 옛 번들이 한동안 돌아다닌다. 반대로
-// 워커가 먼저 바뀌어도 옛 번들이 깨지면 안 되므로 양쪽을 다 살려 둔다.
+// 단건 엔드포인트가 실패하면 목록에서 찾는 길은 남겨 둔다.
 async function loadPlace(id) {
   try {
     const data = await fetchJson(`/api/places/${encodeURIComponent(id)}`);

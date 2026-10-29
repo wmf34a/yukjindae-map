@@ -42,7 +42,8 @@ function festivalCardHtml(festival) {
     <div class="place-grid__thumb-wrap">${thumb}${badge}${feeBadge}</div>
     <div class="place-grid__body">
       <p class="place-grid__name">${escapeHtml(festival.title)}</p>
-      <p class="place-grid__region">${escapeHtml([period, festival.placeName].filter(Boolean).join(" · "))}</p>
+      <p class="place-grid__region">${escapeHtml(period)}</p>
+      ${festival.placeName ? `<p class="place-grid__region">${escapeHtml(festival.placeName)}</p>` : ""}
     </div>
   `;
   return `<a class="place-grid__card" href="festival-detail.html?id=${encodeURIComponent(festival.id)}">${inner}</a>`;

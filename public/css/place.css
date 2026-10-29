@@ -309,7 +309,18 @@
 }
 
 .place-detail__actions .btn-secondary {
-  flex: 0 0 96px;
+  flex: 0 0 auto;
+  padding-left: 18px;
+  padding-right: 18px;
+  white-space: nowrap;
+}
+
+/* 축제 소개글: 칸 아래에 읽기 편한 본문으로 둔다 */
+.place-detail__intro {
+  margin: 16px 0 0;
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--color-text);
 }
 
 .place-detail__actions .btn-primary {
@@ -807,4 +818,40 @@
   color: var(--color-text-secondary);
   font-size: 21px;
   cursor: pointer;
+}
+
+/* 상세의 아래쪽 묶음(주소·편의시설·후기·근처 맛집·카페)을 칸 모양 카드로 통일한다.
+   위쪽 정보 칸과 같은 흰 표면·테두리라 한 화면이 한 가지 결로 읽힌다. */
+.place-detail__section,
+.place-detail__section:first-of-type {
+  margin: 0 0 10px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-white);
+}
+
+.place-detail__label {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-primary-dark);
+}
+
+.review-item:first-of-type {
+  border-top: none;
+}
+
+.place-detail__section p {
+  margin: 0;
+}
+
+.place-detail__section .place-detail__label {
+  margin-bottom: 6px;
+}
+
+.place-detail__section .place-detail__source {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }

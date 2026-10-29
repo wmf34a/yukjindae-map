@@ -24,6 +24,7 @@ function favoriteCard(place) {
 function emptyStateHtml() {
   return `
     <div class="favorite-empty">
+      <svg class="favorite-empty__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.5-9.3C1.2 8 2.7 4.8 6 4.2c2-.4 3.7.5 6 2.8 2.3-2.3 4-3.2 6-2.8 3.3.6 4.8 3.8 3.5 7-2 4.7-9.5 9.3-9.5 9.3z"/></svg>
       <p class="favorite-empty__text">아직 찜한 장소가 없어요</p>
       <a class="favorite-empty__btn" href="index.html">홈으로 가서 둘러보기</a>
     </div>

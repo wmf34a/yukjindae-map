@@ -1,4 +1,4 @@
-const CACHE_NAME = "yukjindae-map-v153";
+const CACHE_NAME = "yukjindae-map-v154";
 const PRECACHE_URLS = [
   "/",
   "/index.html",

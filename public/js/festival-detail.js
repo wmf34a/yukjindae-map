@@ -6,14 +6,20 @@ function formatPeriod(festival) {
   return `${start} ~ ${end}`;
 }
 
-function row(label, value) {
-  if (!value) return "";
-  return `
-    <div class="place-detail__section">
-      <p class="place-detail__label">${escapeHtml(label)}</p>
-      <p class="place-detail__value">${escapeHtml(value)}</p>
-    </div>
-  `;
+// 장소와 요금을 장소 상세와 같은 칸 모양으로 보여준다. 장소는 길어서 항상 한 줄 전체를 쓴다.
+function cellsHtml(festival) {
+  const where = [festival.placeName, festival.address].filter(Boolean).join(" · ");
+  const items = [["장소", where, true], ["요금", festival.useFee, false]].filter(([, v]) => v);
+  if (!items.length) return "";
+  const cells = items
+    .map(
+      ([k, v, wide]) => `<div class="place-detail__cell${wide || v.length > 20 ? " place-detail__cell--wide" : ""}">
+        <span class="place-detail__cell-k">${k}</span>
+        <span class="place-detail__cell-v">${escapeHtml(v)}</span>
+      </div>`
+    )
+    .join("");
+  return `<div class="place-detail__cells">${cells}</div>`;
 }
 
 function render(festival) {
@@ -43,9 +49,8 @@ function render(festival) {
       </div>
       <div class="place-detail__tags">${tags}</div>
 
-      ${row("📍 장소", [festival.placeName, festival.address].filter(Boolean).join(" · "))}
-      ${row("💰 요금", festival.useFee)}
-      ${row("✏️ 소개", festival.description)}
+      ${cellsHtml(festival)}
+      ${festival.description ? `<p class="place-detail__intro">${escapeHtml(festival.description)}</p>` : ""}
 
       <div class="place-detail__actions">
         <a class="btn-primary" target="_blank" rel="noopener" href="${escapeHtml(naverDirectionsUrl({ name: festival.placeName || festival.title, address: festival.address }))}">네이버지도 길찾기</a>
